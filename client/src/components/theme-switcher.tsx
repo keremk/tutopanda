@@ -2,40 +2,75 @@
 
 import { Monitor, Moon, Sun } from "lucide-react";
 import { useTheme } from "next-themes";
-import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { useEffect, useState } from "react";
+
+const themes = [
+  { key: "system", icon: Monitor, label: "System" },
+  { key: "light", icon: Sun, label: "Light" },
+  { key: "dark", icon: Moon, label: "Dark" },
+] as const;
 
 export function ThemeSwitcher() {
-  const { setTheme } = useTheme();
+  const { theme, setTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!mounted) {
+    return (
+      <div className="flex items-center bg-muted rounded-lg p-1 relative">
+        <div className="flex">
+          {themes.map((themeOption) => {
+            const Icon = themeOption.icon;
+            return (
+              <button
+                key={themeOption.key}
+                className="relative z-10 flex items-center justify-center w-8 h-8 text-muted-foreground transition-colors duration-200"
+              >
+                <Icon className="h-4 w-4" />
+                <span className="sr-only">{themeOption.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  const currentThemeIndex = themes.findIndex(t => t.key === theme) || 0;
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" className="btn-clean hover:bg-accent/50">
-          <Sun className="h-5 w-5 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
-          <Moon className="absolute h-5 w-5 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
-          <span className="sr-only">Toggle theme</span>
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="shadow-lg border-0">
-        <DropdownMenuItem onClick={() => setTheme("light")} className="cursor-pointer">
-          <Sun className="mr-3 h-4 w-4" />
-          Light
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => setTheme("dark")} className="cursor-pointer">
-          <Moon className="mr-3 h-4 w-4" />
-          Dark
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => setTheme("system")} className="cursor-pointer">
-          <Monitor className="mr-3 h-4 w-4" />
-          System
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <div className="flex items-center bg-muted rounded-lg p-1 relative">
+      <div
+        className="absolute top-1 bottom-1 bg-background rounded-md shadow-sm transition-transform duration-300 ease-out z-0"
+        style={{
+          width: '32px',
+          transform: `translateX(${currentThemeIndex * 32}px)`,
+        }}
+      />
+      <div className="flex">
+        {themes.map((themeOption) => {
+          const Icon = themeOption.icon;
+          const isActive = theme === themeOption.key;
+
+          return (
+            <button
+              key={themeOption.key}
+              onClick={() => setTheme(themeOption.key)}
+              className={`relative z-10 flex items-center justify-center w-8 h-8 transition-colors duration-200 ${
+                isActive
+                  ? "text-foreground"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <Icon className="h-4 w-4" />
+              <span className="sr-only">{themeOption.label}</span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
   );
 }
