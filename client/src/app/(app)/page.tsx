@@ -1,5 +1,5 @@
-import TimelineVideoApp from '@/components/timeline-video-app';
+import { redirect } from 'next/navigation';
 
 export default function Home() {
-  return <TimelineVideoApp />;
+  redirect('/edit');
 }
