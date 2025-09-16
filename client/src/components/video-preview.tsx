@@ -1,7 +1,7 @@
 import { Player, PlayerRef, CallbackListener } from '@remotion/player';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { type Timeline } from '@/schema';
-import { VideoComposition } from './remotion/VideoComposition';
+import { VideoComposition } from './remotion/video-composition';
 import { useRef, useEffect } from 'react';
 
 interface VideoPreviewProps {

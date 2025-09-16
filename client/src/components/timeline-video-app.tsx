@@ -5,9 +5,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { VideoIcon, Code, Clock, Download } from 'lucide-react';
-import InteractiveTimelineEditor from './InteractiveTimelineEditor';
-import VideoPreview from './VideoPreview';
-import JsonEditor from './JsonEditor';
+import InteractiveTimelineEditor from './interactive-timeline-editor';
+import VideoPreview from './video-preview';
+import JsonEditor from './json-editor';
 import { mockTimeline, type Timeline, type TimelineComponent } from '@/schema';
 
 export default function TimelineVideoApp() {

@@ -1,7 +1,7 @@
 import { Composition, AbsoluteFill, useCurrentFrame, useVideoConfig } from 'remotion';
 import { type Timeline } from '@/schema';
-import { KenBurnsComponent } from './KenBurnsComponent';
-import { MapTroopMovementComponent } from './MapTroopMovementComponent';
+import { KenBurnsComponent } from './KenBurns-component';
+import { MapTroopMovementComponent } from './map-troop-movement-component';
 
 interface VideoCompositionProps {
   timeline: Timeline;
