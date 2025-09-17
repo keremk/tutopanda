@@ -1,20 +1,14 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { VideoIcon, Code, Clock, Download } from 'lucide-react';
 import InteractiveTimelineEditor from './interactive-timeline-editor';
 import VideoPreview from './video-preview';
-import JsonEditor from './json-editor';
 import { mockTimeline, type Timeline, type TimelineComponent } from '@/schema';
 
 export default function TimelineVideoApp() {
   const [timeline, setTimeline] = useState<Timeline>(mockTimeline);
   const [currentTime, setCurrentTime] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [activeTab, setActiveTab] = useState('timeline');
 
   // Auto-pause when reaching end - now handled by the Player
   useEffect(() => {
@@ -162,109 +156,35 @@ export default function TimelineVideoApp() {
     console.log('🔄 Timeline updated from JSON:', newTimeline.name);
   };
 
-  const getCurrentComponents = () => {
-    return timeline.components.filter(comp => 
-      currentTime >= comp.startTime && currentTime < comp.startTime + comp.duration
-    );
-  };
-
-  const currentComponents = getCurrentComponents();
-
   return (
-    <div className="min-h-screen bg-background text-foreground p-6">
-      <div className="max-w-7xl mx-auto space-y-6">
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold flex items-center gap-3">
-              <VideoIcon className="w-8 h-8 text-primary" />
-              Timeline Video Creator
-            </h1>
-            <p className="text-muted-foreground mt-1">
-              Create videos from JSON timeline definitions with Remotion
-            </p>
-          </div>
-          
-          <div className="flex items-center gap-4">
-            <Badge variant="outline" className="text-sm">
-              {timeline.components.length} Components
-            </Badge>
-            <Badge variant="outline" className="text-sm">
-              {timeline.duration}s Duration
-            </Badge>
-            {currentComponents.length > 0 && (
-              <Badge variant="default" className="text-sm">
-                {currentComponents.length} Active
-              </Badge>
-            )}
-          </div>
+    <div className="h-full flex flex-col bg-background text-foreground">
+      <div className="flex-1 flex flex-col overflow-hidden min-w-[800px]">
+        {/* Video Preview - Responsive height */}
+        <div className="flex-1 min-h-0 p-6">
+          <VideoPreview
+            timeline={timeline}
+            currentTime={currentTime}
+            isPlaying={isPlaying}
+            onSeek={handleSeek}
+            onPlay={handlePlay}
+            onPause={handlePause}
+          />
         </div>
 
-        {/* Video Preview - Always Visible */}
-        <VideoPreview
-          timeline={timeline}
-          currentTime={currentTime}
-          isPlaying={isPlaying}
-          onSeek={handleSeek}
-          onPlay={handlePlay}
-          onPause={handlePause}
-        />
-
-        {/* Main Content Tabs */}
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="timeline" data-testid="tab-video">
-              <Clock className="w-4 h-4 mr-2" />
-              Video
-            </TabsTrigger>
-            <TabsTrigger value="json" data-testid="tab-json">
-              <Code className="w-4 h-4 mr-2" />
-              JSON Editor
-            </TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="timeline" className="mt-6">
-            <div className="space-y-6">
-              <InteractiveTimelineEditor
-                timeline={timeline}
-                currentTime={currentTime}
-                isPlaying={isPlaying}
-                onPlay={handlePlay}
-                onPause={handlePause}
-                onSeek={handleSeek}
-                onAddComponent={handleAddComponent}
-                onRemoveComponent={handleRemoveComponent}
-                onUpdateComponent={handleUpdateComponent}
-                onExport={handleExport}
-              />
-              
-              {/* Current Components Display */}
-              {currentComponents.length > 0 && (
-                <div className="bg-muted/50 p-4 rounded-lg">
-                  <h3 className="text-sm font-semibold mb-2">Currently Playing:</h3>
-                  <div className="flex flex-wrap gap-2">
-                    {currentComponents.map(comp => (
-                      <Badge key={comp.id} variant="secondary">
-                        {comp.name} ({comp.type})
-                      </Badge>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          </TabsContent>
-
-          <TabsContent value="json" className="mt-6">
-            <JsonEditor
-              timeline={timeline}
-              onTimelineChange={handleTimelineChange}
-            />
-          </TabsContent>
-        </Tabs>
-
-        {/* Footer */}
-        <div className="text-center text-sm text-muted-foreground border-t pt-4">
-          Built with Remotion, React, and TypeScript • Timeline-based video generation
+        {/* Timeline Editor - Responsive height */}
+        <div className="flex-1 min-h-0 p-6">
+          <InteractiveTimelineEditor
+            timeline={timeline}
+            currentTime={currentTime}
+            isPlaying={isPlaying}
+            onPlay={handlePlay}
+            onPause={handlePause}
+            onSeek={handleSeek}
+            onAddComponent={handleAddComponent}
+            onRemoveComponent={handleRemoveComponent}
+            onUpdateComponent={handleUpdateComponent}
+            onExport={handleExport}
+          />
         </div>
       </div>
     </div>

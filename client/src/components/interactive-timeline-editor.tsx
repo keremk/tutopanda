@@ -1,8 +1,10 @@
-import { useState, useRef, useCallback, useEffect } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Slider } from '@/components/ui/slider';
-import { Play, Pause, Download, Plus, Trash2, GripVertical } from 'lucide-react';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { Play, Pause, Download, Plus, Trash2, GripVertical, Film, Mic, Music, Volume2 } from 'lucide-react';
 import { type Timeline, type TimelineComponent } from '@/schema';
 
 interface TimelineEditorProps {
@@ -26,6 +28,45 @@ interface DragState {
   startTime: number;
   originalDuration?: number;
 }
+
+interface TimelineChannel {
+  id: string;
+  name: string;
+  icon: React.ComponentType<{ className?: string }>;
+  height: number;
+  componentTypes: string[];
+}
+
+const TIMELINE_CHANNELS: TimelineChannel[] = [
+  {
+    id: 'clips',
+    name: 'Video Clips',
+    icon: Film,
+    height: 48,
+    componentTypes: ['ken_burns', 'map_troop_movement'],
+  },
+  {
+    id: 'voice',
+    name: 'Voice & Narration',
+    icon: Mic,
+    height: 48,
+    componentTypes: ['voice'],
+  },
+  {
+    id: 'music',
+    name: 'Background Music',
+    icon: Music,
+    height: 48,
+    componentTypes: ['background_music'],
+  },
+  {
+    id: 'sfx',
+    name: 'Sound Effects',
+    icon: Volume2,
+    height: 48,
+    componentTypes: ['sound_effect'],
+  },
+];
 
 export default function InteractiveTimelineEditor({
   timeline,
@@ -62,13 +103,31 @@ export default function InteractiveTimelineEditor({
   const timelineWidth = 800;
   const pixelsPerSecond = timeline.duration > 0 ? timelineWidth / timeline.duration : timelineWidth / 10;
   const snapThreshold = 0.5; // seconds
+  const channelHeight = 48;
+  const totalTimelineHeight = TIMELINE_CHANNELS.length * channelHeight;
+
+  const getChannelForComponent = (componentType: string): TimelineChannel => {
+    return TIMELINE_CHANNELS.find(channel =>
+      channel.componentTypes.includes(componentType)
+    ) || TIMELINE_CHANNELS[0]; // Default to clips channel
+  };
+
+  const getChannelIndex = (componentType: string): number => {
+    const channel = getChannelForComponent(componentType);
+    return TIMELINE_CHANNELS.findIndex(c => c.id === channel.id);
+  };
 
   const getComponentStyle = (component: TimelineComponent) => {
     const left = component.startTime * pixelsPerSecond;
     const width = component.duration * pixelsPerSecond;
+    const channelIndex = getChannelIndex(component.type);
+    const top = channelIndex * channelHeight + 4; // 4px padding from channel edge
+
     return {
       left: `${left}px`,
+      top: `${top}px`,
       width: `${Math.max(width, 20)}px`, // Minimum width for visibility
+      height: `${channelHeight - 8}px`, // Full channel height minus padding
     };
   };
 
@@ -202,13 +261,13 @@ export default function InteractiveTimelineEditor({
   };
 
   return (
-    <Card className="w-full">
-      <CardHeader>
+    <Card className="w-full h-full flex flex-col">
+      <CardHeader className="shrink-0">
         <CardTitle className="flex items-center justify-between">
           <span>Timeline Editor</span>
           <div className="flex gap-2">
             <Button
-              variant="outline"
+              variant="secondary"
               size="sm"
               onClick={() => onAddComponent('ken_burns')}
               data-testid="button-add-ken-burns"
@@ -217,7 +276,7 @@ export default function InteractiveTimelineEditor({
               Ken Burns
             </Button>
             <Button
-              variant="outline"
+              variant="secondary"
               size="sm"
               onClick={() => onAddComponent('map_troop_movement')}
               data-testid="button-add-map"
@@ -225,83 +284,111 @@ export default function InteractiveTimelineEditor({
               <Plus className="w-4 h-4 mr-1" />
               Map
             </Button>
-            <Button
-              onClick={onExport}
-              data-testid="button-export"
-              className="bg-primary hover:bg-primary/90"
-            >
-              <Download className="w-4 h-4 mr-1" />
-              Export MP4
-            </Button>
           </div>
         </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-4">
-        {/* Controls */}
-        <div className="flex items-center gap-4">
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={isPlaying ? onPause : onPlay}
-            data-testid="button-play-pause"
-          >
-            {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
-          </Button>
-          <div className="text-sm font-mono" data-testid="text-time-display">
-            {(isSeeking ? sliderValue[0] : currentTime).toFixed(1)}s / {timeline.duration}s
-          </div>
-        </div>
-
+      <CardContent className="flex-1 flex flex-col space-y-4 min-h-0 overflow-auto">
         {/* Timeline Scrubber */}
         <div className="space-y-2">
-          <div className="flex justify-center">
-            <Slider
-              value={sliderValue}
-              max={timeline.duration}
-              step={0.1}
-              onValueChange={(value) => {
-                setSliderValue(value);
-                onSeek(value[0]);
-              }}
-              onValueCommit={() => setIsSeeking(false)}
-              onPointerDown={() => setIsSeeking(true)}
-              style={{ width: `${timelineWidth}px` }}
-              data-testid="slider-timeline"
-            />
+          <div className="flex py-3">
+            {/* Spacer for icon column alignment */}
+            <div className="w-16 shrink-0"></div>
+            {/* Slider aligned with timeline tracks */}
+            <div className="flex justify-center flex-1">
+              <Slider
+                value={sliderValue}
+                max={timeline.duration}
+                step={0.1}
+                onValueChange={(value) => {
+                  setSliderValue(value);
+                  onSeek(value[0]);
+                }}
+                onValueCommit={() => setIsSeeking(false)}
+                onPointerDown={() => setIsSeeking(true)}
+                style={{ width: `${timelineWidth}px` }}
+                data-testid="slider-timeline"
+              />
+            </div>
           </div>
           
           {/* Timeline Visual */}
-          <div className="relative bg-muted rounded-lg p-4" style={{ height: '140px' }}>
-            {/* Time markers - aligned with track */}
-            <div 
-              className="absolute top-0 flex justify-between text-xs text-muted-foreground"
-              style={{ width: `${timelineWidth}px`, left: '50%', transform: 'translateX(-50%)' }}
-            >
-              {Array.from({ length: Math.ceil(timeline.duration) + 1 }, (_, i) => (
-                <span key={i} className="w-8 text-center">
-                  {i}s
-                </span>
-              ))}
-            </div>
-            
-            {/* Component blocks */}
-            <div 
-              ref={timelineRef}
-              className="relative mt-6 cursor-pointer select-none" 
-              style={{ width: `${timelineWidth}px`, height: '80px', margin: '0 auto' }}
-              onClick={handleTimelineClick}
-              data-testid="timeline-track"
-            >
-              {timeline.components
-                .sort((a, b) => a.startTime - b.startTime)
-                .map((component) => (
-                <div
-                  key={component.id}
-                  className={`absolute top-0 h-12 rounded ${getComponentColor(component.type)} ${dragState.componentId === component.id ? 'opacity-80 shadow-lg' : ''} transition-all cursor-move group border border-white/20`}
-                  style={getComponentStyle(component)}
-                  data-testid={`timeline-component-${component.id}`}
-                  onMouseDown={(e) => handleMouseDown(e, component.id, 'move')}
-                >
+          <div className="bg-muted rounded-lg overflow-hidden" style={{ height: `${totalTimelineHeight + 60}px` }}>
+            <ScrollArea className="h-full">
+              <div className="relative p-4">
+                {/* Time markers - aligned with timeline tracks */}
+                <div className="flex">
+                  {/* Spacer for icon column */}
+                  <div className="w-16 shrink-0"></div>
+                  {/* Time markers aligned with tracks */}
+                  <div className="flex-1 relative">
+                    <div
+                      className="absolute top-2 flex justify-between text-xs text-muted-foreground"
+                      style={{ width: `${timelineWidth}px`, left: '50%', transform: 'translateX(-50%)' }}
+                    >
+                      {Array.from({ length: Math.ceil(timeline.duration) + 1 }, (_, i) => (
+                        <span key={i} className="w-8 text-center">
+                          {i}s
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex mt-6">
+                  {/* Channel Labels Column */}
+                  <div className="w-16 shrink-0 bg-background/80 border-r border-border/30">
+                    {TIMELINE_CHANNELS.map((channel, index) => {
+                      const IconComponent = channel.icon;
+                      return (
+                        <Tooltip key={channel.id}>
+                          <TooltipTrigger asChild>
+                            <div
+                              className="flex items-center justify-center hover:bg-muted/30 transition-colors"
+                              style={{ height: `${channelHeight}px` }}
+                            >
+                              <IconComponent className="w-4 h-4 text-muted-foreground hover:text-foreground transition-colors" />
+                            </div>
+                          </TooltipTrigger>
+                          <TooltipContent side="right">
+                            <p>{channel.name}</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      );
+                    })}
+                  </div>
+
+                  {/* Timeline Tracks */}
+                  <div className="flex-1">
+                    <div
+                      ref={timelineRef}
+                      className="relative cursor-pointer select-none mx-auto"
+                      style={{ width: `${timelineWidth}px`, height: `${totalTimelineHeight}px` }}
+                      onClick={handleTimelineClick}
+                      data-testid="timeline-tracks"
+                    >
+                      {/* Channel Background Lines */}
+                      {TIMELINE_CHANNELS.map((channel, index) => (
+                        <div
+                          key={`bg-${channel.id}`}
+                          className="absolute w-full border-b border-border/30"
+                          style={{
+                            top: `${index * channelHeight}px`,
+                            height: `${channelHeight}px`
+                          }}
+                        />
+                      ))}
+
+                      {/* Component blocks */}
+                      {timeline.components
+                        .sort((a, b) => a.startTime - b.startTime)
+                        .map((component) => (
+                          <div
+                            key={component.id}
+                            className={`absolute rounded ${getComponentColor(component.type)} ${dragState.componentId === component.id ? 'opacity-80 shadow-lg' : ''} transition-all cursor-move group border border-white/20`}
+                            style={getComponentStyle(component)}
+                            data-testid={`timeline-component-${component.id}`}
+                            onMouseDown={(e) => handleMouseDown(e, component.id, 'move')}
+                          >
                   {/* Resize handle - start */}
                   <div
                     className="absolute left-0 top-0 w-2 h-full bg-white/20 hover:bg-white/40 cursor-ew-resize opacity-0 group-hover:opacity-100 transition-opacity"
@@ -344,40 +431,46 @@ export default function InteractiveTimelineEditor({
                 </div>
               ))}
               
-              {/* Snap guides */}
-              {dragState.isDragging && (
-                <div className="absolute top-0 h-12 pointer-events-none">
-                  {timeline.components
-                    .filter(c => c.id !== dragState.componentId)
-                    .map(component => (
-                    <>
-                      <div 
-                        key={`snap-start-${component.id}`}
-                        className="absolute w-0.5 h-12 bg-yellow-400/50"
-                        style={{ left: `${component.startTime * pixelsPerSecond}px` }}
+                      {/* Snap guides */}
+                      {dragState.isDragging && (
+                        <div className="absolute top-0 pointer-events-none" style={{ height: `${totalTimelineHeight}px` }}>
+                          {timeline.components
+                            .filter(c => c.id !== dragState.componentId)
+                            .map(component => (
+                              <React.Fragment key={`snap-${component.id}`}>
+                                <div
+                                  className="absolute w-0.5 bg-yellow-400/50"
+                                  style={{
+                                    left: `${component.startTime * pixelsPerSecond}px`,
+                                    height: `${totalTimelineHeight}px`
+                                  }}
+                                />
+                                <div
+                                  className="absolute w-0.5 bg-yellow-400/50"
+                                  style={{
+                                    left: `${(component.startTime + component.duration) * pixelsPerSecond}px`,
+                                    height: `${totalTimelineHeight}px`
+                                  }}
+                                />
+                              </React.Fragment>
+                            ))}
+                        </div>
+                      )}
+
+                      {/* Playhead */}
+                      <div
+                        className="absolute top-0 w-0.5 bg-red-500 z-20 pointer-events-none"
+                        style={{
+                          left: `${Math.max(0, Math.min(playheadPosition, timelineWidth))}px`,
+                          height: `${totalTimelineHeight}px`
+                        }}
+                        data-testid="timeline-playhead"
                       />
-                      <div 
-                        key={`snap-end-${component.id}`}
-                        className="absolute w-0.5 h-12 bg-yellow-400/50"
-                        style={{ left: `${(component.startTime + component.duration) * pixelsPerSecond}px` }}
-                      />
-                    </>
-                  ))}
+                    </div>
+                  </div>
                 </div>
-              )}
-              
-              {/* Playhead */}
-              <div
-                className="absolute top-0 w-0.5 h-12 bg-red-500 z-20 pointer-events-none"
-                style={{ left: `${Math.max(0, Math.min(playheadPosition, timelineWidth))}px` }}
-                data-testid="timeline-playhead"
-              />
-            </div>
-            
-            {/* Instructions */}
-            <div className="mt-2 text-xs text-muted-foreground text-center">
-              Click to seek • Drag to move clips • Hover edges to resize • Components snap together
-            </div>
+              </div>
+            </ScrollArea>
           </div>
         </div>
 

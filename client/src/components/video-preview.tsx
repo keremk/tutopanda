@@ -103,12 +103,12 @@ export default function VideoPreview({ timeline, currentTime, isPlaying, onSeek,
     return () => clearInterval(interval);
   }, []);
   return (
-    <Card className="w-full">
-      <CardHeader>
+    <Card className="w-full h-full flex flex-col">
+      <CardHeader className="shrink-0">
         <CardTitle>Video Preview</CardTitle>
       </CardHeader>
-      <CardContent>
-        <div className="bg-black rounded-lg overflow-hidden" data-testid="video-preview">
+      <CardContent className="flex-1 flex flex-col min-h-0">
+        <div className="flex-1 bg-black rounded-lg overflow-hidden flex items-center justify-center min-h-0" data-testid="video-preview">
           <Player
             ref={playerRef}
             component={VideoComposition}
@@ -119,8 +119,9 @@ export default function VideoPreview({ timeline, currentTime, isPlaying, onSeek,
             compositionHeight={1080}
             style={{
               width: '100%',
-              height: 'auto',
-              aspectRatio: '16/9',
+              height: '100%',
+              maxHeight: '100%',
+              objectFit: 'contain',
             }}
             controls
             loop={false}
@@ -129,7 +130,7 @@ export default function VideoPreview({ timeline, currentTime, isPlaying, onSeek,
             data-testid="remotion-player"
           />
         </div>
-        <div className="mt-4 text-sm text-muted-foreground">
+        <div className="shrink-0 mt-4 text-sm text-muted-foreground">
           Resolution: 1920x1080 | Frame Rate: 30 FPS | Duration: {timeline.duration}s
         </div>
       </CardContent>

@@ -39,8 +39,8 @@ export default function JsonEditor({ timeline, onTimelineChange }: JsonEditorPro
   };
 
   return (
-    <Card className="w-full">
-      <CardHeader>
+    <Card className="w-full h-full flex flex-col">
+      <CardHeader className="shrink-0">
         <CardTitle className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <FileText className="w-5 h-5" />
@@ -73,27 +73,27 @@ export default function JsonEditor({ timeline, onTimelineChange }: JsonEditorPro
           </div>
         </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="flex-1 flex flex-col space-y-4 min-h-0">
         {error && (
-          <div className="text-sm text-destructive bg-destructive/10 p-3 rounded-lg border border-destructive/20">
+          <div className="shrink-0 text-sm text-destructive bg-destructive/10 p-3 rounded-lg border border-destructive/20">
             <strong>Validation Error:</strong> {error}
           </div>
         )}
-        
-        <div className="space-y-2">
-          <div className="text-sm text-muted-foreground">
+
+        <div className="flex-1 flex flex-col space-y-2 min-h-0">
+          <div className="shrink-0 text-sm text-muted-foreground">
             Edit the timeline JSON below. Changes will be applied when you click "Apply Changes".
           </div>
           <Textarea
             value={jsonText}
             onChange={(e) => setJsonText(e.target.value)}
             placeholder="Enter timeline JSON here..."
-            className="min-h-[400px] font-mono text-sm"
+            className="flex-1 font-mono text-sm resize-none"
             data-testid="textarea-json"
           />
         </div>
-        
-        <div className="text-xs text-muted-foreground">
+
+        <div className="shrink-0 text-xs text-muted-foreground">
           <strong>Supported component types:</strong> ken_burns, map_troop_movement
         </div>
       </CardContent>
