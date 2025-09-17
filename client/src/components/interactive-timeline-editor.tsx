@@ -1,9 +1,9 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Slider } from '@/components/ui/slider';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { TimelineSlider } from '@/components/timeline-slider';
 import { Play, Pause, Download, Plus, Trash2, GripVertical, Film, Mic, Music, Volume2 } from 'lucide-react';
 import { type Timeline, type TimelineComponent } from '@/schema';
 
@@ -88,23 +88,29 @@ export default function InteractiveTimelineEditor({
     startTime: 0,
   });
   
-  // Local slider control to prevent race conditions during drag
-  const [isSeeking, setIsSeeking] = useState(false);
-  const [sliderValue, setSliderValue] = useState([currentTime]);
-  
-  // Sync slider value from external currentTime when not seeking
-  useEffect(() => {
-    if (!isSeeking) {
-      setSliderValue([currentTime]);
-    }
-  }, [currentTime, isSeeking]);
 
   const timelineRef = useRef<HTMLDivElement>(null);
-  const timelineWidth = 800;
-  const pixelsPerSecond = timeline.duration > 0 ? timelineWidth / timeline.duration : timelineWidth / 10;
+  const [timelineWidth, setTimelineWidth] = useState(800);
+  const minTimelineDuration = 60; // 1 minute minimum
+  const actualDuration = Math.max(timeline.duration, minTimelineDuration);
+  const pixelsPerSecond = actualDuration > 0 ? timelineWidth / actualDuration : timelineWidth / minTimelineDuration;
   const snapThreshold = 0.5; // seconds
   const channelHeight = 48;
   const totalTimelineHeight = TIMELINE_CHANNELS.length * channelHeight;
+
+  // Update timeline width based on available space
+  useEffect(() => {
+    const updateWidth = () => {
+      if (timelineRef.current?.parentElement) {
+        const availableWidth = timelineRef.current.parentElement.clientWidth - 20; // 20px margin
+        setTimelineWidth(Math.max(400, availableWidth)); // minimum 400px
+      }
+    };
+
+    updateWidth();
+    window.addEventListener('resize', updateWidth);
+    return () => window.removeEventListener('resize', updateWidth);
+  }, []);
 
   const getChannelForComponent = (componentType: string): TimelineChannel => {
     return TIMELINE_CHANNELS.find(channel =>
@@ -118,15 +124,15 @@ export default function InteractiveTimelineEditor({
   };
 
   const getComponentStyle = (component: TimelineComponent) => {
-    const left = component.startTime * pixelsPerSecond;
-    const width = component.duration * pixelsPerSecond;
+    const leftPercent = (component.startTime / actualDuration) * 100;
+    const widthPercent = (component.duration / actualDuration) * 100;
     const channelIndex = getChannelIndex(component.type);
     const top = channelIndex * channelHeight + 4; // 4px padding from channel edge
 
     return {
-      left: `${left}px`,
+      left: `${leftPercent}%`,
       top: `${top}px`,
-      width: `${Math.max(width, 20)}px`, // Minimum width for visibility
+      width: `${Math.max(widthPercent, 2)}%`, // Minimum 2% width for visibility
       height: `${channelHeight - 8}px`, // Full channel height minus padding
     };
   };
@@ -240,16 +246,6 @@ export default function InteractiveTimelineEditor({
     }
   }, [dragState.isDragging, handleMouseMove, handleMouseUp]);
 
-  // Ensure isSeeking gets reset on any pointer up
-  useEffect(() => {
-    const handlePointerUp = () => setIsSeeking(false);
-    document.addEventListener('pointerup', handlePointerUp);
-    document.addEventListener('mouseup', handlePointerUp);
-    return () => {
-      document.removeEventListener('pointerup', handlePointerUp);
-      document.removeEventListener('mouseup', handlePointerUp);
-    };
-  }, []);
 
   const handleTimelineClick = (e: React.MouseEvent) => {
     if (dragState.isDragging) return;
@@ -288,56 +284,29 @@ export default function InteractiveTimelineEditor({
         </CardTitle>
       </CardHeader>
       <CardContent className="flex-1 flex flex-col space-y-4 min-h-0 overflow-auto">
-        {/* Timeline Scrubber */}
-        <div className="space-y-2">
-          <div className="flex py-3">
-            {/* Spacer for icon column alignment */}
-            <div className="w-16 shrink-0"></div>
-            {/* Slider aligned with timeline tracks */}
-            <div className="flex justify-center flex-1">
-              <Slider
-                value={sliderValue}
-                max={timeline.duration}
-                step={0.1}
-                onValueChange={(value) => {
-                  setSliderValue(value);
-                  onSeek(value[0]);
-                }}
-                onValueCommit={() => setIsSeeking(false)}
-                onPointerDown={() => setIsSeeking(true)}
-                style={{ width: `${timelineWidth}px` }}
-                data-testid="slider-timeline"
-              />
-            </div>
-          </div>
           
           {/* Timeline Visual */}
           <div className="bg-muted rounded-lg overflow-hidden" style={{ height: `${totalTimelineHeight + 60}px` }}>
             <ScrollArea className="h-full">
               <div className="relative p-4">
-                {/* Time markers - aligned with timeline tracks */}
+                {/* TimelineSlider - includes markers, ticks, and draggable circle */}
                 <div className="flex">
                   {/* Spacer for icon column */}
                   <div className="w-16 shrink-0"></div>
-                  {/* Time markers aligned with tracks */}
-                  <div className="flex-1 relative">
-                    <div
-                      className="absolute top-2 flex justify-between text-xs text-muted-foreground"
-                      style={{ width: `${timelineWidth}px`, left: '50%', transform: 'translateX(-50%)' }}
-                    >
-                      {Array.from({ length: Math.ceil(timeline.duration) + 1 }, (_, i) => (
-                        <span key={i} className="w-8 text-center">
-                          {i}s
-                        </span>
-                      ))}
-                    </div>
+                  {/* TimelineSlider aligned with tracks */}
+                  <div className="flex-1 px-2">
+                    <TimelineSlider
+                      currentTime={currentTime}
+                      duration={actualDuration}
+                      onSeek={onSeek}
+                    />
                   </div>
                 </div>
 
-                <div className="flex mt-6">
+                <div className="flex mt-2">
                   {/* Channel Labels Column */}
                   <div className="w-16 shrink-0 bg-background/80 border-r border-border/30">
-                    {TIMELINE_CHANNELS.map((channel, index) => {
+                    {TIMELINE_CHANNELS.map((channel) => {
                       const IconComponent = channel.icon;
                       return (
                         <Tooltip key={channel.id}>
@@ -358,11 +327,11 @@ export default function InteractiveTimelineEditor({
                   </div>
 
                   {/* Timeline Tracks */}
-                  <div className="flex-1">
+                  <div className="flex-1 px-2">
                     <div
                       ref={timelineRef}
-                      className="relative cursor-pointer select-none mx-auto"
-                      style={{ width: `${timelineWidth}px`, height: `${totalTimelineHeight}px` }}
+                      className="relative cursor-pointer select-none w-full"
+                      style={{ height: `${totalTimelineHeight}px` }}
                       onClick={handleTimelineClick}
                       data-testid="timeline-tracks"
                     >
@@ -370,7 +339,7 @@ export default function InteractiveTimelineEditor({
                       {TIMELINE_CHANNELS.map((channel, index) => (
                         <div
                           key={`bg-${channel.id}`}
-                          className="absolute w-full border-b border-border/30"
+                          className="absolute inset-x-0 border-b border-border/30"
                           style={{
                             top: `${index * channelHeight}px`,
                             height: `${channelHeight}px`
@@ -433,23 +402,21 @@ export default function InteractiveTimelineEditor({
               
                       {/* Snap guides */}
                       {dragState.isDragging && (
-                        <div className="absolute top-0 pointer-events-none" style={{ height: `${totalTimelineHeight}px` }}>
+                        <div className="absolute inset-0 pointer-events-none">
                           {timeline.components
                             .filter(c => c.id !== dragState.componentId)
                             .map(component => (
                               <React.Fragment key={`snap-${component.id}`}>
                                 <div
-                                  className="absolute w-0.5 bg-yellow-400/50"
+                                  className="absolute w-0.5 bg-yellow-400/50 inset-y-0"
                                   style={{
-                                    left: `${component.startTime * pixelsPerSecond}px`,
-                                    height: `${totalTimelineHeight}px`
+                                    left: `${(component.startTime / actualDuration) * 100}%`
                                   }}
                                 />
                                 <div
-                                  className="absolute w-0.5 bg-yellow-400/50"
+                                  className="absolute w-0.5 bg-yellow-400/50 inset-y-0"
                                   style={{
-                                    left: `${(component.startTime + component.duration) * pixelsPerSecond}px`,
-                                    height: `${totalTimelineHeight}px`
+                                    left: `${((component.startTime + component.duration) / actualDuration) * 100}%`
                                   }}
                                 />
                               </React.Fragment>
@@ -459,10 +426,9 @@ export default function InteractiveTimelineEditor({
 
                       {/* Playhead */}
                       <div
-                        className="absolute top-0 w-0.5 bg-red-500 z-20 pointer-events-none"
+                        className="absolute top-0 w-0.5 bg-red-500 z-20 pointer-events-none inset-y-0"
                         style={{
-                          left: `${Math.max(0, Math.min(playheadPosition, timelineWidth))}px`,
-                          height: `${totalTimelineHeight}px`
+                          left: `${Math.min((currentTime / actualDuration) * 100, 100)}%`
                         }}
                         data-testid="timeline-playhead"
                       />
@@ -472,12 +438,6 @@ export default function InteractiveTimelineEditor({
               </div>
             </ScrollArea>
           </div>
-        </div>
-
-        {/* Component Details */}
-        <div className="text-sm text-muted-foreground">
-          Components: {timeline.components.length} | Duration: {timeline.duration}s
-        </div>
       </CardContent>
     </Card>
   );
