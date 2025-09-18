@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect, useCallback } from 'react';
+import React, { useRef, useState, useCallback, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -45,20 +45,14 @@ const TIMELINE_CHANNELS: TimelineChannel[] = [
   },
 ];
 
-interface DragState {
-  isDragging: boolean;
-  dragType: 'move' | 'resize-start' | 'resize-end' | null;
-  componentId: string | null;
-  startX: number;
-  startTime: number;
-  originalDuration?: number;
-}
 
 interface TimelineTracksProps {
   timeline: Timeline;
   currentTime: number;
-  dragState: DragState;
-  setDragState: (state: DragState) => void;
+  totalContentDuration: number;
+  needsHorizontalScroll: boolean;
+  effectiveWidth: number;
+  pixelsPerSecond: number;
   onSeek: (time: number) => void;
   onRemoveComponent: (id: string) => void;
   onUpdateComponent: (id: string, updates: { startTime?: number; duration?: number }) => void;
@@ -68,60 +62,27 @@ interface TimelineTracksProps {
 export function TimelineTracks({
   timeline,
   currentTime,
-  dragState,
-  setDragState,
+  totalContentDuration,
+  needsHorizontalScroll,
+  effectiveWidth,
+  pixelsPerSecond,
   onSeek,
   onRemoveComponent,
   onUpdateComponent,
   className,
 }: TimelineTracksProps) {
   const timelineRef = useRef<HTMLDivElement>(null);
-  const sliderRef = useRef<HTMLDivElement>(null);
-  const [timelineWidth, setTimelineWidth] = useState(800);
-  const [isDraggingSlider, setIsDraggingSlider] = useState(false);
-  const [sliderDragStartX, setSliderDragStartX] = useState(0);
-  const [sliderDragStartTime, setSliderDragStartTime] = useState(0);
+  const [dragState, setDragState] = useState<{
+    isDragging: boolean;
+    dragType: 'resize-start' | 'resize-end' | null;
+    componentId: string | null;
+    startX: number;
+    startTime: number;
+    originalDuration?: number;
+  }>({ isDragging: false, dragType: null, componentId: null, startX: 0, startTime: 0 });
 
-  // Calculate smart timeline duration
-  const maxClipEndTime = timeline.components.length > 0
-    ? Math.max(...timeline.components.map(c => c.startTime + c.duration))
-    : 0;
-
-  // Add 25% padding to content, minimum 10s for empty timelines
-  const contentDurationWithPadding = maxClipEndTime > 0 ? maxClipEndTime * 1.25 : 10;
-
-  // Cap visible timeline at 60s, but track total content for scrolling
-  const maxVisibleDuration = 60;
-  const totalContentDuration = Math.max(contentDurationWithPadding, 10);
-  const actualDuration = Math.min(totalContentDuration, maxVisibleDuration);
-
-  // Determine if we need horizontal scrolling
-  const needsHorizontalScroll = totalContentDuration > maxVisibleDuration;
-
-  // For scrollable timelines, calculate width based on total content
-  // For non-scrollable timelines, use the actual visible duration
-  const effectiveWidth = needsHorizontalScroll
-    ? (timelineWidth * totalContentDuration / maxVisibleDuration)
-    : timelineWidth;
-
-  const pixelsPerSecond = totalContentDuration > 0 ? effectiveWidth / totalContentDuration : timelineWidth / 10;
-  const snapThreshold = 0.5; // seconds
   const channelHeight = 48;
   const totalTimelineHeight = TIMELINE_CHANNELS.length * channelHeight;
-
-  // Update timeline width based on available space
-  useEffect(() => {
-    const updateWidth = () => {
-      if (timelineRef.current?.parentElement) {
-        const availableWidth = timelineRef.current.parentElement.clientWidth - 20; // 20px margin
-        setTimelineWidth(Math.max(400, availableWidth)); // minimum 400px
-      }
-    };
-
-    updateWidth();
-    window.addEventListener('resize', updateWidth);
-    return () => window.removeEventListener('resize', updateWidth);
-  }, []);
 
   const getChannelForComponent = (componentType: string): TimelineChannel => {
     return TIMELINE_CHANNELS.find(channel =>
@@ -161,26 +122,9 @@ export function TimelineTracks({
 
   const pixelsToTime = (pixels: number) => (pixels / pixelsPerSecond);
 
-  const snapToNearbyComponent = (time: number, excludeId: string) => {
-    const otherComponents = timeline.components.filter(c => c.id !== excludeId);
-
-    for (const component of otherComponents) {
-      const startDiff = Math.abs(time - component.startTime);
-      const endDiff = Math.abs(time - (component.startTime + component.duration));
-
-      if (startDiff < snapThreshold) {
-        return component.startTime;
-      }
-      if (endDiff < snapThreshold) {
-        return component.startTime + component.duration;
-      }
-    }
-
-    return Math.max(0, Math.min(time, totalContentDuration));
-  };
-
-  const handleMouseDown = useCallback((e: React.MouseEvent, componentId: string, dragType: 'move' | 'resize-start' | 'resize-end') => {
+  const handleMouseDown = useCallback((e: React.MouseEvent, componentId: string, dragType: 'resize-start' | 'resize-end') => {
     e.preventDefault();
+    e.stopPropagation();
     const component = timeline.components.find(c => c.id === componentId);
     if (!component || !timelineRef.current) return;
 
@@ -195,7 +139,7 @@ export function TimelineTracks({
       startTime: component.startTime,
       originalDuration: component.duration,
     });
-  }, [timeline.components, setDragState]);
+  }, [timeline.components]);
 
   const handleMouseMove = useCallback((e: MouseEvent) => {
     if (!dragState.isDragging || !dragState.componentId || !timelineRef.current) return;
@@ -212,11 +156,8 @@ export function TimelineTracks({
     let newDuration = component.duration;
 
     switch (dragState.dragType) {
-      case 'move':
-        newStartTime = snapToNearbyComponent(dragState.startTime + deltaTime, component.id);
-        break;
       case 'resize-start':
-        const maxStartReduction = component.duration - 0.1; // Minimum duration 0.1s
+        const maxStartReduction = component.duration - 0.1;
         const startDelta = Math.max(-maxStartReduction, deltaTime);
         newStartTime = Math.max(0, dragState.startTime + startDelta);
         newDuration = (dragState.originalDuration || component.duration) - startDelta;
@@ -226,68 +167,16 @@ export function TimelineTracks({
         break;
     }
 
-    // Ensure component doesn't go beyond timeline bounds
     if (newStartTime + newDuration > totalContentDuration && dragState.dragType !== 'resize-end') {
       newStartTime = totalContentDuration - newDuration;
     }
 
     onUpdateComponent(component.id, { startTime: newStartTime, duration: newDuration });
-  }, [dragState, timeline.components, totalContentDuration, onUpdateComponent, pixelsToTime, snapToNearbyComponent]);
+  }, [dragState, timeline.components, totalContentDuration, onUpdateComponent, pixelsToTime]);
 
   const handleMouseUp = useCallback(() => {
-    setDragState({
-      isDragging: false,
-      dragType: null,
-      componentId: null,
-      startX: 0,
-      startTime: 0,
-    });
-  }, [setDragState]);
-
-  // Slider-specific handlers
-  const handleSliderMouseDown = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-
-    if (!sliderRef.current) return;
-
-    const rect = sliderRef.current.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-
-    setIsDraggingSlider(true);
-    setSliderDragStartX(x);
-    setSliderDragStartTime(currentTime);
-  }, [currentTime]);
-
-  const handleSliderMouseMove = useCallback((e: MouseEvent) => {
-    if (!isDraggingSlider || !sliderRef.current) return;
-
-    const rect = sliderRef.current.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const deltaX = x - sliderDragStartX;
-    const deltaPercent = (deltaX / rect.width) * 100;
-    const deltaTime = (deltaPercent / 100) * totalContentDuration;
-
-    const newTime = Math.max(0, Math.min(totalContentDuration, sliderDragStartTime + deltaTime));
-    onSeek(newTime);
-  }, [isDraggingSlider, sliderDragStartX, sliderDragStartTime, totalContentDuration, onSeek]);
-
-  const handleSliderMouseUp = useCallback(() => {
-    setIsDraggingSlider(false);
+    setDragState({ isDragging: false, dragType: null, componentId: null, startX: 0, startTime: 0 });
   }, []);
-
-  const handleSliderTimelineClick = useCallback((e: React.MouseEvent) => {
-    if (isDraggingSlider) return;
-
-    if (!sliderRef.current) return;
-
-    const rect = sliderRef.current.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const percent = (x / rect.width) * 100;
-    const newTime = Math.max(0, Math.min((percent / 100) * totalContentDuration, totalContentDuration));
-
-    onSeek(newTime);
-  }, [isDraggingSlider, totalContentDuration, onSeek]);
 
   useEffect(() => {
     if (dragState.isDragging) {
@@ -300,126 +189,17 @@ export function TimelineTracks({
     }
   }, [dragState.isDragging, handleMouseMove, handleMouseUp]);
 
-  // Add slider mouse move and mouse up listeners to document when dragging
-  useEffect(() => {
-    if (isDraggingSlider) {
-      document.addEventListener('mousemove', handleSliderMouseMove);
-      document.addEventListener('mouseup', handleSliderMouseUp);
-
-      return () => {
-        document.removeEventListener('mousemove', handleSliderMouseMove);
-        document.removeEventListener('mouseup', handleSliderMouseUp);
-      };
-    }
-  }, [isDraggingSlider, handleSliderMouseMove, handleSliderMouseUp]);
 
   const handleTimelineClick = (e: React.MouseEvent) => {
-    if (dragState.isDragging) return;
-
     const rect = e.currentTarget.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const time = pixelsToTime(x);
     onSeek(Math.max(0, Math.min(time, totalContentDuration)));
   };
 
-  // Calculate playhead position for slider
-  const playheadPercent = totalContentDuration > 0 ? (currentTime / totalContentDuration) * 100 : 0;
 
   return (
-    <div className={cn("bg-muted rounded-lg overflow-hidden", className)}>
-      {/* Timeline Slider Section */}
-      <div className="p-4 pb-2 border-b border-border/30">
-        <div className="flex">
-          {/* Spacer for icon column alignment */}
-          <div className="w-16 shrink-0"></div>
-
-          {/* TimelineSlider aligned with tracks */}
-          <div className="flex-1 px-2">
-            <div
-              className="w-full"
-              style={{
-                overflowX: needsHorizontalScroll ? 'auto' : 'hidden',
-                overflowY: 'hidden',
-              }}
-            >
-              <div
-                ref={sliderRef}
-                className="relative h-8 cursor-pointer"
-                style={{
-                  width: needsHorizontalScroll ? `${effectiveWidth}px` : '100%',
-                  minWidth: needsHorizontalScroll ? `${effectiveWidth}px` : 'auto'
-                }}
-                onClick={handleSliderTimelineClick}
-              >
-              {/* Progress line background (full width, darker) */}
-              <div className="absolute top-4 left-0 right-0 h-0.5 bg-muted-foreground/30" />
-
-              {/* Progress line (played portion, orange/yellow) */}
-              <div
-                className="absolute top-4 left-0 h-0.5 bg-gradient-to-r from-orange-400 to-yellow-500 transition-all"
-                style={{ width: `${playheadPercent}%` }}
-              />
-
-              {/* Major markers every 5 seconds */}
-              {Array.from({ length: Math.floor(totalContentDuration / 5) + 1 }, (_, i) => {
-                const seconds = i * 5;
-                const position = (seconds / totalContentDuration) * 100;
-                // Don't transform the first marker (0s) to align with track start
-                const transform = seconds === 0 ? 'none' : 'translateX(-50%)';
-                return (
-                  <div
-                    key={`major-${seconds}`}
-                    className={`absolute flex flex-col pointer-events-none ${seconds === 0 ? 'items-start' : 'items-center'}`}
-                    style={{ left: `${position}%`, transform }}
-                  >
-                    <div className="w-px h-3 bg-muted-foreground/70 mb-1"></div>
-                    <span className="text-xs text-muted-foreground">
-                      {seconds}s
-                    </span>
-                  </div>
-                );
-              })}
-
-              {/* Minor ticks every 1 second */}
-              {Array.from({ length: Math.floor(totalContentDuration) + 1 }, (_, i) => {
-                if (i % 5 === 0) return null; // Skip major markers
-                const position = (i / totalContentDuration) * 100;
-                // Don't transform the first tick to align with track start
-                const transform = i === 0 ? 'none' : 'translateX(-50%)';
-                return (
-                  <div
-                    key={`minor-${i}`}
-                    className="absolute w-px h-1.5 bg-muted-foreground/40 pointer-events-none"
-                    style={{
-                      left: `${position}%`,
-                      transform,
-                      top: '16px'
-                    }}
-                  />
-                );
-              })}
-
-              {/* Draggable playhead circle */}
-              <div
-                className="absolute top-4 z-10 cursor-grab active:cursor-grabbing"
-                style={{
-                  left: `${playheadPercent}%`,
-                  transform: 'translate(-50%, -50%)'
-                }}
-                onMouseDown={handleSliderMouseDown}
-              >
-                <div className="w-4 h-4 rounded-full bg-gradient-to-br from-orange-400 to-yellow-500 border-2 border-white shadow-lg hover:scale-110 transition-transform">
-                  <div className="w-full h-full rounded-full bg-gradient-to-br from-white/20 to-transparent" />
-                </div>
-              </div>
-            </div>
-          </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Timeline Tracks Section */}
-      <ScrollArea style={{ height: `${totalTimelineHeight + 32}px` }}>
+    <ScrollArea style={{ height: `${totalTimelineHeight + 32}px` }}>
         <div className="relative p-4">
           <div className="flex">
             {/* Channel Labels Column */}
@@ -483,10 +263,9 @@ export function TimelineTracks({
                   .map((component) => (
                     <div
                       key={component.id}
-                      className={`absolute rounded ${getComponentColor(component.type)} ${dragState.componentId === component.id ? 'opacity-80 shadow-lg' : ''} transition-all cursor-move group border border-white/20`}
+                      className={`absolute rounded ${getComponentColor(component.type)} transition-all group border border-white/20`}
                       style={getComponentStyle(component)}
                       data-testid={`timeline-component-${component.id}`}
-                      onMouseDown={(e) => handleMouseDown(e, component.id, 'move')}
                     >
                       {/* Resize handle - start */}
                       <div
@@ -530,29 +309,6 @@ export function TimelineTracks({
                     </div>
                 ))}
 
-                {/* Snap guides - only show during actual dragging, not clicking */}
-                {dragState.isDragging && dragState.dragType && (
-                  <div className="absolute inset-0 pointer-events-none">
-                    {timeline.components
-                      .filter(c => c.id !== dragState.componentId)
-                      .map(component => (
-                        <React.Fragment key={`snap-${component.id}`}>
-                          <div
-                            className="absolute w-0.5 bg-yellow-400/50 inset-y-0"
-                            style={{
-                              left: `${(component.startTime / totalContentDuration) * 100}%`
-                            }}
-                          />
-                          <div
-                            className="absolute w-0.5 bg-yellow-400/50 inset-y-0"
-                            style={{
-                              left: `${((component.startTime + component.duration) / totalContentDuration) * 100}%`
-                            }}
-                          />
-                        </React.Fragment>
-                      ))}
-                  </div>
-                )}
 
                 {/* Playhead */}
                 <div
@@ -568,6 +324,5 @@ export function TimelineTracks({
         </div>
         </div>
       </ScrollArea>
-    </div>
   );
 }

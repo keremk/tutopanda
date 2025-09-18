@@ -1,7 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { TimelineTracks } from '@/components/timeline-tracks';
+import { TimelineSlider } from '@/components/timeline-slider';
+import { calculateTimelineMetrics } from '@/lib/timeline-utils';
 import { Plus } from 'lucide-react';
 import { type Timeline } from '@/schema';
 
@@ -18,14 +20,6 @@ interface TimelineEditorProps {
   onExport: () => void;
 }
 
-interface DragState {
-  isDragging: boolean;
-  dragType: 'move' | 'resize-start' | 'resize-end' | null;
-  componentId: string | null;
-  startX: number;
-  startTime: number;
-  originalDuration?: number;
-}
 
 
 export default function InteractiveTimelineEditor({
@@ -36,13 +30,25 @@ export default function InteractiveTimelineEditor({
   onRemoveComponent,
   onUpdateComponent,
 }: TimelineEditorProps) {
-  const [dragState, setDragState] = useState<DragState>({
-    isDragging: false,
-    dragType: null,
-    componentId: null,
-    startX: 0,
-    startTime: 0,
-  });
+  const [timelineWidth, setTimelineWidth] = useState(800);
+
+  // Calculate timeline metrics using utils
+  const metrics = calculateTimelineMetrics(timeline.components, timelineWidth);
+
+  // Update timeline width based on available space
+  useEffect(() => {
+    const updateWidth = () => {
+      const container = document.querySelector('[data-timeline-container]');
+      if (container) {
+        const availableWidth = container.clientWidth - 40; // margin
+        setTimelineWidth(Math.max(400, availableWidth));
+      }
+    };
+
+    updateWidth();
+    window.addEventListener('resize', updateWidth);
+    return () => window.removeEventListener('resize', updateWidth);
+  }, []);
   
 
   return (
@@ -72,14 +78,23 @@ export default function InteractiveTimelineEditor({
           </div>
         </CardTitle>
       </CardHeader>
-      <CardContent className="flex-1 flex flex-col min-h-0">
-        {/* TimelineTracks with integrated slider */}
-        <div className="flex-1 min-h-0">
+      <CardContent className="flex-1 flex flex-col min-h-0" data-timeline-container>
+        {/* Composed Timeline: Slider + Tracks */}
+        <div className="bg-muted rounded-lg overflow-hidden">
+          <TimelineSlider
+            currentTime={currentTime}
+            totalContentDuration={metrics.totalContentDuration}
+            needsHorizontalScroll={metrics.needsHorizontalScroll}
+            effectiveWidth={metrics.effectiveWidth}
+            onSeek={onSeek}
+          />
           <TimelineTracks
             timeline={timeline}
             currentTime={currentTime}
-            dragState={dragState}
-            setDragState={setDragState}
+            totalContentDuration={metrics.totalContentDuration}
+            needsHorizontalScroll={metrics.needsHorizontalScroll}
+            effectiveWidth={metrics.effectiveWidth}
+            pixelsPerSecond={metrics.pixelsPerSecond}
             onSeek={onSeek}
             onRemoveComponent={onRemoveComponent}
             onUpdateComponent={onUpdateComponent}
