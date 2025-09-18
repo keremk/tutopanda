@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { TimelineSlider } from '@/components/timeline-slider';
 import { TimelineTracks } from '@/components/timeline-tracks';
 import { Plus } from 'lucide-react';
 import { type Timeline } from '@/schema';
@@ -46,9 +45,6 @@ export default function InteractiveTimelineEditor({
   });
   
 
-  const minTimelineDuration = 60;
-  const actualDuration = Math.max(timeline.duration, minTimelineDuration);
-
   return (
     <Card className="w-full h-full flex flex-col">
       <CardHeader className="shrink-0">
@@ -76,24 +72,8 @@ export default function InteractiveTimelineEditor({
           </div>
         </CardTitle>
       </CardHeader>
-      <CardContent className="flex-1 flex flex-col space-y-4 min-h-0">
-        {/* TimelineSlider - Fixed at top */}
-        <div className="shrink-0">
-          <div className="flex">
-            {/* Spacer for icon column */}
-            <div className="w-16 shrink-0"></div>
-            {/* TimelineSlider aligned with tracks */}
-            <div className="flex-1 px-2">
-              <TimelineSlider
-                currentTime={currentTime}
-                duration={actualDuration}
-                onSeek={onSeek}
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* TimelineTracks with ScrollArea */}
+      <CardContent className="flex-1 flex flex-col min-h-0">
+        {/* TimelineTracks with integrated slider */}
         <div className="flex-1 min-h-0">
           <TimelineTracks
             timeline={timeline}

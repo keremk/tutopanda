@@ -4,6 +4,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Trash2, GripVertical, Film, Mic, Music, Volume2 } from 'lucide-react';
 import { type Timeline, type TimelineComponent } from '@/schema';
+import { cn } from '@/lib/utils';
 
 interface TimelineChannel {
   id: string;
@@ -61,6 +62,7 @@ interface TimelineTracksProps {
   onSeek: (time: number) => void;
   onRemoveComponent: (id: string) => void;
   onUpdateComponent: (id: string, updates: { startTime?: number; duration?: number }) => void;
+  className?: string;
 }
 
 export function TimelineTracks({
@@ -71,11 +73,22 @@ export function TimelineTracks({
   onSeek,
   onRemoveComponent,
   onUpdateComponent,
+  className,
 }: TimelineTracksProps) {
   const timelineRef = useRef<HTMLDivElement>(null);
+  const sliderRef = useRef<HTMLDivElement>(null);
   const [timelineWidth, setTimelineWidth] = useState(800);
+  const [isDraggingSlider, setIsDraggingSlider] = useState(false);
+  const [sliderDragStartX, setSliderDragStartX] = useState(0);
+  const [sliderDragStartTime, setSliderDragStartTime] = useState(0);
+
   const minTimelineDuration = 60; // 1 minute minimum
-  const actualDuration = Math.max(timeline.duration, minTimelineDuration);
+
+  // Calculate dynamic duration based on actual clip content
+  const maxClipEndTime = timeline.components.length > 0
+    ? Math.max(...timeline.components.map(c => c.startTime + c.duration))
+    : 0;
+  const actualDuration = Math.max(maxClipEndTime, minTimelineDuration);
   const pixelsPerSecond = actualDuration > 0 ? timelineWidth / actualDuration : timelineWidth / minTimelineDuration;
   const snapThreshold = 0.5; // seconds
   const channelHeight = 48;
@@ -216,6 +229,51 @@ export function TimelineTracks({
     });
   }, [setDragState]);
 
+  // Slider-specific handlers
+  const handleSliderMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (!sliderRef.current) return;
+
+    const rect = sliderRef.current.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+
+    setIsDraggingSlider(true);
+    setSliderDragStartX(x);
+    setSliderDragStartTime(currentTime);
+  }, [currentTime]);
+
+  const handleSliderMouseMove = useCallback((e: MouseEvent) => {
+    if (!isDraggingSlider || !sliderRef.current) return;
+
+    const rect = sliderRef.current.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const deltaX = x - sliderDragStartX;
+    const deltaPercent = (deltaX / rect.width) * 100;
+    const deltaTime = (deltaPercent / 100) * actualDuration;
+
+    const newTime = Math.max(0, Math.min(actualDuration, sliderDragStartTime + deltaTime));
+    onSeek(newTime);
+  }, [isDraggingSlider, sliderDragStartX, sliderDragStartTime, actualDuration, onSeek]);
+
+  const handleSliderMouseUp = useCallback(() => {
+    setIsDraggingSlider(false);
+  }, []);
+
+  const handleSliderTimelineClick = useCallback((e: React.MouseEvent) => {
+    if (isDraggingSlider) return;
+
+    if (!sliderRef.current) return;
+
+    const rect = sliderRef.current.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const percent = (x / rect.width) * 100;
+    const newTime = Math.max(0, Math.min((percent / 100) * actualDuration, actualDuration));
+
+    onSeek(newTime);
+  }, [isDraggingSlider, actualDuration, onSeek]);
+
   useEffect(() => {
     if (dragState.isDragging) {
       document.addEventListener('mousemove', handleMouseMove);
@@ -227,17 +285,109 @@ export function TimelineTracks({
     }
   }, [dragState.isDragging, handleMouseMove, handleMouseUp]);
 
+  // Add slider mouse move and mouse up listeners to document when dragging
+  useEffect(() => {
+    if (isDraggingSlider) {
+      document.addEventListener('mousemove', handleSliderMouseMove);
+      document.addEventListener('mouseup', handleSliderMouseUp);
+
+      return () => {
+        document.removeEventListener('mousemove', handleSliderMouseMove);
+        document.removeEventListener('mouseup', handleSliderMouseUp);
+      };
+    }
+  }, [isDraggingSlider, handleSliderMouseMove, handleSliderMouseUp]);
+
   const handleTimelineClick = (e: React.MouseEvent) => {
     if (dragState.isDragging) return;
 
     const rect = e.currentTarget.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const time = pixelsToTime(x);
-    onSeek(Math.max(0, Math.min(time, timeline.duration)));
+    onSeek(Math.max(0, Math.min(time, actualDuration)));
   };
 
+  // Calculate playhead position for slider
+  const playheadPercent = actualDuration > 0 ? (currentTime / actualDuration) * 100 : 0;
+
   return (
-    <div className="bg-muted rounded-lg overflow-hidden" style={{ maxHeight: `${totalTimelineHeight + 32}px` }}>
+    <div className={cn("bg-muted rounded-lg overflow-hidden", className)}>
+      {/* Timeline Slider Section */}
+      <div className="p-4 pb-2 border-b border-border/30">
+        <div className="flex">
+          {/* Spacer for icon column alignment */}
+          <div className="w-16 shrink-0"></div>
+
+          {/* TimelineSlider aligned with tracks */}
+          <div className="flex-1 px-2">
+            <div
+              ref={sliderRef}
+              className="relative h-8 cursor-pointer"
+              onClick={handleSliderTimelineClick}
+            >
+              {/* Progress line background (full width, darker) */}
+              <div className="absolute top-4 left-0 right-0 h-0.5 bg-muted-foreground/30" />
+
+              {/* Progress line (played portion, orange/yellow) */}
+              <div
+                className="absolute top-4 left-0 h-0.5 bg-gradient-to-r from-orange-400 to-yellow-500 transition-all"
+                style={{ width: `${playheadPercent}%` }}
+              />
+
+              {/* Major markers every 5 seconds */}
+              {Array.from({ length: Math.floor(actualDuration / 5) + 1 }, (_, i) => {
+                const seconds = i * 5;
+                const position = (seconds / actualDuration) * 100;
+                return (
+                  <div
+                    key={`major-${seconds}`}
+                    className="absolute flex flex-col items-center pointer-events-none"
+                    style={{ left: `${position}%`, transform: 'translateX(-50%)' }}
+                  >
+                    <div className="w-px h-3 bg-muted-foreground/70 mb-1"></div>
+                    <span className="text-xs text-muted-foreground">
+                      {seconds}s
+                    </span>
+                  </div>
+                );
+              })}
+
+              {/* Minor ticks every 1 second */}
+              {Array.from({ length: Math.floor(actualDuration) + 1 }, (_, i) => {
+                if (i % 5 === 0) return null; // Skip major markers
+                const position = (i / actualDuration) * 100;
+                return (
+                  <div
+                    key={`minor-${i}`}
+                    className="absolute w-px h-1.5 bg-muted-foreground/40 pointer-events-none"
+                    style={{
+                      left: `${position}%`,
+                      transform: 'translateX(-50%)',
+                      top: '16px'
+                    }}
+                  />
+                );
+              })}
+
+              {/* Draggable playhead circle */}
+              <div
+                className="absolute top-4 z-10 cursor-grab active:cursor-grabbing"
+                style={{
+                  left: `${playheadPercent}%`,
+                  transform: 'translate(-50%, -50%)'
+                }}
+                onMouseDown={handleSliderMouseDown}
+              >
+                <div className="w-4 h-4 rounded-full bg-gradient-to-br from-orange-400 to-yellow-500 border-2 border-white shadow-lg hover:scale-110 transition-transform">
+                  <div className="w-full h-full rounded-full bg-gradient-to-br from-white/20 to-transparent" />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Timeline Tracks Section */}
       <ScrollArea style={{ height: `${totalTimelineHeight + 32}px` }}>
         <div className="relative p-4">
           <div className="flex">
