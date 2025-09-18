@@ -82,14 +82,29 @@ export function TimelineTracks({
   const [sliderDragStartX, setSliderDragStartX] = useState(0);
   const [sliderDragStartTime, setSliderDragStartTime] = useState(0);
 
-  const minTimelineDuration = 60; // 1 minute minimum
-
-  // Calculate dynamic duration based on actual clip content
+  // Calculate smart timeline duration
   const maxClipEndTime = timeline.components.length > 0
     ? Math.max(...timeline.components.map(c => c.startTime + c.duration))
     : 0;
-  const actualDuration = Math.max(maxClipEndTime, minTimelineDuration);
-  const pixelsPerSecond = actualDuration > 0 ? timelineWidth / actualDuration : timelineWidth / minTimelineDuration;
+
+  // Add 25% padding to content, minimum 10s for empty timelines
+  const contentDurationWithPadding = maxClipEndTime > 0 ? maxClipEndTime * 1.25 : 10;
+
+  // Cap visible timeline at 60s, but track total content for scrolling
+  const maxVisibleDuration = 60;
+  const totalContentDuration = Math.max(contentDurationWithPadding, 10);
+  const actualDuration = Math.min(totalContentDuration, maxVisibleDuration);
+
+  // Determine if we need horizontal scrolling
+  const needsHorizontalScroll = totalContentDuration > maxVisibleDuration;
+
+  // For scrollable timelines, calculate width based on total content
+  // For non-scrollable timelines, use the actual visible duration
+  const effectiveWidth = needsHorizontalScroll
+    ? (timelineWidth * totalContentDuration / maxVisibleDuration)
+    : timelineWidth;
+
+  const pixelsPerSecond = totalContentDuration > 0 ? effectiveWidth / totalContentDuration : timelineWidth / 10;
   const snapThreshold = 0.5; // seconds
   const channelHeight = 48;
   const totalTimelineHeight = TIMELINE_CHANNELS.length * channelHeight;
@@ -120,15 +135,15 @@ export function TimelineTracks({
   };
 
   const getComponentStyle = (component: TimelineComponent) => {
-    const leftPercent = (component.startTime / actualDuration) * 100;
-    const widthPercent = (component.duration / actualDuration) * 100;
+    const leftPercent = (component.startTime / totalContentDuration) * 100;
+    const widthPercent = (component.duration / totalContentDuration) * 100;
     const channelIndex = getChannelIndex(component.type);
     const top = channelIndex * channelHeight + 4; // 4px padding from channel edge
 
     return {
       left: `${leftPercent}%`,
       top: `${top}px`,
-      width: `${Math.max(widthPercent, 2)}%`, // Minimum 2% width for visibility
+      width: `${Math.max(widthPercent, 0.5)}%`, // Minimum 0.5% width for visibility with longer timelines
       height: `${channelHeight - 8}px`, // Full channel height minus padding
     };
   };
@@ -161,7 +176,7 @@ export function TimelineTracks({
       }
     }
 
-    return Math.max(0, Math.min(time, timeline.duration));
+    return Math.max(0, Math.min(time, totalContentDuration));
   };
 
   const handleMouseDown = useCallback((e: React.MouseEvent, componentId: string, dragType: 'move' | 'resize-start' | 'resize-end') => {
@@ -212,12 +227,12 @@ export function TimelineTracks({
     }
 
     // Ensure component doesn't go beyond timeline bounds
-    if (newStartTime + newDuration > timeline.duration && dragState.dragType !== 'resize-end') {
-      newStartTime = timeline.duration - newDuration;
+    if (newStartTime + newDuration > totalContentDuration && dragState.dragType !== 'resize-end') {
+      newStartTime = totalContentDuration - newDuration;
     }
 
     onUpdateComponent(component.id, { startTime: newStartTime, duration: newDuration });
-  }, [dragState, timeline.components, timeline.duration, onUpdateComponent, pixelsToTime, snapToNearbyComponent]);
+  }, [dragState, timeline.components, totalContentDuration, onUpdateComponent, pixelsToTime, snapToNearbyComponent]);
 
   const handleMouseUp = useCallback(() => {
     setDragState({
@@ -251,11 +266,11 @@ export function TimelineTracks({
     const x = e.clientX - rect.left;
     const deltaX = x - sliderDragStartX;
     const deltaPercent = (deltaX / rect.width) * 100;
-    const deltaTime = (deltaPercent / 100) * actualDuration;
+    const deltaTime = (deltaPercent / 100) * totalContentDuration;
 
-    const newTime = Math.max(0, Math.min(actualDuration, sliderDragStartTime + deltaTime));
+    const newTime = Math.max(0, Math.min(totalContentDuration, sliderDragStartTime + deltaTime));
     onSeek(newTime);
-  }, [isDraggingSlider, sliderDragStartX, sliderDragStartTime, actualDuration, onSeek]);
+  }, [isDraggingSlider, sliderDragStartX, sliderDragStartTime, totalContentDuration, onSeek]);
 
   const handleSliderMouseUp = useCallback(() => {
     setIsDraggingSlider(false);
@@ -269,10 +284,10 @@ export function TimelineTracks({
     const rect = sliderRef.current.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const percent = (x / rect.width) * 100;
-    const newTime = Math.max(0, Math.min((percent / 100) * actualDuration, actualDuration));
+    const newTime = Math.max(0, Math.min((percent / 100) * totalContentDuration, totalContentDuration));
 
     onSeek(newTime);
-  }, [isDraggingSlider, actualDuration, onSeek]);
+  }, [isDraggingSlider, totalContentDuration, onSeek]);
 
   useEffect(() => {
     if (dragState.isDragging) {
@@ -304,11 +319,11 @@ export function TimelineTracks({
     const rect = e.currentTarget.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const time = pixelsToTime(x);
-    onSeek(Math.max(0, Math.min(time, actualDuration)));
+    onSeek(Math.max(0, Math.min(time, totalContentDuration)));
   };
 
   // Calculate playhead position for slider
-  const playheadPercent = actualDuration > 0 ? (currentTime / actualDuration) * 100 : 0;
+  const playheadPercent = totalContentDuration > 0 ? (currentTime / totalContentDuration) * 100 : 0;
 
   return (
     <div className={cn("bg-muted rounded-lg overflow-hidden", className)}>
@@ -321,10 +336,21 @@ export function TimelineTracks({
           {/* TimelineSlider aligned with tracks */}
           <div className="flex-1 px-2">
             <div
-              ref={sliderRef}
-              className="relative h-8 cursor-pointer"
-              onClick={handleSliderTimelineClick}
+              className="w-full"
+              style={{
+                overflowX: needsHorizontalScroll ? 'auto' : 'hidden',
+                overflowY: 'hidden',
+              }}
             >
+              <div
+                ref={sliderRef}
+                className="relative h-8 cursor-pointer"
+                style={{
+                  width: needsHorizontalScroll ? `${effectiveWidth}px` : '100%',
+                  minWidth: needsHorizontalScroll ? `${effectiveWidth}px` : 'auto'
+                }}
+                onClick={handleSliderTimelineClick}
+              >
               {/* Progress line background (full width, darker) */}
               <div className="absolute top-4 left-0 right-0 h-0.5 bg-muted-foreground/30" />
 
@@ -335,14 +361,16 @@ export function TimelineTracks({
               />
 
               {/* Major markers every 5 seconds */}
-              {Array.from({ length: Math.floor(actualDuration / 5) + 1 }, (_, i) => {
+              {Array.from({ length: Math.floor(totalContentDuration / 5) + 1 }, (_, i) => {
                 const seconds = i * 5;
-                const position = (seconds / actualDuration) * 100;
+                const position = (seconds / totalContentDuration) * 100;
+                // Don't transform the first marker (0s) to align with track start
+                const transform = seconds === 0 ? 'none' : 'translateX(-50%)';
                 return (
                   <div
                     key={`major-${seconds}`}
-                    className="absolute flex flex-col items-center pointer-events-none"
-                    style={{ left: `${position}%`, transform: 'translateX(-50%)' }}
+                    className={`absolute flex flex-col pointer-events-none ${seconds === 0 ? 'items-start' : 'items-center'}`}
+                    style={{ left: `${position}%`, transform }}
                   >
                     <div className="w-px h-3 bg-muted-foreground/70 mb-1"></div>
                     <span className="text-xs text-muted-foreground">
@@ -353,16 +381,18 @@ export function TimelineTracks({
               })}
 
               {/* Minor ticks every 1 second */}
-              {Array.from({ length: Math.floor(actualDuration) + 1 }, (_, i) => {
+              {Array.from({ length: Math.floor(totalContentDuration) + 1 }, (_, i) => {
                 if (i % 5 === 0) return null; // Skip major markers
-                const position = (i / actualDuration) * 100;
+                const position = (i / totalContentDuration) * 100;
+                // Don't transform the first tick to align with track start
+                const transform = i === 0 ? 'none' : 'translateX(-50%)';
                 return (
                   <div
                     key={`minor-${i}`}
                     className="absolute w-px h-1.5 bg-muted-foreground/40 pointer-events-none"
                     style={{
                       left: `${position}%`,
-                      transform: 'translateX(-50%)',
+                      transform,
                       top: '16px'
                     }}
                   />
@@ -383,6 +413,7 @@ export function TimelineTracks({
                 </div>
               </div>
             </div>
+          </div>
           </div>
         </div>
       </div>
@@ -416,12 +447,24 @@ export function TimelineTracks({
             {/* Timeline Tracks */}
             <div className="flex-1 px-2">
               <div
-                ref={timelineRef}
-                className="relative cursor-pointer select-none w-full"
-                style={{ height: `${totalTimelineHeight}px` }}
-                onClick={handleTimelineClick}
-                data-testid="timeline-tracks"
+                className="w-full"
+                style={{
+                  height: `${totalTimelineHeight}px`,
+                  overflowX: needsHorizontalScroll ? 'auto' : 'hidden',
+                  overflowY: 'hidden',
+                }}
               >
+                <div
+                  ref={timelineRef}
+                  className="relative cursor-pointer select-none"
+                  style={{
+                    height: `${totalTimelineHeight}px`,
+                    width: needsHorizontalScroll ? `${effectiveWidth}px` : '100%',
+                    minWidth: needsHorizontalScroll ? `${effectiveWidth}px` : 'auto'
+                  }}
+                  onClick={handleTimelineClick}
+                  data-testid="timeline-tracks"
+                >
                 {/* Channel Background Lines */}
                 {TIMELINE_CHANNELS.map((channel, index) => (
                   <div
@@ -487,8 +530,8 @@ export function TimelineTracks({
                     </div>
                 ))}
 
-                {/* Snap guides */}
-                {dragState.isDragging && (
+                {/* Snap guides - only show during actual dragging, not clicking */}
+                {dragState.isDragging && dragState.dragType && (
                   <div className="absolute inset-0 pointer-events-none">
                     {timeline.components
                       .filter(c => c.id !== dragState.componentId)
@@ -497,13 +540,13 @@ export function TimelineTracks({
                           <div
                             className="absolute w-0.5 bg-yellow-400/50 inset-y-0"
                             style={{
-                              left: `${(component.startTime / actualDuration) * 100}%`
+                              left: `${(component.startTime / totalContentDuration) * 100}%`
                             }}
                           />
                           <div
                             className="absolute w-0.5 bg-yellow-400/50 inset-y-0"
                             style={{
-                              left: `${((component.startTime + component.duration) / actualDuration) * 100}%`
+                              left: `${((component.startTime + component.duration) / totalContentDuration) * 100}%`
                             }}
                           />
                         </React.Fragment>
@@ -515,13 +558,14 @@ export function TimelineTracks({
                 <div
                   className="absolute top-0 w-0.5 bg-red-500 z-20 pointer-events-none inset-y-0"
                   style={{
-                    left: `${Math.min((currentTime / actualDuration) * 100, 100)}%`
+                    left: `${Math.min((currentTime / totalContentDuration) * 100, 100)}%`
                   }}
                   data-testid="timeline-playhead"
                 />
               </div>
             </div>
           </div>
+        </div>
         </div>
       </ScrollArea>
     </div>
