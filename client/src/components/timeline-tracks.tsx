@@ -1,7 +1,6 @@
 import React, { useRef, useState, useCallback, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Trash2, GripVertical, Film, Mic, Music, Volume2 } from 'lucide-react';
 import { type Timeline, type TimelineComponent } from '@/schema';
 import { cn } from '@/lib/utils';
@@ -99,13 +98,17 @@ export function TimelineTracks({
     const leftPercent = (component.startTime / totalContentDuration) * 100;
     const widthPercent = (component.duration / totalContentDuration) * 100;
     const channelIndex = getChannelIndex(component.type);
-    const top = channelIndex * channelHeight + 4; // 4px padding from channel edge
+
+    // Calculate for true vertical centering within each 48px row
+    const trackHeight = 40; // Track height
+    const verticalPadding = (channelHeight - trackHeight) / 2; // Equal top/bottom padding
+    const top = channelIndex * channelHeight + verticalPadding;
 
     return {
       left: `${leftPercent}%`,
       top: `${top}px`,
-      width: `${Math.max(widthPercent, 0.5)}%`, // Minimum 0.5% width for visibility with longer timelines
-      height: `${channelHeight - 8}px`, // Full channel height minus padding
+      width: `${Math.max(widthPercent, 0.5)}%`,
+      height: `${trackHeight}px`,
     };
   };
 
@@ -201,50 +204,14 @@ export function TimelineTracks({
   return (
     <ScrollArea style={{ height: `${totalTimelineHeight + 32}px` }}>
         <div className="relative p-4">
-          <div className="flex">
-            {/* Channel Labels Column */}
-            <div className="w-16 shrink-0 bg-background/80 border-r border-border/30">
-              {TIMELINE_CHANNELS.map((channel) => {
-                const IconComponent = channel.icon;
-                return (
-                  <Tooltip key={channel.id}>
-                    <TooltipTrigger asChild>
-                      <div
-                        className="flex items-center justify-center hover:bg-muted/30 transition-colors"
-                        style={{ height: `${channelHeight}px` }}
-                      >
-                        <IconComponent className="w-4 h-4 text-muted-foreground hover:text-foreground transition-colors" />
-                      </div>
-                    </TooltipTrigger>
-                    <TooltipContent side="right">
-                      <p>{channel.name}</p>
-                    </TooltipContent>
-                  </Tooltip>
-                );
-              })}
-            </div>
-
-            {/* Timeline Tracks */}
-            <div className="flex-1 px-2">
-              <div
-                className="w-full"
-                style={{
-                  height: `${totalTimelineHeight}px`,
-                  overflowX: needsHorizontalScroll ? 'auto' : 'hidden',
-                  overflowY: 'hidden',
-                }}
-              >
-                <div
-                  ref={timelineRef}
-                  className="relative cursor-pointer select-none"
-                  style={{
-                    height: `${totalTimelineHeight}px`,
-                    width: needsHorizontalScroll ? `${effectiveWidth}px` : '100%',
-                    minWidth: needsHorizontalScroll ? `${effectiveWidth}px` : 'auto'
-                  }}
-                  onClick={handleTimelineClick}
-                  data-testid="timeline-tracks"
-                >
+          <div className="px-2">
+            <div
+              ref={timelineRef}
+              className="relative cursor-pointer select-none w-full"
+              style={{ height: `${totalTimelineHeight}px` }}
+              onClick={handleTimelineClick}
+              data-testid="timeline-tracks"
+            >
                 {/* Channel Background Lines */}
                 {TIMELINE_CHANNELS.map((channel, index) => (
                   <div
@@ -319,9 +286,7 @@ export function TimelineTracks({
                   data-testid="timeline-playhead"
                 />
               </div>
-            </div>
           </div>
-        </div>
         </div>
       </ScrollArea>
   );

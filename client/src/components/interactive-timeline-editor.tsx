@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { TimelineTracks } from '@/components/timeline-tracks';
-import { TimelineSlider } from '@/components/timeline-slider';
+import { TrackHeaders } from '@/components/track-headers';
+import { TimelineContent } from '@/components/timeline-content';
 import { calculateTimelineMetrics } from '@/lib/timeline-utils';
 import { Plus } from 'lucide-react';
 import { type Timeline } from '@/schema';
@@ -79,16 +79,10 @@ export default function InteractiveTimelineEditor({
         </CardTitle>
       </CardHeader>
       <CardContent className="flex-1 flex flex-col min-h-0" data-timeline-container>
-        {/* Composed Timeline: Slider + Tracks */}
-        <div className="bg-muted rounded-lg overflow-hidden">
-          <TimelineSlider
-            currentTime={currentTime}
-            totalContentDuration={metrics.totalContentDuration}
-            needsHorizontalScroll={metrics.needsHorizontalScroll}
-            effectiveWidth={metrics.effectiveWidth}
-            onSeek={onSeek}
-          />
-          <TimelineTracks
+        {/* Composed Timeline: TrackHeaders + ScrollableContent */}
+        <div className="bg-muted rounded-lg overflow-hidden flex">
+          <TrackHeaders />
+          <TimelineContent
             timeline={timeline}
             currentTime={currentTime}
             totalContentDuration={metrics.totalContentDuration}

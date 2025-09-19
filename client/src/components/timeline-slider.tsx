@@ -85,28 +85,12 @@ export const TimelineSlider = ({
 
   return (
     <div className={cn("p-4 pb-2 border-b border-border/30", className)}>
-      <div className="flex">
-        {/* Spacer for icon column alignment */}
-        <div className="w-16 shrink-0"></div>
-
-        {/* TimelineSlider aligned with tracks */}
-        <div className="flex-1 px-2">
-          <div
-            className="w-full"
-            style={{
-              overflowX: needsHorizontalScroll ? 'auto' : 'hidden',
-              overflowY: 'hidden',
-            }}
-          >
-            <div
-              ref={sliderRef}
-              className="relative h-8 cursor-pointer"
-              style={{
-                width: needsHorizontalScroll ? `${effectiveWidth}px` : '100%',
-                minWidth: needsHorizontalScroll ? `${effectiveWidth}px` : 'auto'
-              }}
-              onClick={handleTimelineClick}
-            >
+      <div className="px-2">
+        <div
+          ref={sliderRef}
+          className="relative h-8 cursor-pointer w-full"
+          onClick={handleTimelineClick}
+        >
               {/* Progress line background (full width, darker) */}
               <div className="absolute top-4 left-0 right-0 h-0.5 bg-muted-foreground/30" />
 
@@ -168,8 +152,6 @@ export const TimelineSlider = ({
                   <div className="w-full h-full rounded-full bg-gradient-to-br from-white/20 to-transparent" />
                 </div>
               </div>
-            </div>
-          </div>
         </div>
       </div>
     </div>
