@@ -1,86 +1,157 @@
 "use client";
 
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { useMemo } from "react";
+import { AlertTriangleIcon, BrainIcon, Loader2Icon } from "lucide-react";
+import { useInngestSubscription } from "@inngest/realtime/hooks";
+
 import {
   Task,
   TaskTrigger,
   TaskContent,
   TaskItem,
-  TaskItemFile,
 } from "@/components/ai-elements/task";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
-import { BrainIcon, FileTextIcon } from "lucide-react";
-import { useState } from "react";
+import { fetchLectureProgressSubscriptionToken } from "@/app/actions/get-subscribe-token";
+import type { LectureProgressMessage } from "@/inngest/functions/start-lecture-creation";
 
 interface AgentProgressProps {
   className?: string;
 }
 
+type RunProgress = {
+  runId: string;
+  messages: LectureProgressMessage[];
+  status: LectureProgressMessage["status"];
+  lastUpdated: number;
+};
+
 export const AgentProgress = ({ className }: AgentProgressProps) => {
-  // Mock data for demonstration - will be replaced with real data later
-  const [tasks] = useState([
-    {
-      id: "1",
-      title: "Analyzing codebase structure",
-      items: [
-        "Found 23 React components",
-        "Identified 5 custom hooks",
-        "Located configuration files",
-      ],
-      files: ["package.json", "tsconfig.json"],
-      completed: true,
-    },
-    {
-      id: "2",
-      title: "Processing user request",
-      items: [
-        "Understanding requirements",
-        "Planning implementation steps",
-      ],
-      files: ["src/components/ui/button.tsx"],
-      completed: false,
-    },
-  ]);
+  const { data = [], state, error } = useInngestSubscription({
+    refreshToken: fetchLectureProgressSubscriptionToken,
+  });
 
-  const hasActiveTasks = tasks.length > 0;
+  const runs = useMemo(() => {
+    if (!data.length) {
+      return [] as RunProgress[];
+    }
 
-  if (!hasActiveTasks) {
+    const grouped = new Map<string, LectureProgressMessage[]>();
+
+    for (const message of data) {
+      if (message.topic !== "progress") {
+        continue;
+      }
+
+      const payload = message.data as LectureProgressMessage | undefined;
+
+      if (!payload?.runId) {
+        continue;
+      }
+
+      const existing = grouped.get(payload.runId);
+
+      if (existing) {
+        existing.push(payload);
+      } else {
+        grouped.set(payload.runId, [payload]);
+      }
+    }
+
+    return Array.from(grouped.entries())
+      .map(([runId, updates]) => {
+        const sorted = [...updates].sort((a, b) => a.step - b.step);
+        const last = sorted[sorted.length - 1];
+        const parsedTimestamp = last ? Date.parse(last.timestamp) : Number.NaN;
+
+        return {
+          runId,
+          messages: sorted,
+          status: last?.status ?? "in-progress",
+          lastUpdated: Number.isFinite(parsedTimestamp)
+            ? parsedTimestamp
+            : Date.now(),
+        } satisfies RunProgress;
+      })
+      .sort((a, b) => b.lastUpdated - a.lastUpdated);
+  }, [data]);
+
+  const hasRuns = runs.length > 0;
+
+  if (error) {
     return (
-      <div className="flex flex-col items-center justify-center h-full text-center p-6">
-        <BrainIcon className="size-12 text-muted-foreground mb-4" />
-        <h3 className="text-lg font-medium text-foreground mb-2">
-          No active tasks
-        </h3>
-        <p className="text-sm text-muted-foreground max-w-sm">
-          Start a conversation to see AI progress and task breakdowns here.
+      <div className="flex h-full flex-col items-center justify-center gap-2 p-6 text-center">
+        <AlertTriangleIcon className="mb-2 size-12 text-destructive" />
+        <h3 className="text-lg font-medium text-foreground">Connection lost</h3>
+        <p className="text-sm text-muted-foreground">
+          {error.message || "Unable to receive agent updates right now."}
         </p>
+      </div>
+    );
+  }
+
+  if (!hasRuns) {
+    if (state === "connecting" || state === "refresh_token") {
+      return (
+        <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
+          <Loader2Icon className="size-10 animate-spin text-muted-foreground" />
+          <div>
+            <h3 className="text-lg font-medium text-foreground">Connecting</h3>
+            <p className="text-sm text-muted-foreground">
+              Listening for realtime agent updates…
+            </p>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
+        <BrainIcon className="size-10 text-muted-foreground" />
+        <div>
+          <h3 className="text-lg font-medium text-foreground">No active tasks</h3>
+          <p className="text-sm text-muted-foreground">
+            Submit a prompt to see the agent’s progress appear here.
+          </p>
+        </div>
       </div>
     );
   }
 
   return (
     <ScrollArea className={cn("h-full", className)}>
-      <div className="p-4 space-y-4">
-        {tasks.map((task) => (
-          <Task key={task.id} defaultOpen={!task.completed}>
-            <TaskTrigger title={task.title} />
-            <TaskContent>
-              {task.items.map((item, index) => (
-                <TaskItem key={index}>{item}</TaskItem>
-              ))}
-              {task.files.length > 0 && (
-                <div className="flex flex-wrap gap-2 mt-2">
-                  {task.files.map((file, index) => (
-                    <TaskItemFile key={index}>
-                      <FileTextIcon className="size-3" />
-                      {file}
-                    </TaskItemFile>
-                  ))}
-                </div>
-              )}
-            </TaskContent>
-          </Task>
-        ))}
+      <div className="space-y-4 p-4">
+        {runs.map((run) => {
+          const lastMessage = run.messages[run.messages.length - 1];
+          const totalSteps = lastMessage?.totalSteps ?? run.messages.length;
+          const completedSteps = Math.min(run.messages.length, totalSteps);
+          const statusLabel = run.status === "complete" ? "complete" : "in progress";
+          const title = `Lecture creation · ${completedSteps}/${totalSteps} steps • ${statusLabel}`;
+
+          return (
+            <Task key={run.runId} defaultOpen={run.status !== "complete"}>
+              <TaskTrigger title={title} />
+              <TaskContent>
+                {run.messages.map((message, index) => (
+                  <TaskItem
+                    key={`${run.runId}-${message.step}`}
+                    className={cn(
+                      "flex items-start gap-3",
+                      index === run.messages.length - 1 &&
+                        message.status === "complete" &&
+                        "text-foreground"
+                    )}
+                  >
+                    <span className="mt-0.5 min-w-6 text-xs font-semibold text-muted-foreground">
+                      {message.step}.
+                    </span>
+                    <span className="flex-1">{message.message}</span>
+                  </TaskItem>
+                ))}
+              </TaskContent>
+            </Task>
+          );
+        })}
       </div>
     </ScrollArea>
   );

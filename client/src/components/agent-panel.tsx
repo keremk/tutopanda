@@ -22,7 +22,10 @@ import {
 } from "@/components/ai-elements/prompt-input";
 import { AgentProgress } from "@/components/agent-progress";
 import { cn } from "@/lib/utils";
-import { type FormEvent } from "react";
+import { useEffect, useRef, useState, useTransition, type FormEvent } from "react";
+import type { ChatStatus } from "ai";
+
+import { sendPromptAction } from "@/app/actions/send-prompt";
 
 interface AgentPanelProps {
   className?: string;
@@ -30,9 +33,46 @@ interface AgentPanelProps {
 }
 
 export const AgentPanel = ({ className, children }: AgentPanelProps) => {
+  const [submitStatus, setSubmitStatus] = useState<ChatStatus | undefined>();
+  const [isPending, startTransition] = useTransition();
+  const errorResetTimeout = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (errorResetTimeout.current) {
+        window.clearTimeout(errorResetTimeout.current);
+      }
+    };
+  }, []);
+
   const handlePromptSubmit = (message: PromptInputMessage, event: FormEvent<HTMLFormElement>) => {
-    // TODO: Implement backend integration
-    console.log("Prompt submitted:", message);
+    const prompt = message.text?.trim();
+
+    if (!prompt || isPending) {
+      return;
+    }
+
+    const formElement = event.currentTarget;
+    setSubmitStatus("submitted");
+
+    startTransition(() => {
+      sendPromptAction({ prompt })
+        .then(() => {
+          formElement.reset();
+          setSubmitStatus(undefined);
+        })
+        .catch((error) => {
+          console.error("Failed to send prompt", error);
+          setSubmitStatus("error");
+          if (errorResetTimeout.current) {
+            window.clearTimeout(errorResetTimeout.current);
+          }
+          errorResetTimeout.current = window.setTimeout(() => {
+            setSubmitStatus(undefined);
+            errorResetTimeout.current = null;
+          }, 2000);
+        });
+    });
   };
 
   return (
@@ -84,7 +124,7 @@ export const AgentPanel = ({ className, children }: AgentPanelProps) => {
                         </PromptInputActionMenuContent>
                       </PromptInputActionMenu>
                     </PromptInputTools>
-                    <PromptInputSubmit />
+                    <PromptInputSubmit status={submitStatus} disabled={isPending} />
                   </PromptInputToolbar>
                 </PromptInputBody>
               </PromptInput>

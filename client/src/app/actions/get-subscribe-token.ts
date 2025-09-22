@@ -1,22 +1,23 @@
-// ex. /app/actions/get-subscribe-token.ts
 "use server";
 
-import { inngest } from "@/inngest/client";
-// See the "Typed channels (recommended)" section above for more details:
-import { userChannel } from "@/inngest/functions/helloWorld";
 import { getSubscriptionToken, Realtime } from "@inngest/realtime";
-import { getSession } from "@/app/lib/session"; // this could be any auth provider
 
-export type UserChannelToken = Realtime.Token<typeof userChannel, ["ai"]>;
+import { lectureProgressChannel } from "@/inngest/functions/start-lecture-creation";
+import { getSession } from "@/lib/session";
+import { getInngestApp } from "@/inngest/client";
 
-export async function fetchRealtimeSubscriptionToken(): Promise<UserChannelToken> {
-  const { userId } = await getSession();
+const inngest = getInngestApp();
 
-  // This creates a token using the Inngest API that is bound to the channel and topic:
-  const token = await getSubscriptionToken(inngest, {
-    channel: `user:${userId}`,
-    topics: ["ai"],
+export type LectureProgressToken = Realtime.Token<
+  typeof lectureProgressChannel,
+  ["progress"]
+>;
+
+export async function fetchLectureProgressSubscriptionToken(): Promise<LectureProgressToken> {
+  const { user } = await getSession();
+
+  return getSubscriptionToken(inngest, {
+    channel: lectureProgressChannel(user.id),
+    topics: ["progress"],
   });
-
-  return token;
 }

@@ -9,3 +9,5 @@ export const getInngestApp = () => {
     middleware: [realtimeMiddleware()],
   }));
 };
+
+export const inngest = getInngestApp();
