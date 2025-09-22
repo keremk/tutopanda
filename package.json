@@ -8,15 +8,16 @@
     "server"
   ],
   "scripts": {
-    "dev": "concurrently \"pnpm --filter client dev\" \"pnpm --filter server dev\"",
-    "dev:client": "pnpm --filter client dev",
-    "dev:server": "pnpm --filter server dev",
-    "build": "pnpm --filter client build && pnpm --filter server build",
-    "build:client": "pnpm --filter client build",
-    "build:server": "pnpm --filter server build",
-    "start": "pnpm --filter server start",
-    "check": "pnpm --filter client type-check && pnpm --filter server check",
-    "db:push": "pnpm --filter server db:push"
+    "dev": "concurrently \"pnpm --filter tutopanda-client dev\" \"pnpm --filter tutopanda-server dev\"",
+    "dev:client": "pnpm --filter tutopanda-client dev",
+    "dev:server": "pnpm --filter tutopanda-server dev",
+    "build": "pnpm --filter tutopanda-client build && pnpm --filter tutopanda-server build",
+    "build:client": "pnpm --filter tutopanda-client build",
+    "build:server": "pnpm --filter tutopanda-server build",
+    "lint": "pnpm --filter tutopanda-client lint",
+    "start": "pnpm --filter tutopanda-server start",
+    "check": "pnpm --filter tutopanda-client type-check && pnpm --filter tutopanda-server check",
+    "db:push": "pnpm --filter tutopanda-server db:push"
   },
   "devDependencies": {
     "concurrently": "^9.1.0"

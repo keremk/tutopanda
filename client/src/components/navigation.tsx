@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   DropdownMenu,
@@ -13,14 +13,37 @@ import {
 import { ThemeSwitcher } from "@/components/theme-switcher";
 import { LogOut, Settings, User } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { authClient } from "@/lib/auth-client";
+import { useToast } from "@/hooks/use-toast";
 
 const navigationItems = [
   { name: "Learn", href: "/learn" },
-  { name: "Edit", href: "/edit" },
+  { name: "Create", href: "/create" },
 ];
 
 export function Navigation() {
   const pathname = usePathname();
+  const router = useRouter();
+  const { toast } = useToast();
+  const { data: session } = authClient.useSession();
+
+  const handleLogout = async () => {
+    try {
+      await authClient.signOut();
+      toast({
+        title: "Success",
+        description: "Logged out successfully!",
+      });
+      router.push("/");
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to log out",
+        variant: "destructive",
+      });
+      console.error("Logout error:", error);
+    }
+  };
 
   return (
     <nav className="nav-clean">
@@ -54,11 +77,18 @@ export function Navigation() {
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Avatar className="h-9 w-9 cursor-pointer ring-2 ring-primary/20 hover:ring-primary/40 transition-all duration-200">
-                <AvatarImage src="/avatars/01.png" alt="@user" />
-                <AvatarFallback className="bg-secondary text-secondary-foreground font-bold">U</AvatarFallback>
+                <AvatarImage src={session?.user?.image || undefined} alt={session?.user?.name || "User"} />
+                <AvatarFallback className="bg-secondary text-secondary-foreground font-bold">
+                  {session?.user?.name?.charAt(0)?.toUpperCase() || "U"}
+                </AvatarFallback>
               </Avatar>
             </DropdownMenuTrigger>
             <DropdownMenuContent className="w-56 shadow-lg border-0" align="end" forceMount>
+              <div className="px-3 py-2 text-sm">
+                <p className="font-medium">{session?.user?.name || "User"}</p>
+                <p className="text-muted-foreground text-xs">{session?.user?.email}</p>
+              </div>
+              <DropdownMenuSeparator />
               <DropdownMenuItem asChild className="cursor-pointer">
                 <Link href="/account" className="flex items-center">
                   <User className="mr-3 h-4 w-4" />
@@ -66,7 +96,10 @@ export function Navigation() {
                 </Link>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem className="cursor-pointer text-destructive focus:text-destructive">
+              <DropdownMenuItem
+                className="cursor-pointer text-destructive focus:text-destructive"
+                onClick={handleLogout}
+              >
                 <LogOut className="mr-3 h-4 w-4" />
                 Log out
               </DropdownMenuItem>

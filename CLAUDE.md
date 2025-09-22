@@ -6,21 +6,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Tutopanda is a pnpm workspace monorepo with two packages:
 - **client/**: Next.js 15 frontend with App Router
-- **server/**: Express + Drizzle ORM API server
+- **server/**: Currently empty and not used, ignore for now
 
 ### Client Structure
-- Routes: `client/src/app/` with grouping folders like `(landing)` and `(docs)`
+- Routes: `client/src/app/` with grouping folders like `(app)`, `(landing)` and `(docs)`
 - Components: `client/src/components/` (shared UI components)
 - Hooks: `client/src/hooks/`
 - Utilities: `client/src/lib/`
 - Validation: `client/src/schema.ts`
 - UI Library: Shadcn/ui components with Radix UI and Tailwind CSS
-
-### Server Structure
-- Entry point: `server/index.ts`
-- Features organized by folder
-- Build output: `server/dist/` (ignored by git)
-- Database: Drizzle ORM with Neon PostgreSQL
+- Data: `client/src/db/` Database schemas and migrations (Drizzle)
+- Actions: `client/src/actions/` All actions go here
+- Data Layer: `client/src/data/` All data layer functions go here
 
 ## Development Commands
 
@@ -42,8 +39,8 @@ pnpm build:server       # Build server only
 
 # Type checking and linting
 pnpm check             # TypeScript validation for both packages
-pnpm --filter client lint    # ESLint for client
-pnpm --filter client type-check  # TypeScript check for client only
+pnpm --filter tutopanda-client lint    # ESLint for client
+pnpm --filter tutopanda-client type-check  # TypeScript check for client only
 
 # Database
 pnpm db:push           # Sync Drizzle migrations (requires DATABASE_URL)
@@ -52,7 +49,7 @@ pnpm db:push           # Sync Drizzle migrations (requires DATABASE_URL)
 ## Key Technologies
 
 - **Frontend**: Next.js 15, React 19, TypeScript, Tailwind CSS v4, Shadcn/ui
-- **Backend**: Express, Drizzle ORM, Passport.js, WebSockets
+- **Backend**: Using Inngest for durable long running operations
 - **Database**: Neon PostgreSQL
 - **Build**: esbuild (server), Next.js (client)
 - **Package Manager**: pnpm workspaces
@@ -69,3 +66,4 @@ pnpm db:push           # Sync Drizzle migrations (requires DATABASE_URL)
 ## Testing
 
 No automated tests are currently configured. Type checking and linting serve as the primary validation. For new code, plan to add Vitest with Testing Library for client code using `.test.tsx` suffix.
+- Add to memory: We are using BetterAuth for authentication backed by a NEON database. For development use local docker based db and use PG driver.
