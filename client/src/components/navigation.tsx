@@ -17,8 +17,8 @@ import { authClient } from "@/lib/auth-client";
 import { useToast } from "@/hooks/use-toast";
 
 const navigationItems = [
-  { name: "Learn", href: "/learn" },
   { name: "Create", href: "/create" },
+  { name: "Learn", href: "/learn" },
 ];
 
 export function Navigation() {

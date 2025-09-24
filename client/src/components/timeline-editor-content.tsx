@@ -14,7 +14,6 @@ interface TimelineEditorContentProps {
   onAddComponent: (type: 'ken_burns' | 'map_troop_movement') => void;
   onRemoveComponent: (id: string) => void;
   onUpdateComponent: (id: string, updates: { startTime?: number; duration?: number }) => void;
-  onExport: () => void;
 }
 
 export default function TimelineEditorContent({

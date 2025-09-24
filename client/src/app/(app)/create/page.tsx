@@ -1,11 +1,11 @@
-import TimelineVideoApp from '@/components/timeline-video-app';
-import { AgentPanel } from '@/components/agent-panel';
+import CreateSection from "@/components/create-section";
+import { AgentPanel } from "@/components/agent-panel";
 
 export default function EditPage() {
   return (
     <div className="h-full">
       <AgentPanel>
-        <TimelineVideoApp />
+        <CreateSection />
       </AgentPanel>
     </div>
   );
