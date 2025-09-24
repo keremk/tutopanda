@@ -1,8 +1,13 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import InteractiveTimelineEditor from './interactive-timeline-editor';
-import VideoPreview from './video-preview';
+import { Button } from '@/components/ui/button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Plus } from 'lucide-react';
+import VideoPreviewContent from './video-preview-content';
+import TimelineEditorContent from './timeline-editor-content';
+import ScriptEditor from './script-editor';
+import AssetsEditor from './assets-editor';
 import { mockTimeline, type Timeline, type TimelineComponent } from '@/schema';
 
 export default function TimelineVideoApp() {
@@ -34,7 +39,7 @@ export default function TimelineVideoApp() {
   };
 
   const handleAddComponent = (type: 'ken_burns' | 'map_troop_movement') => {
-    const newComponent: TimelineComponent = type === 'ken_burns' 
+    const newComponent: TimelineComponent = type === 'ken_burns'
       ? {
           type: 'ken_burns',
           id: `kb-${Date.now()}`,
@@ -73,7 +78,7 @@ export default function TimelineVideoApp() {
       duration: timeline.duration + newComponent.duration,
       components: [...timeline.components, newComponent],
     };
-    
+
     setTimeline(newTimeline);
     console.log(`➕ Added ${type} component:`, newComponent.name);
   };
@@ -81,18 +86,18 @@ export default function TimelineVideoApp() {
   const handleRemoveComponent = (id: string) => {
     const componentToRemove = timeline.components.find(comp => comp.id === id);
     const updatedComponents = timeline.components.filter(comp => comp.id !== id);
-    
+
     // Recalculate timeline duration
-    const newDuration = updatedComponents.reduce((max, comp) => 
+    const newDuration = updatedComponents.reduce((max, comp) =>
       Math.max(max, comp.startTime + comp.duration), 0
     );
-    
+
     const newTimeline = {
       ...timeline,
       duration: newDuration,
       components: updatedComponents,
     };
-    
+
     setTimeline(newTimeline);
     console.log(`❌ Removed component: ${componentToRemove?.name}`);
   };
@@ -101,19 +106,19 @@ export default function TimelineVideoApp() {
     const updatedComponents = timeline.components.map(comp =>
       comp.id === id ? { ...comp, ...updates } : comp
     );
-    
+
     // Recalculate timeline duration based on the furthest component end
     const newDuration = Math.max(
       timeline.duration,
       ...updatedComponents.map(comp => comp.startTime + comp.duration)
     );
-    
+
     const newTimeline = {
       ...timeline,
       duration: newDuration,
       components: updatedComponents,
     };
-    
+
     setTimeline(newTimeline);
     console.log(`🔄 Updated component ${id}:`, updates);
   };
@@ -137,7 +142,7 @@ export default function TimelineVideoApp() {
       });
 
       const result = await response.json();
-      
+
       if (response.ok) {
         console.log('✅ Export started successfully:', result);
         alert(`Export initiated! Your video "${result.timeline}" with ${result.components} components is being processed. Duration: ${result.duration}s`);
@@ -150,43 +155,81 @@ export default function TimelineVideoApp() {
     }
   };
 
-  const handleTimelineChange = (newTimeline: Timeline) => {
-    setTimeline(newTimeline);
-    setCurrentTime(0); // Reset playback
-    console.log('🔄 Timeline updated from JSON:', newTimeline.name);
-  };
-
   return (
     <div className="h-full flex flex-col bg-background text-foreground">
-      <div className="flex-1 flex flex-col overflow-hidden min-w-[800px]">
-        {/* Video Preview - Responsive height */}
-        <div className="flex-1 min-h-0 p-6">
-          <VideoPreview
-            timeline={timeline}
-            currentTime={currentTime}
-            isPlaying={isPlaying}
-            onSeek={handleSeek}
-            onPlay={handlePlay}
-            onPause={handlePause}
-          />
+      <Tabs defaultValue="video-preview" className="h-full flex flex-col">
+        <div className="shrink-0 px-6 pt-6">
+          <TabsList className="grid w-full grid-cols-3">
+            <TabsTrigger value="video-preview">Video Preview</TabsTrigger>
+            <TabsTrigger value="script">Script</TabsTrigger>
+            <TabsTrigger value="assets">Assets</TabsTrigger>
+          </TabsList>
         </div>
 
-        {/* Timeline Editor - Responsive height */}
-        <div className="flex-1 min-h-0 p-6">
-          <InteractiveTimelineEditor
-            timeline={timeline}
-            currentTime={currentTime}
-            isPlaying={isPlaying}
-            onPlay={handlePlay}
-            onPause={handlePause}
-            onSeek={handleSeek}
-            onAddComponent={handleAddComponent}
-            onRemoveComponent={handleRemoveComponent}
-            onUpdateComponent={handleUpdateComponent}
-            onExport={handleExport}
-          />
-        </div>
-      </div>
+        <TabsContent value="video-preview" className="flex-1 flex flex-col p-6 mt-0">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold">Video Preview</h2>
+            <div className="flex gap-2">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => handleAddComponent('ken_burns')}
+                data-testid="button-add-ken-burns"
+              >
+                <Plus className="w-4 h-4 mr-1" />
+                Ken Burns
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => handleAddComponent('map_troop_movement')}
+                data-testid="button-add-map"
+              >
+                <Plus className="w-4 h-4 mr-1" />
+                Map
+              </Button>
+            </div>
+          </div>
+
+          <div className="flex-1 flex flex-col gap-4 min-h-0">
+            {/* Player section */}
+            <div className="flex-1 min-h-0">
+              <VideoPreviewContent
+                timeline={timeline}
+                currentTime={currentTime}
+                isPlaying={isPlaying}
+                onSeek={handleSeek}
+                onPlay={handlePlay}
+                onPause={handlePause}
+              />
+            </div>
+
+            {/* Timeline section */}
+            <div className="h-80 min-h-0">
+              <TimelineEditorContent
+                timeline={timeline}
+                currentTime={currentTime}
+                isPlaying={isPlaying}
+                onPlay={handlePlay}
+                onPause={handlePause}
+                onSeek={handleSeek}
+                onAddComponent={handleAddComponent}
+                onRemoveComponent={handleRemoveComponent}
+                onUpdateComponent={handleUpdateComponent}
+                onExport={handleExport}
+              />
+            </div>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="script" className="flex-1 p-6 mt-0">
+          <ScriptEditor />
+        </TabsContent>
+
+        <TabsContent value="assets" className="flex-1 p-6 mt-0">
+          <AssetsEditor />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

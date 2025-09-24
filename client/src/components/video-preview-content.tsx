@@ -1,10 +1,9 @@
 import { Player, PlayerRef, CallbackListener } from '@remotion/player';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { type Timeline } from '@/schema';
 import { VideoComposition } from './remotion/video-composition';
 import { useRef, useEffect } from 'react';
 
-interface VideoPreviewProps {
+interface VideoPreviewContentProps {
   timeline: Timeline;
   currentTime: number;
   isPlaying: boolean;
@@ -13,7 +12,7 @@ interface VideoPreviewProps {
   onPause?: () => void;
 }
 
-export default function VideoPreview({ timeline, currentTime, isPlaying, onSeek, onPlay, onPause }: VideoPreviewProps) {
+export default function VideoPreviewContent({ timeline, currentTime, isPlaying, onSeek, onPlay, onPause }: VideoPreviewContentProps) {
   const playerRef = useRef<PlayerRef>(null);
   const lastCurrentTime = useRef<number>(currentTime);
   const onSeekRef = useRef(onSeek);
@@ -51,7 +50,9 @@ export default function VideoPreview({ timeline, currentTime, isPlaying, onSeek,
   useEffect(() => {
     const attachListeners = () => {
       const player = playerRef.current;
-      if (!player) return null;
+      if (!player) {
+        return null;
+      }
 
       const onTimeUpdate: CallbackListener<'timeupdate'> = (e) => {
         const time = e.detail.frame / 30; // Convert frame to seconds
@@ -89,7 +90,9 @@ export default function VideoPreview({ timeline, currentTime, isPlaying, onSeek,
 
     // Try to attach immediately if player is ready
     const cleanup = attachListeners();
-    if (cleanup) return cleanup;
+    if (cleanup) {
+      return cleanup;
+    }
 
     // Otherwise, poll until player is ready
     const interval = setInterval(() => {
@@ -102,38 +105,29 @@ export default function VideoPreview({ timeline, currentTime, isPlaying, onSeek,
 
     return () => clearInterval(interval);
   }, []);
+
   return (
-    <Card className="w-full h-full flex flex-col">
-      <CardHeader className="shrink-0">
-        <CardTitle>Video Preview</CardTitle>
-      </CardHeader>
-      <CardContent className="flex-1 flex flex-col min-h-0">
-        <div className="flex-1 bg-black rounded-lg overflow-hidden flex items-center justify-center min-h-0" data-testid="video-preview">
-          <Player
-            ref={playerRef}
-            component={VideoComposition}
-            inputProps={{ timeline }}
-            durationInFrames={timeline.duration * 30} // 30 FPS
-            fps={30}
-            compositionWidth={1920}
-            compositionHeight={1080}
-            style={{
-              width: '100%',
-              height: '100%',
-              maxHeight: '100%',
-              objectFit: 'contain',
-            }}
-            controls
-            loop={false}
-            showVolumeControls={false}
-            acknowledgeRemotionLicense={true}
-            data-testid="remotion-player"
-          />
-        </div>
-        <div className="shrink-0 mt-4 text-sm text-muted-foreground">
-          Resolution: 1920x1080 | Frame Rate: 30 FPS | Duration: {timeline.duration}s
-        </div>
-      </CardContent>
-    </Card>
+    <div className="bg-black rounded-lg overflow-hidden flex items-center justify-center h-full" data-testid="video-preview">
+      <Player
+        ref={playerRef}
+        component={VideoComposition}
+        inputProps={{ timeline }}
+        durationInFrames={timeline.duration * 30} // 30 FPS
+        fps={30}
+        compositionWidth={1920}
+        compositionHeight={1080}
+        style={{
+          width: '100%',
+          height: '100%',
+          maxHeight: '100%',
+          objectFit: 'contain',
+        }}
+        controls
+        loop={false}
+        showVolumeControls={false}
+        acknowledgeRemotionLicense={true}
+        data-testid="remotion-player"
+      />
+    </div>
   );
 }
