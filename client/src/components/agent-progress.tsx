@@ -1,7 +1,13 @@
 "use client";
 
-import { useMemo } from "react";
-import { AlertTriangleIcon, BrainIcon, Loader2Icon } from "lucide-react";
+import { useEffect, useMemo, useRef } from "react";
+import {
+  AlertTriangleIcon,
+  BrainIcon,
+  ChevronDownIcon,
+  Loader2Icon,
+  NotebookPenIcon,
+} from "lucide-react";
 import { useInngestSubscription } from "@inngest/realtime/hooks";
 
 import {
@@ -11,32 +17,56 @@ import {
   TaskItem,
 } from "@/components/ai-elements/task";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { fetchLectureProgressSubscriptionToken } from "@/app/actions/get-subscribe-token";
-import type { LectureProgressMessage } from "@/inngest/functions/start-lecture-creation";
+import type {
+  LectureProgressMessage,
+  LectureReasoningMessage,
+  LectureResultMessage,
+  LectureRunStatus,
+  LectureStatusMessage,
+} from "@/inngest/functions/start-lecture-creation";
+import type { LectureScript } from "@/inngest/functions/start-lecture-creation";
 
 interface AgentProgressProps {
   className?: string;
+  onRunResult?: (runId: string, script: LectureScript) => void;
+  onViewScript?: (runId: string) => void;
+  selectedRunId?: string | null;
 }
 
 type RunProgress = {
   runId: string;
-  messages: LectureProgressMessage[];
-  status: LectureProgressMessage["status"];
+  status: LectureRunStatus;
+  steps: LectureStatusMessage[];
+  reasoning?: LectureReasoningMessage;
+  result?: LectureResultMessage;
   lastUpdated: number;
+  totalSteps: number;
 };
 
-export const AgentProgress = ({ className }: AgentProgressProps) => {
+const getTimestamp = (value?: string) => {
+  const parsed = value ? Date.parse(value) : Number.NaN;
+  return Number.isFinite(parsed) ? parsed : Date.now();
+};
+
+export const AgentProgress = ({
+  className,
+  onRunResult,
+  onViewScript,
+  selectedRunId,
+}: AgentProgressProps) => {
   const { data = [], state, error } = useInngestSubscription({
     refreshToken: fetchLectureProgressSubscriptionToken,
   });
 
-  const runs = useMemo(() => {
-    if (!data.length) {
-      return [] as RunProgress[];
-    }
+  const deliveredResults = useRef(new Set<string>());
 
-    const grouped = new Map<string, LectureProgressMessage[]>();
+  useEffect(() => {
+    if (!onRunResult) {
+      return;
+    }
 
     for (const message of data) {
       if (message.topic !== "progress") {
@@ -45,35 +75,80 @@ export const AgentProgress = ({ className }: AgentProgressProps) => {
 
       const payload = message.data as LectureProgressMessage | undefined;
 
-      if (!payload?.runId) {
+      if (payload?.type !== "result") {
         continue;
       }
 
-      const existing = grouped.get(payload.runId);
+      console.log("Received lecture result", payload.runId, payload.timestamp);
 
-      if (existing) {
-        existing.push(payload);
-      } else {
-        grouped.set(payload.runId, [payload]);
+      if (deliveredResults.current.has(payload.runId)) {
+        continue;
       }
+
+      deliveredResults.current.add(payload.runId);
+      onRunResult(payload.runId, payload.script);
+    }
+  }, [data, onRunResult]);
+
+  const runs = useMemo(() => {
+    const grouped = new Map<string, RunProgress>();
+
+    for (const message of data) {
+      if (message.topic !== "progress") {
+        continue;
+      }
+
+      const payload = message.data as LectureProgressMessage | undefined;
+
+      if (!payload) {
+        continue;
+      }
+
+      const current = grouped.get(payload.runId) ?? {
+        runId: payload.runId,
+        status: "in-progress" as LectureRunStatus,
+        steps: [] as LectureStatusMessage[],
+        lastUpdated: 0,
+        totalSteps: 0,
+      };
+
+      switch (payload.type) {
+        case "status": {
+          console.log("Received lecture status", payload.runId, payload.step, payload.status);
+          const existingIndex = current.steps.findIndex((step) => step.step === payload.step);
+
+          if (existingIndex >= 0) {
+            current.steps[existingIndex] = payload;
+          } else {
+            current.steps.push(payload);
+          }
+
+          current.steps.sort((a, b) => a.step - b.step);
+          current.status = payload.status;
+          current.totalSteps = Math.max(current.totalSteps, payload.totalSteps);
+          current.lastUpdated = Math.max(current.lastUpdated, getTimestamp(payload.timestamp));
+          break;
+        }
+        case "reasoning": {
+          console.log("Received lecture reasoning", payload.runId, payload.isFinal);
+          current.reasoning = payload;
+          current.lastUpdated = Math.max(current.lastUpdated, getTimestamp(payload.timestamp));
+          break;
+        }
+        case "result": {
+          current.result = payload;
+          current.status = "complete";
+          current.lastUpdated = Math.max(current.lastUpdated, getTimestamp(payload.timestamp));
+          break;
+        }
+        default:
+          break;
+      }
+
+      grouped.set(payload.runId, current);
     }
 
-    return Array.from(grouped.entries())
-      .map(([runId, updates]) => {
-        const sorted = [...updates].sort((a, b) => a.step - b.step);
-        const last = sorted[sorted.length - 1];
-        const parsedTimestamp = last ? Date.parse(last.timestamp) : Number.NaN;
-
-        return {
-          runId,
-          messages: sorted,
-          status: last?.status ?? "in-progress",
-          lastUpdated: Number.isFinite(parsedTimestamp)
-            ? parsedTimestamp
-            : Date.now(),
-        } satisfies RunProgress;
-      })
-      .sort((a, b) => b.lastUpdated - a.lastUpdated);
+    return Array.from(grouped.values()).sort((a, b) => b.lastUpdated - a.lastUpdated);
   }, [data]);
 
   const hasRuns = runs.length > 0;
@@ -122,24 +197,46 @@ export const AgentProgress = ({ className }: AgentProgressProps) => {
     <ScrollArea className={cn("h-full", className)}>
       <div className="space-y-4 p-4">
         {runs.map((run) => {
-          const lastMessage = run.messages[run.messages.length - 1];
-          const totalSteps = lastMessage?.totalSteps ?? run.messages.length;
-          const completedSteps = Math.min(run.messages.length, totalSteps);
-          const statusLabel = run.status === "complete" ? "complete" : "in progress";
+          const totalSteps = run.totalSteps || run.steps.length || 1;
+          const completedSteps = run.steps.length;
+          const statusLabel =
+            run.status === "complete"
+              ? "complete"
+              : run.status === "error"
+              ? "error"
+              : "in progress";
           const title = `Lecture creation · ${completedSteps}/${totalSteps} steps • ${statusLabel}`;
+          const isSelected = selectedRunId === run.runId;
 
           return (
-            <Task key={run.runId} defaultOpen={run.status !== "complete"}>
-              <TaskTrigger title={title} />
+            <Task
+              key={run.runId}
+              defaultOpen={run.status !== "complete"}
+              className={cn(
+                "rounded-lg border border-border/60 bg-card/50 p-3",
+                isSelected && "border-primary bg-primary/5"
+              )}
+            >
+              <TaskTrigger
+                title={title}
+                className={cn("group", isSelected && "text-primary")}
+              >
+                <div className="flex w-full items-center justify-between gap-2 text-sm text-muted-foreground transition-colors group-hover:text-foreground">
+                  <div className="flex items-center gap-2">
+                    <NotebookPenIcon className="size-4" />
+                    <span>{title}</span>
+                  </div>
+                  <ChevronDownIcon className="size-4 transition-transform group-data-[state=open]:rotate-180" />
+                </div>
+              </TaskTrigger>
               <TaskContent>
-                {run.messages.map((message, index) => (
+                {run.steps.map((message) => (
                   <TaskItem
                     key={`${run.runId}-${message.step}`}
                     className={cn(
                       "flex items-start gap-3",
-                      index === run.messages.length - 1 &&
-                        message.status === "complete" &&
-                        "text-foreground"
+                      message.status === "complete" && "text-foreground",
+                      message.status === "error" && "text-destructive"
                     )}
                   >
                     <span className="mt-0.5 min-w-6 text-xs font-semibold text-muted-foreground">
@@ -148,6 +245,35 @@ export const AgentProgress = ({ className }: AgentProgressProps) => {
                     <span className="flex-1">{message.message}</span>
                   </TaskItem>
                 ))}
+
+                {run.reasoning ? (
+                  <TaskItem className="flex items-start gap-3 whitespace-pre-wrap">
+                    <span className="mt-0.5 min-w-6 text-xs font-semibold text-muted-foreground">
+                      AI
+                    </span>
+                    <span className="flex-1 text-xs leading-relaxed text-muted-foreground">
+                      {run.reasoning.text}
+                    </span>
+                  </TaskItem>
+                ) : null}
+
+                {run.result ? (
+                  <TaskItem className="flex items-center justify-between gap-3 text-foreground">
+                    <div>
+                      <p className="text-sm font-medium">Script drafted</p>
+                      <p className="text-xs text-muted-foreground">
+                        Open the Script tab to review the generated JSON.
+                      </p>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant={isSelected ? "default" : "outline"}
+                      onClick={() => onViewScript?.(run.runId)}
+                    >
+                      View script
+                    </Button>
+                  </TaskItem>
+                ) : null}
               </TaskContent>
             </Task>
           );
