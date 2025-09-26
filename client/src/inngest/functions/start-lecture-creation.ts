@@ -55,7 +55,7 @@ export const lectureProgressChannel = channel((userId: string) => `user:${userId
 
 const inngest = getInngestApp();
 
-const TOTAL_STEPS = 2;
+const SCRIPT_TOTAL_STEPS = 2;
 const REASONING_MIN_DELTA = 120;
 
 const nowIso = () => new Date().toISOString();
@@ -104,14 +104,13 @@ const extractText = (part: unknown): string => {
   return typeof textValue === "string" ? textValue : "";
 };
 
-const createLogger = (
-  runId: string,
-  logger?: {
-    info?: (message: string, data?: Record<string, unknown>) => void;
-    error?: (message: string, data?: Record<string, unknown>) => void;
-  }
-) => {
-  const prefix = `[start-lecture-creation:${runId}]`;
+type WorkflowLogger = {
+  info?: (message: string, data?: Record<string, unknown>) => void;
+  error?: (message: string, data?: Record<string, unknown>) => void;
+};
+
+export const createLectureLogger = (runId: string, logger?: WorkflowLogger) => {
+  const prefix = `[lecture-workflow:${runId}]`;
 
   return {
     info(message: string, data?: Record<string, unknown>) {
@@ -131,59 +130,87 @@ const createLogger = (
   };
 };
 
-export const startLectureCreation = inngest.createFunction(
-  { id: "start-lecture-creation" },
-  { event: "app/start-lecture-creation" },
+const createLectureProgressPublisher = <TPublish extends (event: any) => Promise<unknown>>({
+  publish,
+  userId,
+  runId,
+  totalSteps,
+  log,
+}: {
+  publish: TPublish;
+  userId: string;
+  runId: string;
+  totalSteps: number;
+  log: ReturnType<typeof createLectureLogger>;
+}) => {
+  const publishStatus = async (
+    message: string,
+    stepIndex: number,
+    status: LectureRunStatus = "in-progress"
+  ) => {
+    await publish(
+      lectureProgressChannel(userId).progress({
+        type: "status",
+        runId,
+        message,
+        status,
+        step: stepIndex,
+        totalSteps,
+        timestamp: nowIso(),
+      })
+    );
+
+    log.info("Status", { message, stepIndex, status });
+  };
+
+  const publishReasoning = async (text: string, isFinal: boolean) => {
+    await publish(
+      lectureProgressChannel(userId).progress({
+        type: "reasoning",
+        runId,
+        text,
+        isFinal,
+        timestamp: nowIso(),
+      })
+    );
+
+    log.info("Reasoning", { characters: text.length, isFinal });
+  };
+
+  const publishResult = async (script: LectureScript) => {
+    await publish(
+      lectureProgressChannel(userId).progress({
+        type: "result",
+        runId,
+        script,
+        timestamp: nowIso(),
+      })
+    );
+
+    log.info("Result published", { segments: script.segments.length });
+  };
+
+  return {
+    publishStatus,
+    publishReasoning,
+    publishResult,
+  };
+};
+
+export const createLectureScript = inngest.createFunction(
+  { id: "create-lecture-script" },
+  { event: "app/create-lecture-script" },
   async ({ event, publish, logger, step }) => {
     const { userId, prompt, runId } = event.data as LectureCreationEventData;
-    const log = createLogger(runId, logger);
-
-    const publishStatus = async (
-      message: string,
-      stepIndex: number,
-      status: LectureRunStatus = "in-progress"
-    ) => {
-      await publish(
-        lectureProgressChannel(userId).progress({
-          type: "status",
-          runId,
-          message,
-          status,
-          step: stepIndex,
-          totalSteps: TOTAL_STEPS,
-          timestamp: nowIso(),
-        })
-      );
-
-      log.info("Status", { message, stepIndex, status });
-    };
-
-    const publishReasoning = async (text: string, isFinal: boolean) => {
-      await publish(
-        lectureProgressChannel(userId).progress({
-          type: "reasoning",
-          runId,
-          text,
-          isFinal,
-          timestamp: nowIso(),
-        })
-      );
-
-      log.info("Reasoning", { characters: text.length, isFinal });
-    };
-
-    const publishResult = async (script: LectureScript) => {
-      await publish(
-        lectureProgressChannel(userId).progress({
-          type: "result",
-          runId,
-          script,
-          timestamp: nowIso(),
-        })
-      );
-
-      log.info("Result published", { segments: script.segments.length });
-    };
+    const log = createLectureLogger(runId, logger);
+    const { publishStatus, publishReasoning, publishResult } =
+      createLectureProgressPublisher({
+        publish,
+        userId,
+        runId,
+        totalSteps: SCRIPT_TOTAL_STEPS,
+        log,
+      });
 
     const rawModelOutput = await step.run("generate-script", async () => {
       await publishStatus("Prompt received", 1);
@@ -218,7 +245,8 @@ export const startLectureCreation = inngest.createFunction(
           return;
         }
 
-        const hasDelta = trimmed.length - lastPublishedReasoningLength >= REASONING_MIN_DELTA;
+        const hasDelta =
+          trimmed.length - lastPublishedReasoningLength >= REASONING_MIN_DELTA;
 
         if (!force && !hasDelta) {
           return;
@@ -297,7 +325,31 @@ export const startLectureCreation = inngest.createFunction(
       return scriptFromModel;
     });
 
-    log.info("Lecture creation completed");
+    log.info("Lecture script generation completed");
+
+    return { runId, script };
+  }
+);
+
+export const startLectureCreation = inngest.createFunction(
+  { id: "start-lecture-creation" },
+  { event: "app/start-lecture-creation" },
+  async ({ event, logger, step }) => {
+    const { userId, prompt, runId } = event.data as LectureCreationEventData;
+    const log = createLectureLogger(runId, logger);
+
+    log.info("Starting lecture workflow");
+
+    const { script } = await step.invoke("create-lecture-script", {
+      function: createLectureScript,
+      data: {
+        userId,
+        prompt,
+        runId,
+      },
+    });
+
+    log.info("Lecture workflow completed", { hasScript: Boolean(script) });
 
     return { runId };
   }
