@@ -55,7 +55,7 @@ export const lectureProgressChannel = channel((userId: string) => `user:${userId
 
 const inngest = getInngestApp();
 
-const TOTAL_STEPS = 3;
+const TOTAL_STEPS = 2;
 const REASONING_MIN_DELTA = 120;
 
 const nowIso = () => new Date().toISOString();
@@ -185,15 +185,10 @@ export const startLectureCreation = inngest.createFunction(
       log.info("Result published", { segments: script.segments.length });
     };
 
-    await step.run("status-prompt-received", async () => {
+    const rawModelOutput = await step.run("generate-script", async () => {
       await publishStatus("Prompt received", 1);
-    });
+      await publishStatus("Drafting lecture with OpenAI", 1);
 
-    await step.run("status-drafting", async () => {
-      await publishStatus("Drafting lecture with OpenAI", 2);
-    });
-
-    const script = await step.run("generate-script", async () => {
       log.info("Starting OpenAI generation", { promptLength: prompt.length });
 
       const result = streamText({
@@ -273,28 +268,33 @@ export const startLectureCreation = inngest.createFunction(
         throw new Error("Model returned empty script output");
       }
 
+      await publishStatus("OpenAI response received", 1, "complete");
+
+      return finalText;
+    });
+
+    const script = await step.run("process-model-output", async () => {
+      await publishStatus("Validating lecture script", 2);
+
       let parsed: unknown;
 
       try {
-        parsed = JSON.parse(finalText);
+        parsed = JSON.parse(rawModelOutput);
       } catch (parseError) {
         const reason =
           parseError instanceof Error ? parseError.message : String(parseError);
         throw new Error(`Model returned invalid JSON for lecture script: ${reason}`);
       }
 
-      const scriptFromModel = lectureScriptSchema.parse(normaliseScriptCandidate(parsed));
+      const scriptFromModel = lectureScriptSchema.parse(
+        normaliseScriptCandidate(parsed)
+      );
       log.info("Script validated", { segments: scriptFromModel.segments.length });
 
+      await publishStatus("Lecture script ready", 2, "complete");
+      await publishResult(scriptFromModel);
+
       return scriptFromModel;
-    });
-
-    await step.run("status-ready", async () => {
-      await publishStatus("Lecture script ready", 3, "complete");
-    });
-
-    await step.run("publish-result", async () => {
-      await publishResult(script);
     });
 
     log.info("Lecture creation completed");

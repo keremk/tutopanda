@@ -36,10 +36,17 @@ interface AgentProgressProps {
   selectedRunId?: string | null;
 }
 
+type StepProgress = {
+  step: number;
+  status: LectureRunStatus;
+  messages: LectureStatusMessage[];
+  lastUpdated: number;
+};
+
 type RunProgress = {
   runId: string;
   status: LectureRunStatus;
-  steps: LectureStatusMessage[];
+  steps: StepProgress[];
   reasoning?: LectureReasoningMessage;
   result?: LectureResultMessage;
   lastUpdated: number;
@@ -107,26 +114,41 @@ export const AgentProgress = ({
       const current = grouped.get(payload.runId) ?? {
         runId: payload.runId,
         status: "in-progress" as LectureRunStatus,
-        steps: [] as LectureStatusMessage[],
+        steps: [] as StepProgress[],
         lastUpdated: 0,
         totalSteps: 0,
       };
 
       switch (payload.type) {
         case "status": {
-          console.log("Received lecture status", payload.runId, payload.step, payload.status);
-          const existingIndex = current.steps.findIndex((step) => step.step === payload.step);
+          console.log(
+            "Received lecture status",
+            payload.runId,
+            payload.step,
+            payload.status
+          );
+          const timestamp = getTimestamp(payload.timestamp);
+          const existing = current.steps.find((step) => step.step === payload.step);
 
-          if (existingIndex >= 0) {
-            current.steps[existingIndex] = payload;
+          if (existing) {
+            existing.messages = [...existing.messages, payload].sort(
+              (a, b) => getTimestamp(a.timestamp) - getTimestamp(b.timestamp)
+            );
+            existing.status = payload.status;
+            existing.lastUpdated = Math.max(existing.lastUpdated, timestamp);
           } else {
-            current.steps.push(payload);
+            current.steps.push({
+              step: payload.step,
+              status: payload.status,
+              messages: [payload],
+              lastUpdated: timestamp,
+            });
           }
 
           current.steps.sort((a, b) => a.step - b.step);
           current.status = payload.status;
           current.totalSteps = Math.max(current.totalSteps, payload.totalSteps);
-          current.lastUpdated = Math.max(current.lastUpdated, getTimestamp(payload.timestamp));
+          current.lastUpdated = Math.max(current.lastUpdated, timestamp);
           break;
         }
         case "reasoning": {
@@ -198,84 +220,120 @@ export const AgentProgress = ({
       <div className="space-y-4 p-4">
         {runs.map((run) => {
           const totalSteps = run.totalSteps || run.steps.length || 1;
-          const completedSteps = run.steps.length;
+          const completedSteps = run.steps.filter((step) => step.status === "complete").length;
           const statusLabel =
             run.status === "complete"
               ? "complete"
               : run.status === "error"
               ? "error"
               : "in progress";
-          const title = `Lecture creation · ${completedSteps}/${totalSteps} steps • ${statusLabel}`;
+          const descriptor = `Lecture creation · ${completedSteps}/${totalSteps} steps • ${statusLabel}`;
           const isSelected = selectedRunId === run.runId;
 
           return (
-            <Task
+            <div
               key={run.runId}
-              defaultOpen={run.status !== "complete"}
               className={cn(
                 "rounded-lg border border-border/60 bg-card/50 p-3",
                 isSelected && "border-primary bg-primary/5"
               )}
             >
-              <TaskTrigger
-                title={title}
-                className={cn("group", isSelected && "text-primary")}
-              >
-                <div className="flex w-full items-center justify-between gap-2 text-sm text-muted-foreground transition-colors group-hover:text-foreground">
-                  <div className="flex items-center gap-2">
-                    <NotebookPenIcon className="size-4" />
-                    <span>{title}</span>
-                  </div>
-                  <ChevronDownIcon className="size-4 transition-transform group-data-[state=open]:rotate-180" />
-                </div>
-              </TaskTrigger>
-              <TaskContent>
-                {run.steps.map((message) => (
-                  <TaskItem
-                    key={`${run.runId}-${message.step}`}
-                    className={cn(
-                      "flex items-start gap-3",
-                      message.status === "complete" && "text-foreground",
-                      message.status === "error" && "text-destructive"
-                    )}
-                  >
-                    <span className="mt-0.5 min-w-6 text-xs font-semibold text-muted-foreground">
-                      {message.step}.
-                    </span>
-                    <span className="flex-1">{message.message}</span>
-                  </TaskItem>
-                ))}
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <NotebookPenIcon className="size-4" />
+                <span>{descriptor}</span>
+              </div>
 
-                {run.reasoning ? (
-                  <TaskItem className="flex items-start gap-3 whitespace-pre-wrap">
-                    <span className="mt-0.5 min-w-6 text-xs font-semibold text-muted-foreground">
-                      AI
-                    </span>
-                    <span className="flex-1 text-xs leading-relaxed text-muted-foreground">
-                      {run.reasoning.text}
-                    </span>
-                  </TaskItem>
-                ) : null}
+              <div className="mt-3 space-y-3">
+                {run.steps.map((step) => {
+                  const latestMessage = step.messages[step.messages.length - 1];
+                  const stepStatusLabel =
+                    step.status === "complete"
+                      ? "complete"
+                      : step.status === "error"
+                      ? "error"
+                      : "in progress";
+                  const stepTitle = `Step ${step.step}/${totalSteps} · ${
+                    latestMessage?.message ?? "Pending"
+                  } • ${stepStatusLabel}`;
+                  const showReasoning = Boolean(run.reasoning) && step.step === 1;
+                  const showResult = Boolean(run.result) && step.step === totalSteps;
 
-                {run.result ? (
-                  <TaskItem className="flex items-center justify-between gap-3 text-foreground">
-                    <div>
-                      <p className="text-sm font-medium">Script drafted</p>
-                      <p className="text-xs text-muted-foreground">
-                        Open the Script tab to review the generated JSON.
-                      </p>
-                    </div>
-                    <Button
-                      size="sm"
-                      variant={isSelected ? "default" : "outline"}
-                      onClick={() => onViewScript?.(run.runId)}
+                  return (
+                    <Task
+                      key={`${run.runId}-${step.step}`}
+                      defaultOpen={step.status !== "complete"}
+                      className="rounded-md border border-border/60 bg-card/30 p-2"
                     >
-                      View script
-                    </Button>
-                  </TaskItem>
-                ) : null}
-              </TaskContent>
-            </Task>
+                      <TaskTrigger title={stepTitle} className="group">
+                        <div className="flex w-full items-center justify-between gap-2 text-sm text-muted-foreground transition-colors group-hover:text-foreground">
+                          <div className="flex items-center gap-2">
+                            <NotebookPenIcon className="size-4" />
+                            <span>{stepTitle}</span>
+                          </div>
+                          <ChevronDownIcon className="size-4 transition-transform group-data-[state=open]:rotate-180" />
+                        </div>
+                      </TaskTrigger>
+                      <TaskContent>
+                        {step.messages.map((message, index) => {
+                          const markerClass =
+                            message.status === "complete"
+                              ? "bg-primary"
+                              : message.status === "error"
+                              ? "bg-destructive"
+                              : "bg-muted-foreground";
+
+                          return (
+                            <TaskItem
+                              key={`${run.runId}-${step.step}-${message.timestamp}-${index}`}
+                              className={cn(
+                                "flex items-start gap-3",
+                                message.status === "complete" && "text-foreground",
+                                message.status === "error" && "text-destructive"
+                              )}
+                            >
+                              <span
+                                className={cn(
+                                  "mt-1.5 block size-1.5 rounded-full",
+                                  markerClass
+                                )}
+                              />
+                              <span className="flex-1">{message.message}</span>
+                            </TaskItem>
+                          );
+                        })}
+
+                        {showReasoning ? (
+                          <TaskItem className="flex items-start gap-3 whitespace-pre-wrap">
+                            <span className="mt-1.5 block size-1.5 rounded-full bg-muted-foreground" />
+                            <span className="flex-1 text-xs leading-relaxed text-muted-foreground">
+                              {run.reasoning?.text}
+                            </span>
+                          </TaskItem>
+                        ) : null}
+
+                        {showResult ? (
+                          <TaskItem className="flex items-center justify-between gap-3 text-foreground">
+                            <div>
+                              <p className="text-sm font-medium">Script drafted</p>
+                              <p className="text-xs text-muted-foreground">
+                                Open the Script tab to review the generated JSON.
+                              </p>
+                            </div>
+                            <Button
+                              size="sm"
+                              variant={isSelected ? "default" : "outline"}
+                              onClick={() => onViewScript?.(run.runId)}
+                            >
+                              View script
+                            </Button>
+                          </TaskItem>
+                        ) : null}
+                      </TaskContent>
+                    </Task>
+                  );
+                })}
+              </div>
+            </div>
           );
         })}
       </div>
