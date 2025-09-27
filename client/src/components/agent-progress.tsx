@@ -26,8 +26,8 @@ import type {
   LectureResultMessage,
   LectureRunStatus,
   LectureStatusMessage,
-} from "@/inngest/functions/start-lecture-creation";
-import type { LectureScript } from "@/inngest/functions/start-lecture-creation";
+} from "@/inngest/functions/workflow-utils";
+import type { LectureScript } from "@/prompts/create-script";
 
 interface AgentProgressProps {
   className?: string;

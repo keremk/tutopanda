@@ -2,7 +2,7 @@
 
 import { getSubscriptionToken, Realtime } from "@inngest/realtime";
 
-import { lectureProgressChannel } from "@/inngest/functions/start-lecture-creation";
+import { lectureProgressChannel } from "@/inngest/functions/workflow-utils";
 import { getSession } from "@/lib/session";
 import { getInngestApp } from "@/inngest/client";
 

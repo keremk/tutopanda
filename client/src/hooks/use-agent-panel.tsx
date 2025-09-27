@@ -2,7 +2,7 @@
 
 import { createContext, useContext } from "react";
 
-import type { LectureScript } from "@/inngest/functions/start-lecture-creation";
+import type { LectureScript } from "@/prompts/create-script";
 
 export type AgentPanelTab = "video-preview" | "script" | "assets";
 

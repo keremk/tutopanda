@@ -38,7 +38,7 @@ import {
   AgentPanelProvider,
   type AgentPanelTab,
 } from "@/hooks/use-agent-panel";
-import type { LectureScript } from "@/inngest/functions/start-lecture-creation";
+import type { LectureScript } from "@/prompts/create-script";
 
 interface AgentPanelProps {
   className?: string;
