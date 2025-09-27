@@ -134,9 +134,9 @@ export const AgentPanel = ({ className, children }: AgentPanelProps) => {
         <ResizableHandle withHandle />
 
         <ResizablePanel defaultSize={30} minSize={25} maxSize={45}>
-          <div className="h-full flex flex-col bg-background border-l">
+          <div className="h-full flex flex-col bg-[color:var(--surface-elevated)] border-l border-[color:var(--surface-border)]">
             {/* Header */}
-            <div className="shrink-0 p-4 border-b">
+            <div className="shrink-0 p-4 border-b border-[color:var(--surface-border)]">
               <h2 className="text-sm font-medium text-foreground">Agent Progress</h2>
             </div>
 
@@ -150,11 +150,11 @@ export const AgentPanel = ({ className, children }: AgentPanelProps) => {
             </div>
 
             {/* AI Prompt Input - Fixed at Bottom */}
-            <div className="shrink-0 border-t bg-background">
+            <div className="shrink-0 border-t border-[color:var(--surface-border)] bg-[color:var(--surface-elevated)]/95">
               <div className="p-4">
                 <PromptInput
                   onSubmit={handlePromptSubmit}
-                  className="w-full"
+                  className="w-full border border-[color:var(--surface-border)] bg-[color:var(--surface-elevated)] shadow-sm"
                   maxFiles={5}
                   maxFileSize={10 * 1024 * 1024} // 10MB
                 >
@@ -176,7 +176,7 @@ export const AgentPanel = ({ className, children }: AgentPanelProps) => {
                           </PromptInputActionMenuContent>
                         </PromptInputActionMenu>
                       </PromptInputTools>
-                      <PromptInputSubmit status={submitStatus} disabled={isPending} />
+                      <PromptInputSubmit status={submitStatus} disabled={isPending} variant="secondary" />
                     </PromptInputToolbar>
                   </PromptInputBody>
                 </PromptInput>

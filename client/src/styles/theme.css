@@ -22,13 +22,15 @@
   --chart-3: hsl(42 82% 39%);
   --chart-4: hsl(44 82% 47%);
   --chart-5: hsl(46 65% 52%);
-  --sidebar: hsl(60 51% 91%);
-  --sidebar-foreground: hsl(0 0% 20%);
+  --sidebar: hsl(46 52% 88%);
+  --sidebar-foreground: hsl(32 60% 22%);
   --sidebar-primary: hsl(46 65% 52%);
-  --sidebar-primary-foreground: hsl(0 0% 20%);
-  --sidebar-accent: hsl(50 100% 54%);
-  --sidebar-accent-foreground: hsl(0 0% 20%);
-  --sidebar-border: hsl(42 82% 39%);
+  --sidebar-primary-foreground: hsl(32 60% 22%);
+  --sidebar-accent: hsl(45 76% 54%);
+  --sidebar-accent-foreground: hsl(32 60% 22%);
+  --sidebar-border: hsl(40 52% 70%);
+  --surface-elevated: hsl(44 60% 90%);
+  --surface-border: hsl(40 36% 72%);
   --sidebar-ring: hsl(44 82% 47%);
 
   --font-sans: Montserrat, sans-serif;
@@ -71,13 +73,15 @@
   --chart-3: hsl(42 82% 39%);
   --chart-4: hsl(44 82% 47%);
   --chart-5: hsl(42 82% 39%);
-  --sidebar: hsl(0 0% 20%);
-  --sidebar-foreground: hsl(0 0% 100%);
-  --sidebar-primary: hsl(42 100% 34%);
-  --sidebar-primary-foreground: hsl(0 0% 100%);
-  --sidebar-accent: hsl(44 82% 47%);
-  --sidebar-accent-foreground: hsl(60 51% 91%);
-  --sidebar-border: hsl(25 74% 31%);
+  --sidebar: hsl(0 0% 16%);
+  --sidebar-foreground: hsl(40 55% 85%);
+  --sidebar-primary: hsl(42 82% 43%);
+  --sidebar-primary-foreground: hsl(40 55% 85%);
+  --sidebar-accent: hsl(42 82% 43%);
+  --sidebar-accent-foreground: hsl(40 55% 85%);
+  --sidebar-border: hsl(0 0% 28%);
+  --surface-elevated: hsl(0 0% 14%);
+  --surface-border: hsl(0 0% 26%);
   --sidebar-ring: hsl(42 82% 39%);
 
   --shadow-2xs: 0px 1px 3px 0px hsl(0 0% 0% / 0.05 / 0.03);

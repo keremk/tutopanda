@@ -18,7 +18,9 @@
   }
 
   .nav-clean {
-    @apply border-0 bg-background/80 backdrop-blur-md shadow-sm;
+    @apply border-0 shadow-sm backdrop-blur-md;
+    background-color: var(--surface-elevated);
+    border-bottom: 1px solid var(--surface-border);
   }
 
   .card-clean {
