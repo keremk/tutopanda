@@ -4,6 +4,7 @@ import { and, desc, eq } from "drizzle-orm";
 
 import { db } from "@/db/db";
 import { projectsTable, type SelectProject } from "@/db/app-schema";
+import { getLatestVideoLectureForProject } from "@/data/video-lectures";
 
 type DbOrTx =
   | typeof db
@@ -70,4 +71,24 @@ export async function getProjectById(
     .limit(1);
 
   return project ?? null;
+}
+
+export async function listProjectsWithLatestLecture(
+  userId: string,
+  database?: DbOrTx
+): Promise<Array<{ project: SelectProject; latestLectureId: number | null }>> {
+  const projects = await listProjectsForUser(userId, database);
+
+  const results = await Promise.all(
+    projects.map(async (project) => {
+      const lecture = await getLatestVideoLectureForProject(project.id, database);
+
+      return {
+        project,
+        latestLectureId: lecture?.id ?? null,
+      };
+    })
+  );
+
+  return results;
 }

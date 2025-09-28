@@ -48,7 +48,7 @@ export async function createProjectWithLectureAction({
   const { user } = await getSession();
   const runId = randomUUID();
 
-  const { project } = await db.transaction(async (tx) => {
+  const { project, lecture } = await db.transaction(async (tx) => {
     const project = await createProject(
       {
         userId: user.id,
@@ -57,7 +57,7 @@ export async function createProjectWithLectureAction({
       tx
     );
 
-    await createVideoLecture({ projectId: project.id }, tx);
+    const lecture = await createVideoLecture({ projectId: project.id }, tx);
 
     await inngest.send({
       name: "app/start-lecture-creation",
@@ -68,14 +68,16 @@ export async function createProjectWithLectureAction({
       } satisfies LectureCreationEventData,
     });
 
-    return { project };
+    return { project, lecture };
   });
 
   revalidatePath("/create");
   revalidatePath("/edit");
+  revalidatePath(`/edit/${lecture.id}`);
 
   return {
     projectId: project.id,
+    lectureId: lecture.id,
     runId,
   };
 }

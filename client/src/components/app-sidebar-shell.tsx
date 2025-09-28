@@ -23,15 +23,21 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import type { SelectProject } from "@/db/app-schema";
 import { Folder, PanelLeftOpen, PanelRightOpen } from "lucide-react";
 
 const NAVBAR_HEIGHT_PX = 64;
 
+export type SidebarProjectItem = {
+  id: number;
+  name: string | null;
+  lectureId: number | null;
+};
+
 export type AppSidebarShellProps = {
-  projects: Pick<SelectProject, "id" | "name">[];
+  projects: SidebarProjectItem[];
   children: React.ReactNode;
   sidebarDefaultOpen?: boolean;
+  activeLectureId?: number | null;
   className?: string;
 };
 
@@ -39,16 +45,19 @@ export function AppSidebarShell({
   projects,
   children,
   sidebarDefaultOpen = true,
+  activeLectureId,
   className,
 }: AppSidebarShellProps) {
   const projectItems = useMemo(() => {
-    return projects.map((project) => ({
-      id: project.id,
-      name:
-        project.name && project.name.trim().length > 0
-          ? project.name.trim()
-          : `Untitled project ${project.id}`,
-    }));
+    return projects.map((project) => {
+      const trimmedName = project.name?.trim();
+
+      return {
+        id: project.id,
+        name: trimmedName && trimmedName.length > 0 ? trimmedName : `Untitled project ${project.id}`,
+        lectureId: project.lectureId ?? null,
+      };
+    });
   }, [projects]);
 
   return (
@@ -69,7 +78,7 @@ export function AppSidebarShell({
           <SidebarTopSection />
         </SidebarHeader>
         <SidebarContent className="flex-1 px-2 pb-4">
-          <ProjectsMenu projectItems={projectItems} />
+          <ProjectsMenu projectItems={projectItems} activeLectureId={activeLectureId ?? null} />
         </SidebarContent>
         <SidebarFooter className="px-2 pb-4 pt-2">
           <SidebarCollapseControl />
@@ -91,23 +100,26 @@ export function AppSidebarShell({
   );
 }
 
-type ProjectListItem = {
+type NormalizedProjectItem = {
   id: number;
   name: string;
+  lectureId: number | null;
 };
 
 function SidebarTopSection() {
   const { state } = useSidebar();
   const isExpanded = state === "expanded";
 
+  if (!isExpanded) {
+    return null;
+  }
+
   return (
     <div className="flex items-center gap-3 text-sidebar-foreground/80">
       <span className="flex h-9 w-9 items-center justify-center rounded-lg text-sidebar-accent">
         <Folder className="size-4" />
       </span>
-      {isExpanded ? (
-        <span className="text-sm font-semibold text-sidebar-foreground">Projects</span>
-      ) : null}
+      <span className="text-sm font-semibold text-sidebar-foreground">Projects</span>
     </div>
   );
 }
@@ -152,9 +164,19 @@ function SidebarCollapseControl() {
   );
 }
 
-function ProjectsMenu({ projectItems }: { projectItems: ProjectListItem[] }) {
+function ProjectsMenu({
+  projectItems,
+  activeLectureId,
+}: {
+  projectItems: NormalizedProjectItem[];
+  activeLectureId: number | null;
+}) {
   const { state } = useSidebar();
   const isExpanded = state === "expanded";
+
+  if (!isExpanded) {
+    return null;
+  }
 
   if (projectItems.length === 0) {
     return (
@@ -167,23 +189,51 @@ function ProjectsMenu({ projectItems }: { projectItems: ProjectListItem[] }) {
   return (
     <div className="flex h-full flex-col">
       <SidebarMenu className="flex-1 space-y-1 overflow-y-auto">
-        {projectItems.map((project) => (
-          <SidebarMenuItem key={project.id}>
-            <SidebarMenuButton asChild tooltip={project.name}>
-              <Link href={`/edit?projectId=${project.id}`} className="flex w-full">
-                <span
-                  className={cn(
-                    "flex-1 truncate text-sm text-sidebar-foreground/90",
-                    "group-data-[collapsible=icon]:sr-only"
-                  )}
-                  aria-hidden={!isExpanded}
-                >
-                  {project.name}
-                </span>
-              </Link>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        ))}
+        {projectItems.map((project) => {
+          const canOpen = project.lectureId !== null;
+          const isActive = canOpen && project.lectureId === activeLectureId;
+
+          return (
+            <SidebarMenuItem key={project.id}>
+              <SidebarMenuButton
+                asChild={canOpen}
+                tooltip={project.name}
+                isActive={isActive}
+                aria-disabled={!canOpen}
+                className={cn(
+                  "transition-colors data-[active=true]:bg-[color:var(--sidebar-active-bg)] data-[active=true]:text-sidebar-foreground data-[active=true]:shadow-sm",
+                  !canOpen && "opacity-60 cursor-not-allowed",
+                )}
+              >
+                {canOpen ? (
+                  <Link href={`/edit/${project.lectureId}`} className="flex w-full">
+                    <span
+                      className={cn(
+                        "flex-1 truncate text-sm text-sidebar-foreground/90",
+                        "group-data-[collapsible=icon]:sr-only"
+                      )}
+                      aria-hidden={!isExpanded}
+                    >
+                      {project.name}
+                    </span>
+                  </Link>
+                ) : (
+                  <div className="flex w-full select-none">
+                    <span
+                      className={cn(
+                        "flex-1 truncate text-sm text-sidebar-foreground/60",
+                        "group-data-[collapsible=icon]:sr-only"
+                      )}
+                      aria-hidden={!isExpanded}
+                    >
+                      {project.name}
+                    </span>
+                  </div>
+                )}
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          );
+        })}
       </SidebarMenu>
     </div>
   );

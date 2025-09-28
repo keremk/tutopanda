@@ -22,8 +22,7 @@ import {
 } from "@/components/ai-elements/prompt-input";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import type { SelectProject } from "@/db/app-schema";
-import { AppSidebarShell } from "@/components/app-sidebar-shell";
+import { AppSidebarShell, type SidebarProjectItem } from "@/components/app-sidebar-shell";
 
 const SAMPLE_PROMPTS = [
   "Create a lecture outlining the key events of the American Revolution.",
@@ -32,7 +31,7 @@ const SAMPLE_PROMPTS = [
 ];
 
 type CreatePageContentProps = {
-  projects: Pick<SelectProject, "id" | "name">[];
+  projects: SidebarProjectItem[];
 };
 
 export function CreatePageContent({ projects }: CreatePageContentProps) {
@@ -66,11 +65,11 @@ export function CreatePageContent({ projects }: CreatePageContentProps) {
 
     startTransition(() => {
       createProjectWithLectureAction({ prompt: text })
-        .then(({ projectId }) => {
+        .then(({ lectureId }) => {
           formElement.reset();
           setPrompt("");
           setSubmitStatus(undefined);
-          router.push(`/edit?projectId=${projectId}`);
+          router.push(`/edit/${lectureId}`);
         })
         .catch((error) => {
           console.error("Failed to create project", error);

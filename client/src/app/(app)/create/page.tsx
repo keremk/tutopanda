@@ -1,10 +1,16 @@
-import { listProjectsForUser } from "@/data/project";
+import { listProjectsWithLatestLecture } from "@/data/project";
 import { CreatePageContent } from "@/components/create-page-content";
 import { getSession } from "@/lib/session";
 
 export default async function CreatePage() {
   const { user } = await getSession();
-  const projects = await listProjectsForUser(user.id);
+  const projects = await listProjectsWithLatestLecture(user.id);
 
-  return <CreatePageContent projects={projects} />;
+  const sidebarProjects = projects.map(({ project, latestLectureId }) => ({
+    id: project.id,
+    name: project.name,
+    lectureId: latestLectureId,
+  }));
+
+  return <CreatePageContent projects={sidebarProjects} />;
 }

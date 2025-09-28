@@ -29,6 +29,7 @@
   --sidebar-accent: hsl(45 76% 54%);
   --sidebar-accent-foreground: hsl(32 60% 22%);
   --sidebar-border: hsl(40 52% 70%);
+  --sidebar-active-bg: hsl(45 44% 83%);
   --surface-elevated: hsl(44 60% 90%);
   --surface-border: hsl(40 36% 72%);
   --sidebar-ring: hsl(44 82% 47%);
@@ -80,6 +81,7 @@
   --sidebar-accent: hsl(42 82% 43%);
   --sidebar-accent-foreground: hsl(40 55% 85%);
   --sidebar-border: hsl(0 0% 28%);
+  --sidebar-active-bg: hsl(0 0% 22%);
   --surface-elevated: hsl(0 0% 14%);
   --surface-border: hsl(0 0% 26%);
   --sidebar-ring: hsl(42 82% 39%);
