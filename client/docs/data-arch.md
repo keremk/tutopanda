@@ -12,6 +12,13 @@
 - **Inngest workflows**: Background jobs (e.g. script generation, timeline synthesis) call the same data services to append revisions and update lecture snapshots, emitting progress events so the browser can refresh.
 - **Postgres (Neon) via Drizzle**: Stores the authoritative row for each lecture plus append-only revision history and workflow run metadata.
 
+## Type Boundaries
+- **Database layer types** (`client/src/db/types.ts`): mirror Drizzle table shapes and column primitives (including `jsonb`) so migrations and persistence stay strongly typed. These types are never consumed outside the data layer.
+- **Application layer types** (`client/src/types/types.ts`): compose Zod-validated domain objects (`lectureContentSchema`, timeline structures, workflow payloads) that the UI, server actions, and Inngest functions rely on. These express business rules (required fields, defaults) independently of storage.
+- **Mapping contracts**: each data-layer API accepts/returns application types and converts to/from the persistence types internally. Parsing happens at the boundary (Zod → DB) and serialization happens on the way out (DB → Zod). This prevents leaking raw `jsonb` or nullable columns into the app and centralises shape changes.
+- **Source of truth**: Zod schemas remain the canonical definition for application types; database types derive from Drizzle. Tests in the data layer should cover these transformations so a schema drift is caught early.
+- **Planned refactor**: consolidate existing domain types from `schema.ts` and Inngest modules into `client/src/types/types.ts`, and ensure new APIs never expose Drizzle-generated types. Update existing services to use the new split progressively.
+
 ## Domain Model
 ### Existing Tables
 - `projects` – already holds project ownership and name.
@@ -102,7 +109,7 @@
 
 ## Operational Considerations & Next Steps
 1. **Migrations**: Add `revision` and `updated_at` to `video_lectures`, create the new tables, and backfill existing rows with `revision = 0`.
-2. **Type definitions**: Centralize the lecture/timeline TypeScript types and reuse them in the editor, server actions, and Inngest functions for end-to-end validation.
+2. **Type definitions**: Move Zod/domain types into `client/src/types/types.ts`, keep Drizzle mirrors in `client/src/db/types.ts`, and update services so they map between the two layers.
 3. **Implement `saveLectureDraft` action** with validation (e.g. Zod schema) to guard the incoming JSON before persistence.
 4. **Replace mock timeline data** in `timeline-editor-content.tsx`, `timeline-tracks.tsx`, etc. with the provider state loaded from the real snapshot.
 5. **Enhance workflow feedback** by wiring the existing Inngest progress events to the editor so users see background updates in real time.

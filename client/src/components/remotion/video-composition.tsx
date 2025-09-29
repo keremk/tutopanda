@@ -1,7 +1,6 @@
 import { Composition, AbsoluteFill, useCurrentFrame, useVideoConfig } from 'remotion';
-import { type Timeline } from '@/schema';
+import { type Timeline } from '@/types/types';
 import { KenBurnsComponent } from './KenBurns-component';
-import { MapTroopMovementComponent } from './map-troop-movement-component';
 
 interface VideoCompositionProps {
   timeline: Timeline;
@@ -14,30 +13,19 @@ export const VideoComposition: React.FC<VideoCompositionProps> = ({ timeline }) 
 
   return (
     <AbsoluteFill style={{ backgroundColor: '#000' }}>
-      {timeline.components.map((component) => {
-        const isActive = currentTime >= component.startTime && currentTime < component.startTime + component.duration;
-        
+      {(timeline.tracks?.visual ?? []).map((clip) => {
+        const isActive =
+          currentTime >= clip.startTime && currentTime < clip.startTime + clip.duration;
+
         if (!isActive) return null;
 
-        const relativeTime = currentTime - component.startTime;
-        const progress = Math.min(relativeTime / component.duration, 1);
+        const relativeTime = currentTime - clip.startTime;
+        const progress = Math.min(relativeTime / clip.duration, 1);
 
-        switch (component.type) {
-          case 'ken_burns':
+        switch (clip.kind) {
+          case 'kenBurns':
             return (
-              <KenBurnsComponent
-                key={component.id}
-                component={component}
-                progress={progress}
-              />
-            );
-          case 'map_troop_movement':
-            return (
-              <MapTroopMovementComponent
-                key={component.id}
-                component={component}
-                progress={progress}
-              />
+              <KenBurnsComponent key={clip.id} component={clip} progress={progress} />
             );
           default:
             return null;

@@ -4,7 +4,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { FileText, Check, X, Upload } from 'lucide-react';
-import { type Timeline, timelineSchema } from '@/schema';
+import { timelineSchema } from '@/types/types';
+import { type Timeline } from '@/types/types';
 
 interface JsonEditorProps {
   timeline: Timeline;
@@ -93,8 +94,13 @@ export default function JsonEditor({ timeline, onTimelineChange }: JsonEditorPro
           />
         </div>
 
-        <div className="shrink-0 text-xs text-muted-foreground">
-          <strong>Supported component types:</strong> ken_burns, map_troop_movement
+        <div className="shrink-0 text-xs text-muted-foreground space-y-1">
+          <div>
+            <strong>Supported tracks:</strong> visual, voice, music, soundEffects
+          </div>
+          <div>
+            <strong>Visual clip kinds:</strong> kenBurns
+          </div>
         </div>
       </CardContent>
     </Card>

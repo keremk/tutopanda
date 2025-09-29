@@ -81,7 +81,11 @@ export const TimelineSlider = ({
     }
   }, [isDragging, handleMouseMove, handleMouseUp]);
 
-  const playheadPercent = totalContentDuration > 0 ? (currentTime / totalContentDuration) * 100 : 0;
+  const safeDuration = totalContentDuration > 0 ? totalContentDuration : 1;
+  const playheadPercent = Math.min(
+    100,
+    Math.max(0, (currentTime / safeDuration) * 100)
+  );
 
   return (
     <div className={cn("p-4 pb-2 border-b border-border/30", className)}>
@@ -101,9 +105,9 @@ export const TimelineSlider = ({
               />
 
               {/* Major markers every 5 seconds */}
-              {Array.from({ length: Math.floor(totalContentDuration / 5) + 1 }, (_, i) => {
+              {Array.from({ length: Math.floor(safeDuration / 5) + 1 }, (_, i) => {
                 const seconds = i * 5;
-                const position = (seconds / totalContentDuration) * 100;
+                const position = (seconds / safeDuration) * 100;
                 // Don't transform the first marker (0s) to align with track start
                 const transform = seconds === 0 ? 'none' : 'translateX(-50%)';
                 return (
@@ -121,9 +125,9 @@ export const TimelineSlider = ({
               })}
 
               {/* Minor ticks every 1 second */}
-              {Array.from({ length: Math.floor(totalContentDuration) + 1 }, (_, i) => {
+              {Array.from({ length: Math.floor(safeDuration) + 1 }, (_, i) => {
                 if (i % 5 === 0) return null; // Skip major markers
-                const position = (i / totalContentDuration) * 100;
+                const position = (i / safeDuration) * 100;
                 // Don't transform the first tick to align with track start
                 const transform = i === 0 ? 'none' : 'translateX(-50%)';
                 return (

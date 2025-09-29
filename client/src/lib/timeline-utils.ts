@@ -1,4 +1,9 @@
-import { type TimelineComponent } from '@/schema';
+import {
+  type AnyTimelineClip,
+  type Timeline,
+  type TimelineTrackKey,
+  timelineTrackKeys,
+} from '@/types/types';
 
 export interface TimelineMetrics {
   totalContentDuration: number;
@@ -8,12 +13,14 @@ export interface TimelineMetrics {
 }
 
 export function calculateTimelineMetrics(
-  components: TimelineComponent[],
+  timeline: Timeline,
   timelineWidth: number
 ): TimelineMetrics {
+  const clips = flattenTimelineClips(timeline).map((entry) => entry.clip);
+
   // Calculate smart timeline duration
-  const maxClipEndTime = components.length > 0
-    ? Math.max(...components.map(c => c.startTime + c.duration))
+  const maxClipEndTime = clips.length > 0
+    ? Math.max(...clips.map((clip) => clip.startTime + clip.duration))
     : 0;
 
   // Add 25% padding to content, minimum 10s for empty timelines
@@ -40,4 +47,20 @@ export function calculateTimelineMetrics(
     effectiveWidth,
     pixelsPerSecond,
   };
+}
+
+export function flattenTimelineClips(timeline: Timeline): Array<{
+  track: TimelineTrackKey;
+  clip: AnyTimelineClip;
+}> {
+  const entries: Array<{ track: TimelineTrackKey; clip: AnyTimelineClip }> = [];
+
+  for (const track of timelineTrackKeys) {
+    const clips = timeline.tracks?.[track] ?? [];
+    for (const clip of clips) {
+      entries.push({ track, clip: clip as AnyTimelineClip });
+    }
+  }
+
+  return entries.sort((a, b) => a.clip.startTime - b.clip.startTime);
 }

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { TrackHeaders } from '@/components/track-headers';
 import { TimelineContent } from '@/components/timeline-content';
 import { calculateTimelineMetrics } from '@/lib/timeline-utils';
-import { type Timeline } from '@/schema';
+import { type Timeline, type TimelineTrackKey } from '@/types/types';
 
 interface TimelineEditorContentProps {
   timeline: Timeline;
@@ -11,22 +11,25 @@ interface TimelineEditorContentProps {
   onPlay: () => void;
   onPause: () => void;
   onSeek: (time: number) => void;
-  onAddComponent: (type: 'ken_burns' | 'map_troop_movement') => void;
-  onRemoveComponent: (id: string) => void;
-  onUpdateComponent: (id: string, updates: { startTime?: number; duration?: number }) => void;
+  onRemoveClip: (track: TimelineTrackKey, id: string) => void;
+  onUpdateClip: (
+    track: TimelineTrackKey,
+    id: string,
+    updates: { startTime?: number; duration?: number }
+  ) => void;
 }
 
 export default function TimelineEditorContent({
   timeline,
   currentTime,
   onSeek,
-  onRemoveComponent,
-  onUpdateComponent,
+  onRemoveClip,
+  onUpdateClip,
 }: TimelineEditorContentProps) {
   const [timelineWidth, setTimelineWidth] = useState(800);
 
   // Calculate timeline metrics using utils
-  const metrics = calculateTimelineMetrics(timeline.components, timelineWidth);
+  const metrics = calculateTimelineMetrics(timeline, timelineWidth);
 
   // Update timeline width based on available space
   useEffect(() => {
@@ -56,8 +59,8 @@ export default function TimelineEditorContent({
           effectiveWidth={metrics.effectiveWidth}
           pixelsPerSecond={metrics.pixelsPerSecond}
           onSeek={onSeek}
-          onRemoveComponent={onRemoveComponent}
-          onUpdateComponent={onUpdateComponent}
+          onRemoveClip={onRemoveClip}
+          onUpdateClip={onUpdateClip}
         />
       </div>
     </div>

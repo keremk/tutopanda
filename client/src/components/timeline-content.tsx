@@ -1,7 +1,7 @@
 import React from 'react';
 import { TimelineSlider } from '@/components/timeline-slider';
 import { TimelineTracks } from '@/components/timeline-tracks';
-import { type Timeline } from '@/schema';
+import { type Timeline, type TimelineTrackKey } from '@/types/types';
 
 interface TimelineContentProps {
   timeline: Timeline;
@@ -11,8 +11,12 @@ interface TimelineContentProps {
   effectiveWidth: number;
   pixelsPerSecond: number;
   onSeek: (time: number) => void;
-  onRemoveComponent: (id: string) => void;
-  onUpdateComponent: (id: string, updates: { startTime?: number; duration?: number }) => void;
+  onRemoveClip: (track: TimelineTrackKey, id: string) => void;
+  onUpdateClip: (
+    track: TimelineTrackKey,
+    id: string,
+    updates: { startTime?: number; duration?: number }
+  ) => void;
 }
 
 export function TimelineContent({
@@ -23,8 +27,8 @@ export function TimelineContent({
   effectiveWidth,
   pixelsPerSecond,
   onSeek,
-  onRemoveComponent,
-  onUpdateComponent,
+  onRemoveClip,
+  onUpdateClip,
 }: TimelineContentProps) {
   return (
     <div
@@ -56,8 +60,8 @@ export function TimelineContent({
           effectiveWidth={effectiveWidth}
           pixelsPerSecond={pixelsPerSecond}
           onSeek={onSeek}
-          onRemoveComponent={onRemoveComponent}
-          onUpdateComponent={onUpdateComponent}
+          onRemoveClip={onRemoveClip}
+          onUpdateClip={onUpdateClip}
         />
       </div>
     </div>

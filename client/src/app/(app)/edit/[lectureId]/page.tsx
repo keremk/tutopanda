@@ -3,7 +3,9 @@ import { notFound } from "next/navigation";
 import CreateSection from "@/components/create-section";
 import { AgentPanel } from "@/components/agent-panel";
 import { AppSidebarShell } from "@/components/app-sidebar-shell";
+import { LectureEditorProvider } from "@/components/lecture-editor-provider";
 import { listProjectsWithLatestLecture } from "@/data/project";
+import { getLectureForUser, toSerializableLectureSnapshot } from "@/data/video-lectures";
 import { getSession } from "@/lib/session";
 
 type EditPageParams = {
@@ -25,6 +27,17 @@ export default async function EditLecturePage({
     notFound();
   }
 
+  const lecture = await getLectureForUser({
+    lectureId,
+    userId: user.id,
+  });
+
+  if (!lecture) {
+    notFound();
+  }
+
+  const serialisedLecture = toSerializableLectureSnapshot(lecture);
+
   return (
     <AppSidebarShell
       projects={projects.map(({ project, latestLectureId }) => ({
@@ -35,11 +48,16 @@ export default async function EditLecturePage({
       activeLectureId={lectureId}
       sidebarDefaultOpen={false}
     >
-      <div className="flex h-full flex-1">
-        <AgentPanel className="h-full">
-          <CreateSection />
-        </AgentPanel>
-      </div>
+      <LectureEditorProvider
+        lectureId={lectureId}
+        initialSnapshot={serialisedLecture}
+      >
+        <div className="flex h-full flex-1">
+          <AgentPanel className="h-full">
+            <CreateSection />
+          </AgentPanel>
+        </div>
+      </LectureEditorProvider>
     </AppSidebarShell>
   );
 }

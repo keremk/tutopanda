@@ -7,9 +7,11 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/db/db";
 import { createProject } from "@/data/project";
 import { createVideoLecture } from "@/data/video-lectures";
+import { createWorkflowRun } from "@/data/workflow-runs";
 import { getSession } from "@/lib/session";
 import { getInngestApp } from "@/inngest/client";
 import type { LectureCreationEventData } from "@/inngest/functions/start-lecture-creation";
+import { LECTURE_WORKFLOW_TOTAL_STEPS } from "@/inngest/functions/workflow-utils";
 
 const inngest = getInngestApp();
 
@@ -58,6 +60,17 @@ export async function createProjectWithLectureAction({
     );
 
     const lecture = await createVideoLecture({ projectId: project.id }, tx);
+
+    await createWorkflowRun(
+      {
+        runId,
+        lectureId: lecture.id,
+        userId: user.id,
+        totalSteps: LECTURE_WORKFLOW_TOTAL_STEPS,
+        status: "queued",
+      },
+      tx
+    );
 
     await inngest.send({
       name: "app/start-lecture-creation",

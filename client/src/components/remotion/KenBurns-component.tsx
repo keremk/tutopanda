@@ -1,12 +1,16 @@
 import { AbsoluteFill, Img, interpolate } from 'remotion';
-import { type KenBurnsComponent as KenBurnsComponentType } from '@/schema';
+import { type KenBurnsClip } from '@/types/types';
 
 interface KenBurnsComponentProps {
-  component: KenBurnsComponentType;
+  component: KenBurnsClip;
   progress: number;
 }
 
 export const KenBurnsComponent: React.FC<KenBurnsComponentProps> = ({ component, progress }) => {
+  if (!component.imageUrl) {
+    return null;
+  }
+
   const scale = interpolate(progress, [0, 1], [component.startScale, component.endScale]);
   const translateX = interpolate(progress, [0, 1], [component.startX, component.endX]);
   const translateY = interpolate(progress, [0, 1], [component.startY, component.endY]);

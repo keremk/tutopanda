@@ -1,43 +1,39 @@
 import React from 'react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Film, Mic, Music, Volume2 } from 'lucide-react';
+import type { TimelineTrackKey } from '@/types/types';
 
 interface TrackChannel {
-  id: string;
+  id: TimelineTrackKey;
   name: string;
   icon: React.ComponentType<{ className?: string }>;
   height: number;
-  componentTypes: string[];
 }
 
 const TIMELINE_CHANNELS: TrackChannel[] = [
   {
-    id: 'clips',
-    name: 'Video Clips',
+    id: 'visual',
+    name: 'Visual Clips',
     icon: Film,
     height: 48,
-    componentTypes: ['ken_burns', 'map_troop_movement'],
   },
   {
     id: 'voice',
     name: 'Voice & Narration',
     icon: Mic,
     height: 48,
-    componentTypes: ['voice'],
   },
   {
     id: 'music',
     name: 'Background Music',
     icon: Music,
     height: 48,
-    componentTypes: ['background_music'],
   },
   {
-    id: 'sfx',
+    id: 'soundEffects',
     name: 'Sound Effects',
     icon: Volume2,
     height: 48,
-    componentTypes: ['sound_effect'],
   },
 ];
 

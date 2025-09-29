@@ -1,5 +1,5 @@
 import { Player, PlayerRef, CallbackListener } from '@remotion/player';
-import { type Timeline } from '@/schema';
+import { type Timeline } from '@/types/types';
 import { VideoComposition } from './remotion/video-composition';
 import { useRef, useEffect } from 'react';
 
@@ -19,6 +19,9 @@ export default function VideoPreviewContent({ timeline, currentTime, isPlaying, 
   const onPlayRef = useRef(onPlay);
   const onPauseRef = useRef(onPause);
 
+  const fps = 30;
+  const durationInFrames = Math.max(1, Math.round(Math.max(timeline.duration, 0) * fps));
+
   // Keep refs updated with latest callbacks
   useEffect(() => {
     onSeekRef.current = onSeek;
@@ -29,11 +32,11 @@ export default function VideoPreviewContent({ timeline, currentTime, isPlaying, 
   // Synchronize video player with timeline current time
   useEffect(() => {
     if (playerRef.current && Math.abs(currentTime - lastCurrentTime.current) > 0.1) {
-      const frame = Math.round(currentTime * 30); // 30 FPS
+      const frame = Math.round(currentTime * fps);
       playerRef.current.seekTo(frame);
       lastCurrentTime.current = currentTime;
     }
-  }, [currentTime]);
+  }, [currentTime, fps]);
 
   // Synchronize play/pause state
   useEffect(() => {
@@ -55,7 +58,7 @@ export default function VideoPreviewContent({ timeline, currentTime, isPlaying, 
       }
 
       const onTimeUpdate: CallbackListener<'timeupdate'> = (e) => {
-        const time = e.detail.frame / 30; // Convert frame to seconds
+        const time = e.detail.frame / fps; // Convert frame to seconds
         if (onSeekRef.current && Math.abs(time - lastCurrentTime.current) > 0.01) {
           lastCurrentTime.current = time;
           onSeekRef.current(time);
@@ -104,7 +107,7 @@ export default function VideoPreviewContent({ timeline, currentTime, isPlaying, 
     }, 100);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [fps]);
 
   return (
     <div className="bg-black rounded-lg overflow-hidden flex items-center justify-center h-full" data-testid="video-preview">
@@ -112,8 +115,8 @@ export default function VideoPreviewContent({ timeline, currentTime, isPlaying, 
         ref={playerRef}
         component={VideoComposition}
         inputProps={{ timeline }}
-        durationInFrames={timeline.duration * 30} // 30 FPS
-        fps={30}
+        durationInFrames={durationInFrames}
+        fps={fps}
         compositionWidth={1920}
         compositionHeight={1080}
         style={{

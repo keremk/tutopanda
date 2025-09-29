@@ -1,22 +1,50 @@
-import { mockTimeline, type Timeline, type TimelineComponent } from "@/schema";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
 import VideoPreviewContent from "./video-preview-content";
 import TimelineEditorContent from "./timeline-editor-content";
+import { useLectureEditor } from "@/components/lecture-editor-provider";
+import type {
+  Timeline,
+  KenBurnsClip,
+  TimelineTrackKey,
+  TimelineTracks,
+} from "@/types/types";
 
 export default function VideoPreview() {
-  const [timeline, setTimeline] = useState<Timeline>(mockTimeline);
+  const {
+    lectureId,
+    timeline,
+    updateTimeline,
+  } = useLectureEditor();
   const [currentTime, setCurrentTime] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
 
+  const createEmptyTimeline = useMemo(() => {
+    return () => ({
+      id: `timeline-${lectureId}`,
+      name: "Untitled timeline",
+      duration: 0,
+      tracks: {
+        visual: [],
+        voice: [],
+        music: [],
+        soundEffects: [],
+      },
+    });
+  }, [lectureId]);
+
+  const fallbackTimeline = useMemo<Timeline>(() => createEmptyTimeline(), [createEmptyTimeline]);
+
+  const activeTimeline = timeline ?? fallbackTimeline;
+
   // Auto-pause when reaching end - now handled by the Player
   useEffect(() => {
-    if (currentTime >= timeline.duration) {
+    if (currentTime >= activeTimeline.duration) {
       setIsPlaying(false);
       setCurrentTime(0);
     }
-  }, [currentTime, timeline.duration]);
+  }, [currentTime, activeTimeline.duration]);
 
   const handlePlay = () => {
     setIsPlaying(true);
@@ -33,101 +61,112 @@ export default function VideoPreview() {
     console.log("⏭️ Seeked to:", time.toFixed(1) + "s");
   };
 
-  const handleAddComponent = (type: "ken_burns" | "map_troop_movement") => {
-    const newComponent: TimelineComponent =
-      type === "ken_burns"
-        ? {
-            type: "ken_burns",
-            id: `kb-${Date.now()}`,
-            name: `New Ken Burns ${timeline.components.length + 1}`,
-            duration: 5,
-            startTime: timeline.duration,
-            imageUrl:
-              "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=1200&h=800&fit=crop",
-            startScale: 1,
-            endScale: 1.2,
-            startX: 0,
-            startY: 0,
-            endX: -30,
-            endY: -20,
-          }
-        : {
-            type: "map_troop_movement",
-            id: `map-${Date.now()}`,
-            name: `New Map Movement ${timeline.components.length + 1}`,
-            duration: 6,
-            startTime: timeline.duration,
-            mapRegion: "medieval_europe",
-            troops: [
-              {
-                id: "troop-1",
-                name: "New Forces",
-                color: "#ff6b6b",
-                path: [
-                  { lat: 48.8, lng: 2.3, timestamp: 0 },
-                  { lat: 51.5, lng: -0.1, timestamp: 3 },
-                  { lat: 52.5, lng: 13.4, timestamp: 6 },
-                ],
-              },
-            ],
-          };
+  const ensureTimeline = (value: Timeline | null | undefined): Timeline => {
+    if (!value) {
+      return createEmptyTimeline();
+    }
 
-    const newTimeline = {
-      ...timeline,
-      duration: timeline.duration + newComponent.duration,
-      components: [...timeline.components, newComponent],
+    return {
+      ...value,
+      tracks: {
+        visual: value.tracks?.visual ?? [],
+        voice: value.tracks?.voice ?? [],
+        music: value.tracks?.music ?? [],
+        soundEffects: value.tracks?.soundEffects ?? [],
+      },
     };
-
-    setTimeline(newTimeline);
-    console.log(`➕ Added ${type} component:`, newComponent.name);
   };
 
-  const handleRemoveComponent = (id: string) => {
-    const componentToRemove = timeline.components.find(
-      (comp) => comp.id === id
+  const recomputeDuration = (tracks: TimelineTracks) => {
+    const clips = Object.values(tracks).flatMap((list) =>
+      list.map((clip) => clip.startTime + clip.duration)
     );
-    const updatedComponents = timeline.components.filter(
-      (comp) => comp.id !== id
-    );
-
-    // Recalculate timeline duration
-    const newDuration = updatedComponents.reduce(
-      (max, comp) => Math.max(max, comp.startTime + comp.duration),
-      0
-    );
-
-    const newTimeline = {
-      ...timeline,
-      duration: newDuration,
-      components: updatedComponents,
-    };
-
-    setTimeline(newTimeline);
-    console.log(`❌ Removed component: ${componentToRemove?.name}`);
+    return clips.length > 0 ? Math.max(...clips) : 0;
   };
 
-  const handleUpdateComponent = (
+  const handleAddVisualClip = () => {
+    const visualClips = activeTimeline.tracks?.visual ?? [];
+    const nextStartTime = visualClips.length > 0
+      ? Math.max(...visualClips.map((clip) => clip.startTime + clip.duration))
+      : activeTimeline.duration;
+
+    const newClip: KenBurnsClip = {
+      id: `kb-${Date.now()}`,
+      name: `Ken Burns ${visualClips.length + 1}`,
+      kind: "kenBurns",
+      startTime: nextStartTime,
+      duration: 5,
+      imageAssetId: undefined,
+      imageUrl:
+        "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=1200&h=800&fit=crop",
+      startScale: 1,
+      endScale: 1.2,
+      startX: 0,
+      startY: 0,
+      endX: -30,
+      endY: -20,
+    };
+
+    updateTimeline((previous) => {
+      const base = ensureTimeline(previous);
+      const tracks = {
+        ...base.tracks,
+        visual: [...base.tracks.visual, newClip],
+      };
+      return {
+        ...base,
+        tracks,
+        duration: recomputeDuration(tracks),
+      };
+    });
+    console.log("➕ Added visual clip:", newClip.name);
+  };
+
+  const handleRemoveClip = (track: TimelineTrackKey, id: string) => {
+    updateTimeline((previous) => {
+      const base = ensureTimeline(previous);
+      const clips = base.tracks[track] ?? [];
+      const clipToRemove = clips.find((clip) => clip.id === id);
+      const updatedClips = clips.filter((clip) => clip.id !== id);
+      const tracks = {
+        ...base.tracks,
+        [track]: updatedClips,
+      };
+
+      console.log(`❌ Removed clip: ${clipToRemove?.name ?? id}`);
+
+      return {
+        ...base,
+        tracks,
+        duration: recomputeDuration(tracks),
+      };
+    });
+  };
+
+  const handleUpdateClip = (
+    track: TimelineTrackKey,
     id: string,
     updates: { startTime?: number; duration?: number }
   ) => {
-    const updatedComponents = timeline.components.map((comp) =>
-      comp.id === id ? { ...comp, ...updates } : comp
-    );
+    updateTimeline((previous) => {
+      const base = ensureTimeline(previous);
+      const clips = base.tracks[track] ?? [];
+      const updatedClips = clips.map((clip) =>
+        clip.id === id ? { ...clip, ...updates } : clip
+      );
+      const tracks = {
+        ...base.tracks,
+        [track]: updatedClips,
+      };
 
-    // Recalculate timeline duration based on the furthest component end
-    const newDuration = Math.max(
-      timeline.duration,
-      ...updatedComponents.map((comp) => comp.startTime + comp.duration)
-    );
+      console.log(`🔄 Updated clip ${id}:`, updates);
 
-    const newTimeline = {
-      ...timeline,
-      duration: newDuration,
-      components: updatedComponents,
-    };
-
-    setTimeline(newTimeline);
-    console.log(`🔄 Updated component ${id}:`, updates);
+      return {
+        ...base,
+        tracks,
+        duration: recomputeDuration(tracks),
+      };
+    });
   };
 
   return (
@@ -138,20 +177,11 @@ export default function VideoPreview() {
           <Button
             variant="secondary"
             size="sm"
-            onClick={() => handleAddComponent("ken_burns")}
+            onClick={handleAddVisualClip}
             data-testid="button-add-ken-burns"
           >
             <Plus className="w-4 h-4 mr-1" />
             Ken Burns
-          </Button>
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => handleAddComponent("map_troop_movement")}
-            data-testid="button-add-map"
-          >
-            <Plus className="w-4 h-4 mr-1" />
-            Map
           </Button>
         </div>
       </div>
@@ -160,7 +190,7 @@ export default function VideoPreview() {
         {/* Player section */}
         <div className="flex-1 min-h-0">
           <VideoPreviewContent
-            timeline={timeline}
+            timeline={activeTimeline}
             currentTime={currentTime}
             isPlaying={isPlaying}
             onSeek={handleSeek}
@@ -172,15 +202,14 @@ export default function VideoPreview() {
         {/* Timeline section */}
         <div className="h-80 min-h-0">
           <TimelineEditorContent
-            timeline={timeline}
+            timeline={activeTimeline}
             currentTime={currentTime}
             isPlaying={isPlaying}
             onPlay={handlePlay}
             onPause={handlePause}
             onSeek={handleSeek}
-            onAddComponent={handleAddComponent}
-            onRemoveComponent={handleRemoveComponent}
-            onUpdateComponent={handleUpdateComponent}
+            onRemoveClip={handleRemoveClip}
+            onUpdateClip={handleUpdateClip}
           />
         </div>
       </div>

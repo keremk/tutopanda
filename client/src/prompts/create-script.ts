@@ -1,4 +1,5 @@
-import { z } from "zod";
+export { lectureScriptSchema, lectureSegmentSchema } from "@/types/types";
+export type { LectureScript } from "@/types/types";
 
 export const createScriptSystemPrompt = [
   "You are an expert historical researcher and documentary script writer.",
@@ -11,35 +12,6 @@ export const createScriptSystemPrompt = [
   "Research the topic carefully before writing so the content is factual and recent.",
   "Always return content that strictly matches the output schema; no additional commentary.",
 ].join("\n");
-
-export const lectureSegmentSchema = z.object({
-  narration: z
-    .string()
-    .min(1, "Provide narration text for the segment."),
-  backgroundMusic: z
-    .string()
-    .min(1, "Describe background music that supports the narration."),
-  effect: z
-    .string()
-    .min(1, "Describe a tasteful sound effect that enhances the scene."),
-  suggestedFormat: z
-    .enum(["image", "map"], {
-      required_error: "Choose a visual treatment for the segment.",
-      invalid_type_error: "Select either 'image' or 'map' as the visual format.",
-    })
-    .catch("image"),
-});
-
-export const lectureScriptSchema = z.object({
-  detailedSummary: z
-    .string()
-    .min(1, "Provide a detailed written summary for supplemental reading."),
-  segments: z
-    .array(lectureSegmentSchema)
-    .min(1, "Include at least one segment for the lecture."),
-});
-
-export type LectureScript = z.infer<typeof lectureScriptSchema>;
 
 export const lectureScriptSchemaName = "presentation";
 export const lectureScriptSchemaDescription =
