@@ -53,7 +53,7 @@ export default async function EditLecturePage({
         initialSnapshot={serialisedLecture}
       >
         <div className="flex h-full flex-1">
-          <AgentPanel className="h-full">
+          <AgentPanel className="h-full" lectureId={lectureId}>
             <CreateSection />
           </AgentPanel>
         </div>

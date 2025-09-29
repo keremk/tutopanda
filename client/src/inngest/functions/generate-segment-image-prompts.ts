@@ -7,7 +7,8 @@ import {
   createLectureProgressPublisher,
   LECTURE_WORKFLOW_TOTAL_STEPS,
 } from "@/inngest/functions/workflow-utils";
-import type { LectureScript } from "@/prompts/create-script";
+import type { LectureScript, ImageGenerationDefaults, ImageAsset } from "@/types/types";
+import { updateLectureContent } from "@/lib/lecture/persistence";
 import {
   buildImagePromptUserMessage,
   createImagePromptDeveloperPrompt,
@@ -30,10 +31,45 @@ type SegmentPrompt = {
 export type GenerateSegmentImagePromptsEvent = {
   userId: string;
   runId: string;
+  lectureId: number;
   script: LectureScript;
+  imageDefaults: ImageGenerationDefaults;
   workflowStep?: number;
   totalWorkflowSteps?: number;
 };
+
+const buildImageAssets = ({
+  prompts,
+  defaults,
+  runId,
+}: {
+  prompts: SegmentPrompt[];
+  defaults: ImageGenerationDefaults;
+  runId: string;
+}): ImageAsset[] => {
+  const aspectParts = defaults.aspectRatio
+    .split(":")
+    .map((value) => Number.parseInt(value, 10));
+  const [aspectWidth, aspectHeight] = aspectParts;
+  const computedHeight =
+    Number.isFinite(aspectWidth) && aspectWidth > 0
+      ? Math.round((defaults.width / aspectWidth) * aspectHeight)
+      : defaults.height;
+
+  return prompts.map(
+    (entry, index) =>
+      ({
+        id: `img-${runId}-${entry.segmentIndex}-${index}`,
+        label: `Segment ${entry.segmentIndex + 1}`,
+        prompt: entry.prompt,
+        aspectRatio: defaults.aspectRatio,
+        width: defaults.width,
+        height: computedHeight,
+        size: defaults.size,
+      } satisfies ImageAsset)
+  );
+};
+
 
 export const generateSegmentImagePrompts = inngest.createFunction(
   { id: "generate-segment-image-prompts" },
@@ -42,7 +78,9 @@ export const generateSegmentImagePrompts = inngest.createFunction(
     const {
       userId,
       runId,
+      lectureId,
       script,
+      imageDefaults,
       workflowStep = IMAGE_PROMPT_WORKFLOW_STEP,
       totalWorkflowSteps = LECTURE_WORKFLOW_TOTAL_STEPS,
     } = event.data as GenerateSegmentImagePromptsEvent;
@@ -122,7 +160,20 @@ export const generateSegmentImagePrompts = inngest.createFunction(
       processedSegments: segmentsToProcess.length,
     });
 
+    await step.run("save-image-prompts", async () => {
+      const assets = buildImageAssets({
+        prompts,
+        defaults: imageDefaults,
+        runId,
+      });
+
+      await updateLectureContent({
+        lectureId,
+        actorId: userId,
+        payload: { images: assets },
+      });
+    });
+
     return { runId, prompts };
   }
 );
-

@@ -7,6 +7,7 @@ import {
   lectureScriptSchema,
   type LectureScript,
 } from "@/prompts/create-script";
+import { updateLectureContent } from "@/lib/lecture/persistence";
 import { getInngestApp } from "@/inngest/client";
 import {
   createLectureLogger,
@@ -66,6 +67,7 @@ export type CreateLectureScriptEvent = {
   userId: string;
   prompt: string;
   runId: string;
+  lectureId: number;
   totalWorkflowSteps?: number;
 };
 
@@ -82,6 +84,7 @@ export const createLectureScript = inngest.createFunction(
       userId,
       prompt,
       runId,
+      lectureId,
       totalWorkflowSteps = LECTURE_WORKFLOW_TOTAL_STEPS,
     } = event.data as CreateLectureScriptEvent;
 
@@ -194,18 +197,31 @@ export const createLectureScript = inngest.createFunction(
       } catch (parseError) {
         const reason =
           parseError instanceof Error ? parseError.message : String(parseError);
-        throw new Error(`Model returned invalid JSON for lecture script: ${reason}`);
+        throw new Error(
+          `Model returned invalid JSON for lecture script: ${reason}`
+        );
       }
 
       const scriptFromModel = lectureScriptSchema.parse(
         normaliseScriptCandidate(parsed)
       );
-      log.info("Script validated", { segments: scriptFromModel.segments.length });
+      log.info("Script validated", {
+        segments: scriptFromModel.segments.length,
+      });
 
-      await publishStatus("Lecture script ready", 2, "complete");
       await publishResult(scriptFromModel);
 
       return scriptFromModel;
+    });
+
+    await step.run("save-script", async () => {
+      await publishStatus("Saving lecture script", 2, "in-progress");
+      await updateLectureContent({
+        lectureId,
+        actorId: userId,
+        payload: { script },
+      });
+      await publishStatus("Lecture script ready", 2, "complete");
     });
 
     log.info("Lecture script generation completed");
@@ -213,4 +229,3 @@ export const createLectureScript = inngest.createFunction(
     return { runId, script } satisfies CreateLectureScriptResult;
   }
 );
-

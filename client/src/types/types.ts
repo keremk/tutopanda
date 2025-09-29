@@ -187,6 +187,20 @@ export type LectureScript = z.infer<typeof lectureScriptSchema>;
 
 export type LectureSource = "app" | "workflow" | "system";
 
+export type ImageGenerationDefaults = {
+  width: number;
+  height: number;
+  aspectRatio: typeof aspectRatioValues[number];
+  size: string;
+};
+
+export const DEFAULT_IMAGE_GENERATION_DEFAULTS: ImageGenerationDefaults = {
+  width: 1024,
+  height: 576,
+  aspectRatio: "16:9",
+  size: "1K",
+};
+
 export type NormalisedLectureContent = Omit<LectureContent, "timeline"> & {
   timeline: Timeline | null;
 };

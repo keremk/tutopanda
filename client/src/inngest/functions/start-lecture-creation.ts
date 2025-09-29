@@ -2,11 +2,14 @@ import { getInngestApp } from "@/inngest/client";
 import { createLectureLogger, LECTURE_WORKFLOW_TOTAL_STEPS } from "@/inngest/functions/workflow-utils";
 import { createLectureScript } from "@/inngest/functions/create-lecture-script";
 import { generateSegmentImagePrompts } from "@/inngest/functions/generate-segment-image-prompts";
+import type { ImageGenerationDefaults } from "@/types/types";
 
 export type LectureCreationEventData = {
   prompt: string;
   userId: string;
   runId: string;
+  lectureId: number;
+  imageDefaults: ImageGenerationDefaults;
   totalWorkflowSteps?: number;
 };
 
@@ -16,7 +19,8 @@ export const startLectureCreation = inngest.createFunction(
   { id: "start-lecture-creation" },
   { event: "app/start-lecture-creation" },
   async ({ event, logger, step }) => {
-    const { userId, prompt, runId } = event.data as LectureCreationEventData;
+    const { userId, prompt, runId, lectureId, imageDefaults } =
+      event.data as LectureCreationEventData;
     const log = createLectureLogger(runId, logger);
 
     log.info("Starting lecture workflow");
@@ -27,6 +31,7 @@ export const startLectureCreation = inngest.createFunction(
         userId,
         prompt,
         runId,
+        lectureId,
         totalWorkflowSteps: LECTURE_WORKFLOW_TOTAL_STEPS,
       },
     });
@@ -36,7 +41,9 @@ export const startLectureCreation = inngest.createFunction(
       data: {
         userId,
         runId,
+        lectureId,
         script,
+        imageDefaults,
         workflowStep: 3,
         totalWorkflowSteps: LECTURE_WORKFLOW_TOTAL_STEPS,
       },
@@ -50,4 +57,3 @@ export const startLectureCreation = inngest.createFunction(
     return { runId };
   }
 );
-

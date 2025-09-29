@@ -11,9 +11,9 @@ import {
 } from "react";
 
 import {
-  saveLectureDraftAction,
-  type SaveLectureDraftInput,
-} from "@/app/actions/save-lecture-draft";
+  updateLectureContentAction,
+  type UpdateLectureContentActionInput,
+} from "@/app/actions/lecture/update-lecture-content";
 import type { SerializableLectureSnapshot } from "@/data/video-lectures";
 import type { NormalisedLectureContent, Timeline } from "@/types/types";
 
@@ -115,32 +115,20 @@ export function LectureEditorProvider({
 
     const payload = Object.fromEntries(
       Array.from(dirtyFields, (key) => [key, draft[key]])
-    ) as SaveLectureDraftInput["payload"];
+    ) as UpdateLectureContentActionInput["payload"];
 
     try {
-      const result = await saveLectureDraftAction({
+      const snapshot = await updateLectureContentAction({
         lectureId,
         baseRevision: revision,
         payload,
       });
 
-      if (result.status === "conflict") {
-        setStatus("error");
-        setLastError(
-          "We refreshed your lecture with newer changes from another device."
-        );
-        setDraft(snapshotToContent(result.snapshot));
-        setRevision(result.snapshot.revision);
-        setUpdatedAt(new Date(result.snapshot.updatedAt));
-        setDirtyFields(new Set());
-        return;
-      }
-
       setStatus("idle");
       setLastError(null);
-      setDraft(snapshotToContent(result.snapshot));
-      setRevision(result.revision);
-      setUpdatedAt(new Date(result.updatedAt));
+      setDraft(snapshotToContent(snapshot));
+      setRevision(snapshot.revision);
+      setUpdatedAt(new Date(snapshot.updatedAt));
       setDirtyFields(new Set());
     } catch (error) {
       console.error("Failed to auto-save lecture", error);

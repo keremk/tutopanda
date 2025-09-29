@@ -41,11 +41,12 @@ import {
 import type { LectureScript } from "@/prompts/create-script";
 
 interface AgentPanelProps {
+  lectureId: number;
   className?: string;
   children: React.ReactNode;
 }
 
-export const AgentPanel = ({ className, children }: AgentPanelProps) => {
+export const AgentPanel = ({ lectureId, className, children }: AgentPanelProps) => {
   const [submitStatus, setSubmitStatus] = useState<ChatStatus | undefined>();
   const [isPending, startTransition] = useTransition();
   const errorResetTimeout = useRef<number | null>(null);
@@ -72,7 +73,7 @@ export const AgentPanel = ({ className, children }: AgentPanelProps) => {
     setSubmitStatus("submitted");
 
     startTransition(() => {
-      sendPromptAction({ prompt })
+      sendPromptAction({ prompt, lectureId })
         .then(() => {
           formElement.reset();
           setSubmitStatus(undefined);
