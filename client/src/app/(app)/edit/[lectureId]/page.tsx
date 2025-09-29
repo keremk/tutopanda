@@ -5,7 +5,7 @@ import { AgentPanel } from "@/components/agent-panel";
 import { AppSidebarShell } from "@/components/app-sidebar-shell";
 import { LectureEditorProvider } from "@/components/lecture-editor-provider";
 import { listProjectsWithLatestLecture } from "@/data/project";
-import { getLectureForUser, toSerializableLectureSnapshot } from "@/data/video-lectures";
+import { getLectureForUser, toSerializableLectureSnapshot } from "@/data/lecture/repository";
 import { getSession } from "@/lib/session";
 
 type EditPageParams = {

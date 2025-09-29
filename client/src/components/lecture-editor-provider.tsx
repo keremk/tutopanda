@@ -14,7 +14,7 @@ import {
   updateLectureContentAction,
   type UpdateLectureContentActionInput,
 } from "@/app/actions/lecture/update-lecture-content";
-import type { SerializableLectureSnapshot } from "@/data/video-lectures";
+import type { SerializableLectureSnapshot } from "@/data/lecture/repository";
 import type { NormalisedLectureContent, Timeline } from "@/types/types";
 
 const AUTO_SAVE_DELAY_MS = 2000;

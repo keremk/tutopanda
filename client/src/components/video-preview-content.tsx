@@ -20,7 +20,10 @@ export default function VideoPreviewContent({ timeline, currentTime, isPlaying, 
   const onPauseRef = useRef(onPause);
 
   const fps = 30;
-  const durationInFrames = Math.max(1, Math.round(Math.max(timeline.duration, 0) * fps));
+  const timelineSeconds = Number.isFinite(timeline?.duration)
+    ? Math.max(timeline.duration, 0)
+    : 0;
+  const durationInFrames = Math.max(1, Math.round(timelineSeconds * fps));
 
   // Keep refs updated with latest callbacks
   useEffect(() => {

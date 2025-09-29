@@ -6,7 +6,7 @@ import { revalidatePath } from "next/cache";
 
 import { db } from "@/db/db";
 import { createProject } from "@/data/project";
-import { createVideoLecture } from "@/data/video-lectures";
+import { createVideoLecture } from "@/data/lecture/repository";
 import { createWorkflowRun } from "@/data/workflow-runs";
 import { getSession } from "@/lib/session";
 import { getInngestApp } from "@/inngest/client";

@@ -14,6 +14,10 @@ export const VideoComposition: React.FC<VideoCompositionProps> = ({ timeline }) 
   return (
     <AbsoluteFill style={{ backgroundColor: '#000' }}>
       {(timeline.tracks?.visual ?? []).map((clip) => {
+        if (!Number.isFinite(clip.duration) || clip.duration <= 0) {
+          return null;
+        }
+
         const isActive =
           currentTime >= clip.startTime && currentTime < clip.startTime + clip.duration;
 

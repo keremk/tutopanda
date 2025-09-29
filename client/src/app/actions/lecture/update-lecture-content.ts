@@ -7,8 +7,8 @@ import {
   lectureUpdatePayloadSchema,
   updateLectureContent,
   type LectureUpdatePayload,
-} from "@/lib/lecture/persistence";
-import { toSerializableLectureSnapshot } from "@/data/video-lectures";
+} from "@/services/lecture/persist";
+import { toSerializableLectureSnapshot } from "@/data/lecture/repository";
 
 const updateLectureContentActionSchema = z.object({
   lectureId: z.number().int().positive(),
@@ -52,4 +52,4 @@ export async function updateLectureContentAction({
   return toSerializableLectureSnapshot(snapshot);
 }
 
-export type { LectureUpdatePayload } from "@/lib/lecture/persistence";
+export type { LectureUpdatePayload } from "@/services/lecture/persist";

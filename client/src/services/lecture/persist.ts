@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { getLectureById, updateLectureSnapshot } from "@/data/video-lectures";
+import { getLectureById, updateLectureSnapshot } from "@/data/lecture/repository";
 import { lectureContentSchema } from "@/types/types";
 
 export const lectureUpdatePayloadSchema = lectureContentSchema.partial();

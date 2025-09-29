@@ -7,7 +7,7 @@ import {
   lectureScriptSchema,
   type LectureScript,
 } from "@/prompts/create-script";
-import { updateLectureContent } from "@/lib/lecture/persistence";
+import { updateLectureContent } from "@/services/lecture/persist";
 import { getInngestApp } from "@/inngest/client";
 import {
   createLectureLogger,

@@ -4,7 +4,7 @@ import { and, desc, eq } from "drizzle-orm";
 
 import { db } from "@/db/db";
 import { projectsTable, type SelectProject } from "@/db/app-schema";
-import { getLatestVideoLectureForProject } from "@/data/video-lectures";
+import { getLatestVideoLectureForProject } from "@/data/lecture/repository";
 
 type DbOrTx =
   | typeof db

@@ -8,7 +8,7 @@ import {
   LECTURE_WORKFLOW_TOTAL_STEPS,
 } from "@/inngest/functions/workflow-utils";
 import type { LectureScript, ImageGenerationDefaults, ImageAsset } from "@/types/types";
-import { updateLectureContent } from "@/lib/lecture/persistence";
+import { updateLectureContent } from "@/services/lecture/persist";
 import {
   buildImagePromptUserMessage,
   createImagePromptDeveloperPrompt,
