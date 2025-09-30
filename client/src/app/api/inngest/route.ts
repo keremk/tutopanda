@@ -4,6 +4,9 @@ import { helloWorld } from "@/inngest/functions/helloworld";
 import { startLectureCreation } from "@/inngest/functions/start-lecture-creation";
 import { createLectureScript } from "@/inngest/functions/create-lecture-script";
 import { generateSegmentImagePrompts } from "@/inngest/functions/generate-segment-image-prompts";
+import { generateImages } from "@/inngest/functions/generate-images";
+import { generateNarration } from "@/inngest/functions/generate-narration";
+import { generateMusic } from "@/inngest/functions/generate-music";
 
 const inngest = getInngestApp();
 
@@ -15,5 +18,8 @@ export const { GET, POST, PUT } = serve({
     startLectureCreation,
     createLectureScript,
     generateSegmentImagePrompts,
+    generateImages,
+    generateNarration,
+    generateMusic
   ],
 });

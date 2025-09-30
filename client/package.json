@@ -13,6 +13,11 @@
     "db:migrate": "NODE_TLS_REJECT_UNAUTHORIZED=0 drizzle-kit migrate"
   },
   "dependencies": {
+    "@ai-sdk/openai": "^2.0.39",
+    "@ai-sdk/replicate": "^1.0.11",
+    "@elevenlabs/elevenlabs-js": "^2.16.0",
+    "@flystorage/file-storage": "^1.2.0",
+    "@flystorage/local-fs": "^1.2.0",
     "@hookform/resolvers": "^3.10.0",
     "@inngest/realtime": "^0.4.0",
     "@jridgewell/trace-mapping": "^0.3.25",
@@ -63,6 +68,7 @@
     "input-otp": "^1.4.2",
     "leaflet": "^1.9.4",
     "lucide-react": "^0.453.0",
+    "mediabunny": "^1.21.1",
     "nanoid": "^5.1.5",
     "next": "^15.0.3",
     "next-themes": "^0.4.6",
@@ -75,6 +81,7 @@
     "react-resizable-panels": "^2.1.9",
     "recharts": "^2.15.2",
     "remotion": "^4.0.346",
+    "replicate": "^1.2.0",
     "tailwind-merge": "^2.6.0",
     "tailwindcss-animate": "^1.0.7",
     "tw-animate-css": "^1.2.5",

@@ -12,7 +12,10 @@ import { getSession } from "@/lib/session";
 import { getInngestApp } from "@/inngest/client";
 import type { LectureCreationEventData } from "@/inngest/functions/start-lecture-creation";
 import { LECTURE_WORKFLOW_TOTAL_STEPS } from "@/inngest/functions/workflow-utils";
-import { DEFAULT_IMAGE_GENERATION_DEFAULTS } from "@/types/types";
+import {
+  DEFAULT_IMAGE_GENERATION_DEFAULTS,
+  DEFAULT_NARRATION_GENERATION_DEFAULTS,
+} from "@/types/types";
 
 const inngest = getInngestApp();
 
@@ -81,6 +84,7 @@ export async function createProjectWithLectureAction({
         runId,
         lectureId: lecture.id,
         imageDefaults: DEFAULT_IMAGE_GENERATION_DEFAULTS,
+        narrationDefaults: DEFAULT_NARRATION_GENERATION_DEFAULTS,
       } satisfies LectureCreationEventData,
     });
 

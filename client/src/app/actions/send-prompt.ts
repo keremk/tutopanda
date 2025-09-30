@@ -7,7 +7,9 @@ import { getInngestApp } from "@/inngest/client";
 import type { LectureCreationEventData } from "@/inngest/functions/start-lecture-creation";
 import {
   DEFAULT_IMAGE_GENERATION_DEFAULTS,
+  DEFAULT_NARRATION_GENERATION_DEFAULTS,
   type ImageGenerationDefaults,
+  type NarrationGenerationDefaults,
 } from "@/types/types";
 
 const inngest = getInngestApp();
@@ -16,12 +18,14 @@ type SendPromptInput = {
   prompt: string;
   lectureId: number;
   imageDefaults?: ImageGenerationDefaults;
+  narrationDefaults?: NarrationGenerationDefaults;
 };
 
 export async function sendPromptAction({
   prompt,
   lectureId,
   imageDefaults,
+  narrationDefaults,
 }: SendPromptInput) {
   const cleanedPrompt = prompt.trim();
 
@@ -32,7 +36,8 @@ export async function sendPromptAction({
   const { user } = await getSession();
   const runId = randomUUID();
 
-  const defaults = imageDefaults ?? DEFAULT_IMAGE_GENERATION_DEFAULTS;
+  const imageSettings = imageDefaults ?? DEFAULT_IMAGE_GENERATION_DEFAULTS;
+  const narrationSettings = narrationDefaults ?? DEFAULT_NARRATION_GENERATION_DEFAULTS;
 
   await inngest.send({
     name: "app/start-lecture-creation",
@@ -41,7 +46,8 @@ export async function sendPromptAction({
       userId: user.id,
       runId,
       lectureId,
-      imageDefaults: defaults,
+      imageDefaults: imageSettings,
+      narrationDefaults: narrationSettings,
     } satisfies LectureCreationEventData,
   });
 

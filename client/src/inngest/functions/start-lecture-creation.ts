@@ -2,7 +2,11 @@ import { getInngestApp } from "@/inngest/client";
 import { createLectureLogger, LECTURE_WORKFLOW_TOTAL_STEPS } from "@/inngest/functions/workflow-utils";
 import { createLectureScript } from "@/inngest/functions/create-lecture-script";
 import { generateSegmentImagePrompts } from "@/inngest/functions/generate-segment-image-prompts";
-import type { ImageGenerationDefaults } from "@/types/types";
+import { generateImages } from "@/inngest/functions/generate-images";
+import { generateNarration } from "@/inngest/functions/generate-narration";
+import type { ImageGenerationDefaults, NarrationGenerationDefaults, NarrationSettings } from "@/types/types";
+import { DEFAULT_NARRATION_GENERATION_DEFAULTS } from "@/types/types";
+import { getLectureById } from "@/data/lecture/repository";
 
 export type LectureCreationEventData = {
   prompt: string;
@@ -10,6 +14,7 @@ export type LectureCreationEventData = {
   runId: string;
   lectureId: number;
   imageDefaults: ImageGenerationDefaults;
+  narrationDefaults?: NarrationGenerationDefaults;
   totalWorkflowSteps?: number;
 };
 
@@ -19,7 +24,7 @@ export const startLectureCreation = inngest.createFunction(
   { id: "start-lecture-creation" },
   { event: "app/start-lecture-creation" },
   async ({ event, logger, step }) => {
-    const { userId, prompt, runId, lectureId, imageDefaults } =
+    const { userId, prompt, runId, lectureId, imageDefaults, narrationDefaults } =
       event.data as LectureCreationEventData;
     const log = createLectureLogger(runId, logger);
 
@@ -49,9 +54,63 @@ export const startLectureCreation = inngest.createFunction(
       },
     });
 
+    const lecture = await step.run("get-lecture-for-images", async () => {
+      return await getLectureById({ lectureId });
+    });
+
+    if (!lecture) {
+      throw new Error(`Lecture ${lectureId} not found`);
+    }
+
+    const generatedImages = await step.invoke("generate-images", {
+      function: generateImages,
+      data: {
+        userId,
+        runId,
+        lectureId,
+        projectId: lecture.projectId,
+        images: lecture.images || [],
+        workflowStep: 4,
+        totalWorkflowSteps: LECTURE_WORKFLOW_TOTAL_STEPS,
+      },
+    });
+
+    const lectureAfterImages = await step.run("get-lecture-for-narration", async () => {
+      return await getLectureById({ lectureId });
+    });
+
+    if (!lectureAfterImages) {
+      throw new Error(`Lecture ${lectureId} not found`);
+    }
+
+    const narrationConfig = narrationDefaults ?? DEFAULT_NARRATION_GENERATION_DEFAULTS;
+
+    const narrationSettings: NarrationSettings[] = script.segments.map((_, index) => ({
+      id: `narration-${index}`,
+      label: `Segment ${index + 1}`,
+      model: narrationConfig.model,
+      voice: narrationConfig.voice,
+    }));
+
+    const generatedNarration = await step.invoke("generate-narration", {
+      function: generateNarration,
+      data: {
+        userId,
+        runId,
+        lectureId,
+        projectId: lecture.projectId,
+        script,
+        narration: narrationSettings,
+        workflowStep: 5,
+        totalWorkflowSteps: LECTURE_WORKFLOW_TOTAL_STEPS,
+      },
+    });
+
     log.info("Lecture workflow completed", {
       hasScript: Boolean(script),
       imagePrompts: imagePrompts?.prompts?.length ?? 0,
+      generatedImages: generatedImages?.images?.length ?? 0,
+      generatedNarration: generatedNarration?.narration?.length ?? 0,
     });
 
     return { runId };

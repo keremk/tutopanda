@@ -53,12 +53,9 @@ export const imageAssetSchema = baseAssetSchema
 
 export const narrationAssetSchema = baseAssetSchema
   .extend({
-    prompt: z.string().optional(),
-    draftScript: z.string().optional(),
     finalScript: z.string().optional(),
     model: z.string().optional(),
     voice: z.string().optional(),
-    audioUrl: z.string().optional(),
     duration: z.number().nonnegative().optional(),
   })
   .passthrough();
@@ -199,6 +196,16 @@ export const DEFAULT_IMAGE_GENERATION_DEFAULTS: ImageGenerationDefaults = {
   height: 576,
   aspectRatio: "16:9",
   size: "1K",
+};
+
+export type NarrationGenerationDefaults = {
+  model: string;
+  voice: string;
+};
+
+export const DEFAULT_NARRATION_GENERATION_DEFAULTS: NarrationGenerationDefaults = {
+  model: process.env.DEFAULT_VOICE_MODEL_ID || "eleven_v3",
+  voice: process.env.DEFAULT_VOICE_ID || "onwK4e9ZLuTAKqWW03F9",
 };
 
 export type NormalisedLectureContent = Omit<LectureContent, "timeline"> & {
