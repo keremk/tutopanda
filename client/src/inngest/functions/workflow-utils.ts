@@ -31,10 +31,18 @@ export type LectureResultMessage = {
   timestamp: string;
 };
 
+export type LectureTimelineCompleteMessage = {
+  type: "timeline-complete";
+  runId: string;
+  lectureId: number;
+  timestamp: string;
+};
+
 export type LectureProgressMessage =
   | LectureStatusMessage
   | LectureReasoningMessage
-  | LectureResultMessage;
+  | LectureResultMessage
+  | LectureTimelineCompleteMessage;
 
 export const lectureProgressChannel = channel((userId: string) => `user:${userId}`)
   .addTopic(topic("progress").type<LectureProgressMessage>());

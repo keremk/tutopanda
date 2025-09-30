@@ -7,6 +7,7 @@ import { generateSegmentImagePrompts } from "@/inngest/functions/generate-segmen
 import { generateImages } from "@/inngest/functions/generate-images";
 import { generateNarration } from "@/inngest/functions/generate-narration";
 import { generateMusic } from "@/inngest/functions/generate-music";
+import { generateTimeline } from "@/inngest/functions/generate-timeline";
 
 const inngest = getInngestApp();
 
@@ -20,6 +21,7 @@ export const { GET, POST, PUT } = serve({
     generateSegmentImagePrompts,
     generateImages,
     generateNarration,
-    generateMusic
+    generateMusic, 
+    generateTimeline
   ],
 });

@@ -130,7 +130,7 @@ export default function VideoPreviewContent({ timeline, currentTime, isPlaying, 
         }}
         controls
         loop={false}
-        showVolumeControls={false}
+        showVolumeControls={true}
         acknowledgeRemotionLicense={true}
         data-testid="remotion-player"
       />

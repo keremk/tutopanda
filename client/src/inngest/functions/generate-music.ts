@@ -41,7 +41,7 @@ const generateMusicForScript = async (
 ): Promise<Buffer> => {
   const input = {
     prompt,
-    duration: durationSeconds,
+    duration: Math.round(durationSeconds), // Must be an integer
   };
 
   const output = await replicate.run("stability-ai/stable-audio-2.5", {

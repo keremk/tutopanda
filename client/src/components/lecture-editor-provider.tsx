@@ -9,13 +9,17 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { useInngestSubscription } from "@inngest/realtime/hooks";
 
 import {
   updateLectureContentAction,
   type UpdateLectureContentActionInput,
 } from "@/app/actions/lecture/update-lecture-content";
+import { getLectureAction } from "@/app/actions/lecture/get-lecture";
 import type { SerializableLectureSnapshot } from "@/data/lecture/repository";
 import type { NormalisedLectureContent, Timeline } from "@/types/types";
+import { fetchLectureProgressSubscriptionToken } from "@/app/actions/get-subscribe-token";
+import type { LectureProgressMessage } from "@/inngest/functions/workflow-utils";
 
 const AUTO_SAVE_DELAY_MS = 2000;
 
@@ -67,6 +71,43 @@ export function LectureEditorProvider({
   const [revision, setRevision] = useState(initialSnapshot.revision);
   const [updatedAt, setUpdatedAt] = useState(new Date(initialSnapshot.updatedAt));
   const [projectId] = useState(initialSnapshot.projectId);
+
+  // Subscribe to timeline completion events
+  const { data: subscriptionData = [] } = useInngestSubscription({
+    refreshToken: fetchLectureProgressSubscriptionToken,
+  });
+
+  // Handle timeline completion
+  useEffect(() => {
+    for (const message of subscriptionData) {
+      if (message.topic !== "progress") {
+        continue;
+      }
+
+      const payload = message.data as LectureProgressMessage | undefined;
+
+      if (payload?.type === "timeline-complete" && payload.lectureId === lectureId) {
+        console.log("Timeline completed, refreshing lecture data...");
+
+        // Refetch the lecture snapshot
+        const refreshLecture = async () => {
+          try {
+            const snapshot = await getLectureAction(lectureId);
+            setDraft(snapshotToContent(snapshot));
+            setRevision(snapshot.revision);
+            setUpdatedAt(new Date(snapshot.updatedAt));
+            setDirtyFields(new Set());
+            console.log("Timeline loaded successfully");
+          } catch (error) {
+            console.error("Failed to refresh lecture after timeline completion", error);
+          }
+        };
+
+        void refreshLecture();
+        break; // Only process once
+      }
+    }
+  }, [subscriptionData, lectureId]);
 
   const markDirty = useCallback((key: LectureContentKey) => {
     setDirtyFields((prev) => {

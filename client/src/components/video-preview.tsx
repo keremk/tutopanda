@@ -186,9 +186,9 @@ export default function VideoPreview() {
         </div>
       </div>
 
-      <div className="flex-1 flex flex-col gap-4 min-h-0">
-        {/* Player section */}
-        <div className="flex-1 min-h-0">
+      <div className="flex-1 flex flex-col gap-4 min-h-0 overflow-hidden">
+        {/* Player section - constrained height */}
+        <div className="flex-shrink-0" style={{ height: "min(60vh, calc(100% - 22rem))" }}>
           <VideoPreviewContent
             timeline={activeTimeline}
             currentTime={currentTime}
@@ -200,7 +200,7 @@ export default function VideoPreview() {
         </div>
 
         {/* Timeline section */}
-        <div className="h-80 min-h-0">
+        <div className="h-80 flex-shrink-0">
           <TimelineEditorContent
             timeline={activeTimeline}
             currentTime={currentTime}

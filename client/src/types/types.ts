@@ -57,6 +57,7 @@ export const narrationAssetSchema = baseAssetSchema
     model: z.string().optional(),
     voice: z.string().optional(),
     duration: z.number().nonnegative().optional(),
+    sourceUrl: z.string().optional(),
   })
   .passthrough();
 

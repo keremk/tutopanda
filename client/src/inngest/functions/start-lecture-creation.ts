@@ -4,6 +4,8 @@ import { createLectureScript } from "@/inngest/functions/create-lecture-script";
 import { generateSegmentImagePrompts } from "@/inngest/functions/generate-segment-image-prompts";
 import { generateImages } from "@/inngest/functions/generate-images";
 import { generateNarration } from "@/inngest/functions/generate-narration";
+import { generateMusic } from "@/inngest/functions/generate-music";
+import { generateTimeline } from "@/inngest/functions/generate-timeline";
 import type { ImageGenerationDefaults, NarrationGenerationDefaults, NarrationSettings } from "@/types/types";
 import { DEFAULT_NARRATION_GENERATION_DEFAULTS } from "@/types/types";
 import { getLectureById } from "@/data/lecture/repository";
@@ -106,11 +108,53 @@ export const startLectureCreation = inngest.createFunction(
       },
     });
 
+    const lectureAfterNarration = await step.run("get-lecture-for-music", async () => {
+      return await getLectureById({ lectureId });
+    });
+
+    if (!lectureAfterNarration) {
+      throw new Error(`Lecture ${lectureId} not found after narration`);
+    }
+
+    // Calculate total duration from narration for music generation
+    const totalDuration = (lectureAfterNarration.narration ?? []).reduce(
+      (sum, n) => sum + (n.duration ?? 0),
+      0
+    );
+
+    const generatedMusic = await step.invoke("generate-music", {
+      function: generateMusic,
+      data: {
+        userId,
+        runId,
+        lectureId,
+        projectId: lecture.projectId,
+        script,
+        durationSeconds: totalDuration,
+        workflowStep: 6,
+        totalWorkflowSteps: LECTURE_WORKFLOW_TOTAL_STEPS,
+      },
+    });
+
+    const timeline = await step.invoke("generate-timeline", {
+      function: generateTimeline,
+      data: {
+        userId,
+        runId,
+        lectureId,
+        projectId: lecture.projectId,
+        workflowStep: 7,
+        totalWorkflowSteps: LECTURE_WORKFLOW_TOTAL_STEPS,
+      },
+    });
+
     log.info("Lecture workflow completed", {
       hasScript: Boolean(script),
       imagePrompts: imagePrompts?.prompts?.length ?? 0,
       generatedImages: generatedImages?.images?.length ?? 0,
       generatedNarration: generatedNarration?.narration?.length ?? 0,
+      hasMusic: Boolean(generatedMusic?.music),
+      hasTimeline: Boolean(timeline?.timeline),
     });
 
     return { runId };

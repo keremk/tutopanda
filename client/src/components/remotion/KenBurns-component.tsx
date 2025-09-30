@@ -50,7 +50,7 @@ export const KenBurnsComponent: React.FC<KenBurnsComponentProps> = ({ component,
           background: 'linear-gradient(transparent, rgba(0,0,0,0.7))',
         }}
       >
-        <h1
+        {/* <h1
           style={{
             fontSize: 64,
             fontWeight: 'bold',
@@ -61,7 +61,7 @@ export const KenBurnsComponent: React.FC<KenBurnsComponentProps> = ({ component,
           }}
         >
           {component.name}
-        </h1>
+        </h1> */}
       </AbsoluteFill>
     </AbsoluteFill>
   );

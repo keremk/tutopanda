@@ -67,3 +67,4 @@ pnpm db:push           # Sync Drizzle migrations (requires DATABASE_URL)
 
 No automated tests are currently configured. Type checking and linting serve as the primary validation. For new code, plan to add Vitest with Testing Library for client code using `.test.tsx` suffix.
 - Add to memory: We are using BetterAuth for authentication backed by a NEON database. For development use local docker based db and use PG driver.
+- Please remember running type-check to make sure that you are generating correct code.

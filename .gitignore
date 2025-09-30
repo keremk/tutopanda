@@ -50,3 +50,6 @@ next-env.d.ts
 **/.source/
 
 *.tar.gz
+
+# Local file storage
+local-storage/

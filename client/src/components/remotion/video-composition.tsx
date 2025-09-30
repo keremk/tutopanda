@@ -1,10 +1,18 @@
-import { Composition, AbsoluteFill, useCurrentFrame, useVideoConfig } from 'remotion';
+import { Composition, AbsoluteFill, useCurrentFrame, useVideoConfig, Audio, Sequence } from 'remotion';
 import { type Timeline } from '@/types/types';
 import { KenBurnsComponent } from './KenBurns-component';
 
 interface VideoCompositionProps {
   timeline: Timeline;
 }
+
+// Helper to ensure URL has the correct API prefix
+const normalizeStorageUrl = (url: string | undefined): string | undefined => {
+  if (!url) return undefined;
+  if (url.startsWith('/api/storage/')) return url;
+  if (url.startsWith('http://') || url.startsWith('https://')) return url;
+  return `/api/storage/${url}`;
+};
 
 export const VideoComposition: React.FC<VideoCompositionProps> = ({ timeline }) => {
   const frame = useCurrentFrame();
@@ -13,6 +21,7 @@ export const VideoComposition: React.FC<VideoCompositionProps> = ({ timeline }) 
 
   return (
     <AbsoluteFill style={{ backgroundColor: '#000' }}>
+      {/* Visual track - Ken Burns effects */}
       {(timeline.tracks?.visual ?? []).map((clip) => {
         if (!Number.isFinite(clip.duration) || clip.duration <= 0) {
           return null;
@@ -29,11 +38,55 @@ export const VideoComposition: React.FC<VideoCompositionProps> = ({ timeline }) 
         switch (clip.kind) {
           case 'kenBurns':
             return (
-              <KenBurnsComponent key={clip.id} component={clip} progress={progress} />
+              <KenBurnsComponent
+                key={clip.id}
+                component={{
+                  ...clip,
+                  imageUrl: normalizeStorageUrl(clip.imageUrl)
+                }}
+                progress={progress}
+              />
             );
           default:
             return null;
         }
+      })}
+
+      {/* Voice track - Narration audio */}
+      {(timeline.tracks?.voice ?? []).map((clip) => {
+        if (!clip.audioUrl || !Number.isFinite(clip.duration) || clip.duration <= 0) {
+          return null;
+        }
+
+        const startFrame = Math.round(clip.startTime * fps);
+        const durationInFrames = Math.round(clip.duration * fps);
+
+        return (
+          <Sequence key={clip.id} from={startFrame} durationInFrames={durationInFrames}>
+            <Audio
+              src={normalizeStorageUrl(clip.audioUrl)}
+              volume={clip.volume ?? 1.0}
+            />
+          </Sequence>
+        );
+      })}
+
+      {/* Music track - Background music */}
+      {(timeline.tracks?.music ?? []).map((clip) => {
+        if (!clip.audioUrl || !Number.isFinite(clip.duration) || clip.duration <= 0) {
+          return null;
+        }
+
+        const durationInFrames = Math.round(clip.duration * fps);
+
+        return (
+          <Sequence key={clip.id} from={0} durationInFrames={durationInFrames}>
+            <Audio
+              src={normalizeStorageUrl(clip.audioUrl)}
+              volume={clip.volume ?? 0.3}
+            />
+          </Sequence>
+        );
       })}
     </AbsoluteFill>
   );
