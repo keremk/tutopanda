@@ -1,4 +1,4 @@
-import { Composition, AbsoluteFill, useCurrentFrame, useVideoConfig, Audio, Sequence } from 'remotion';
+import { AbsoluteFill, useCurrentFrame, useVideoConfig, Audio, Sequence } from 'remotion';
 import { type Timeline } from '@/types/types';
 import { KenBurnsComponent } from './KenBurns-component';
 

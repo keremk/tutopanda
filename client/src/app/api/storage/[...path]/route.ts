@@ -27,30 +27,46 @@ export async function GET(
       );
     }
 
-    // Read file as a stream
-    const stream = await storage.read(filePath);
+    // Get file size for range requests
+    const stat = await storage.stat(filePath);
+    const fileSize = stat.isFile && 'size' in stat ? (stat.size ?? 0) : 0;
 
     // Determine content type based on file extension
     const contentType = getContentType(filePath);
 
-    // Convert Node.js Readable to Web ReadableStream
-    const webStream = new ReadableStream({
-      start(controller) {
-        stream.on("data", (chunk: Buffer) => {
-          controller.enqueue(new Uint8Array(chunk));
-        });
-        stream.on("end", () => {
-          controller.close();
-        });
-        stream.on("error", (error) => {
-          controller.error(error);
-        });
-      },
-    });
+    // Handle range requests for seeking support
+    const range = request.headers.get("range");
 
-    return new NextResponse(webStream, {
+    if (range) {
+      const parts = range.replace(/bytes=/, "").split("-");
+      const start = parseInt(parts[0], 10);
+      const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+      const chunkSize = end - start + 1;
+
+      // Read file as buffer to support ranges
+      const buffer = await storage.readToBuffer(filePath);
+      const chunk = buffer.slice(start, end + 1);
+
+      return new NextResponse(chunk, {
+        status: 206,
+        headers: {
+          "Content-Range": `bytes ${start}-${end}/${fileSize}`,
+          "Accept-Ranges": "bytes",
+          "Content-Length": chunkSize.toString(),
+          "Content-Type": contentType,
+          "Cache-Control": "public, max-age=31536000, immutable",
+        },
+      });
+    }
+
+    // No range request - serve entire file
+    const buffer = await storage.readToBuffer(filePath);
+
+    return new NextResponse(buffer, {
       headers: {
         "Content-Type": contentType,
+        "Content-Length": fileSize.toString(),
+        "Accept-Ranges": "bytes",
         "Cache-Control": "public, max-age=31536000, immutable",
       },
     });
