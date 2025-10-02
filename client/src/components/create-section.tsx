@@ -5,9 +5,12 @@ import { useAgentPanelContext, type AgentPanelTab } from "@/hooks/use-agent-pane
 import ScriptEditor from "./script-editor";
 import AssetsEditor from "./assets-editor";
 import VideoPreview from "./video-preview";
+import EditConfiguration from "./edit-configuration";
+import { useLectureEditor } from "./lecture-editor-provider";
 
 export default function CreateSection() {
   const { activeTab, setActiveTab } = useAgentPanelContext();
+  const { content } = useLectureEditor();
 
   return (
     <div className="h-full flex flex-col bg-background text-foreground">
@@ -17,12 +20,24 @@ export default function CreateSection() {
         className="h-full flex flex-col"
       >
         <div className="shrink-0 px-6 pt-6">
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="video-preview">Video Preview</TabsTrigger>
+            <TabsTrigger value="configuration">Configuration</TabsTrigger>
             <TabsTrigger value="script">Script</TabsTrigger>
             <TabsTrigger value="assets">Assets</TabsTrigger>
           </TabsList>
         </div>
+
+        <TabsContent
+          value="configuration"
+          className="flex-1 p-6 mt-0 overflow-hidden"
+        >
+          <EditConfiguration
+            config={content.config}
+            runId={null}
+            isEditMode={false}
+          />
+        </TabsContent>
 
         <TabsContent
           value="video-preview"

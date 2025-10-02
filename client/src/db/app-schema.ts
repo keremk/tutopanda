@@ -9,6 +9,7 @@ import {
   index,
 } from "drizzle-orm/pg-core";
 import { user } from "./auth-schema";
+import { title } from "process";
 
 export const projectsTable = pgTable("projects", {
   id: serial("id").primaryKey(),
@@ -25,7 +26,10 @@ export const videoLecturesTable = pgTable("video_lectures", {
   id: serial("id").primaryKey(),
   projectId: integer("project_id")
     .notNull()
-    .references(() => projectsTable.id, { onDelete: "cascade" }),
+    .references(() => projectsTable.id, { onDelete: "cascade" }), 
+  title: text("title").notNull().default("Untitled Lecture"),
+  summary: text("summary"),
+  config: jsonb("config"),
   script: jsonb("script"),
   images: jsonb("images"),
   narration: jsonb("narration"),
@@ -57,7 +61,7 @@ export const lectureRevisionsTable = pgTable(
       .notNull()
       .defaultNow(),
   },
-  (table) => [
+  (table) => [  
     uniqueIndex("lecture_revision_unique").on(table.lectureId, table.revision),
     index("lecture_revisions_run_id_idx").on(table.runId),
   ]

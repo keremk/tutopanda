@@ -1,5 +1,8 @@
-export { lectureScriptSchema, lectureSegmentSchema } from "@/types/types";
+export { generatedScriptSchema, generatedSegmentSchema } from "@/types/types";
 export type { LectureScript } from "@/types/types";
+
+// For backwards compatibility, export the generated schema as the expected name
+export { generatedScriptSchema as lectureScriptSchema } from "@/types/types";
 
 export const createScriptSystemPrompt = [
   "You are an expert historical researcher and documentary script writer.",

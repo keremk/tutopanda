@@ -1,6 +1,7 @@
 import { channel, topic } from "@inngest/realtime";
 
 import type { LectureScript } from "@/prompts/create-script";
+import type { LectureConfig } from "@/types/types";
 
 export const LECTURE_WORKFLOW_TOTAL_STEPS = 7;
 
@@ -38,11 +39,19 @@ export type LectureTimelineCompleteMessage = {
   timestamp: string;
 };
 
+export type LectureConfigMessage = {
+  type: "config";
+  runId: string;
+  config: LectureConfig;
+  timestamp: string;
+};
+
 export type LectureProgressMessage =
   | LectureStatusMessage
   | LectureReasoningMessage
   | LectureResultMessage
-  | LectureTimelineCompleteMessage;
+  | LectureTimelineCompleteMessage
+  | LectureConfigMessage;
 
 export const lectureProgressChannel = channel((userId: string) => `user:${userId}`)
   .addTopic(topic("progress").type<LectureProgressMessage>());
@@ -135,9 +144,23 @@ export const createLectureProgressPublisher = <TPublish extends (event: any) => 
     log.info("Result published", { segments: script.segments.length });
   };
 
+  const publishConfig = async (config: LectureConfig) => {
+    await publish(
+      lectureProgressChannel(userId).progress({
+        type: "config",
+        runId,
+        config,
+        timestamp: nowIso(),
+      })
+    );
+
+    log.info("Config published", { config });
+  };
+
   return {
     publishStatus,
     publishReasoning,
     publishResult,
+    publishConfig,
   };
 };

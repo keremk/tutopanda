@@ -33,6 +33,7 @@ type LectureEditorContextValue = {
   status: "idle" | "saving" | "error";
   lastError: string | null;
   clearError: () => void;
+  content: NormalisedLectureContent;
   timeline: Timeline | null;
   setTimeline: (timeline: Timeline | null) => void;
   updateTimeline: (updater: (timeline: Timeline | null) => Timeline | null) => void;
@@ -202,6 +203,7 @@ export function LectureEditorProvider({
     status,
     lastError,
     clearError: () => setLastError(null),
+    content: draft,
     timeline: draft.timeline,
     setTimeline: (timeline) => setField("timeline", timeline ?? null),
     updateTimeline,
@@ -215,7 +217,7 @@ export function LectureEditorProvider({
     updatedAt,
     status,
     lastError,
-    draft.timeline,
+    draft,
     setField,
     updateTimeline,
     flushDraft,
@@ -231,6 +233,9 @@ export function LectureEditorProvider({
 const snapshotToContent = (
   snapshot: SerializableLectureSnapshot
 ): NormalisedLectureContent => ({
+  title: snapshot.title,
+  summary: snapshot.summary,
+  config: snapshot.config ?? null,
   script: snapshot.script ?? null,
   images: snapshot.images ?? [],
   narration: snapshot.narration ?? [],

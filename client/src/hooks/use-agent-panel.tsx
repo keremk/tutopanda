@@ -4,7 +4,7 @@ import { createContext, useContext } from "react";
 
 import type { LectureScript } from "@/prompts/create-script";
 
-export type AgentPanelTab = "video-preview" | "script" | "assets";
+export type AgentPanelTab = "configuration" | "video-preview" | "script" | "assets";
 
 export type AgentPanelContextValue = {
   activeTab: AgentPanelTab;

@@ -26,13 +26,17 @@ import type {
   LectureResultMessage,
   LectureRunStatus,
   LectureStatusMessage,
+  LectureConfigMessage,
 } from "@/inngest/functions/workflow-utils";
 import type { LectureScript } from "@/prompts/create-script";
+import type { LectureConfig } from "@/types/types";
 
 interface AgentProgressProps {
   className?: string;
   onRunResult?: (runId: string, script: LectureScript) => void;
   onViewScript?: (runId: string) => void;
+  onConfigAccepted?: (runId: string, config: LectureConfig) => void;
+  onConfigEdit?: (runId: string, config: LectureConfig) => void;
   selectedRunId?: string | null;
 }
 
@@ -49,6 +53,7 @@ type RunProgress = {
   steps: StepProgress[];
   reasoning?: LectureReasoningMessage;
   result?: LectureResultMessage;
+  config?: LectureConfigMessage;
   lastUpdated: number;
   totalSteps: number;
 };
@@ -62,6 +67,8 @@ export const AgentProgress = ({
   className,
   onRunResult,
   onViewScript,
+  onConfigAccepted,
+  onConfigEdit,
   selectedRunId,
 }: AgentProgressProps) => {
   const { data = [], state, error } = useInngestSubscription({
@@ -163,6 +170,11 @@ export const AgentProgress = ({
           current.lastUpdated = Math.max(current.lastUpdated, getTimestamp(payload.timestamp));
           break;
         }
+        case "config": {
+          current.config = payload;
+          current.lastUpdated = Math.max(current.lastUpdated, getTimestamp(payload.timestamp));
+          break;
+        }
         default:
           break;
       }
@@ -242,6 +254,33 @@ export const AgentProgress = ({
                 <NotebookPenIcon className="size-4" />
                 <span>{descriptor}</span>
               </div>
+
+              {run.config ? (
+                <div className="mt-3 rounded-md border border-border/60 bg-card/30 p-3">
+                  <h4 className="mb-2 text-sm font-medium text-foreground">Configuration Summary</h4>
+                  <div className="space-y-1 text-sm text-muted-foreground">
+                    <div><strong>Duration:</strong> {run.config.config.general.duration}</div>
+                    <div><strong>Language:</strong> {run.config.config.general.language}{run.config.config.general.subtitleLanguage ? ` (Subtitles: ${run.config.config.general.subtitleLanguage})` : ""}</div>
+                    <div><strong>Size & Aspect Ratio:</strong> {run.config.config.image.size} • {run.config.config.image.aspectRatio}</div>
+                    <div><strong>Style:</strong> {run.config.config.image.style}</div>
+                  </div>
+                  <div className="mt-3 flex gap-2">
+                    <Button
+                      size="sm"
+                      onClick={() => onConfigAccepted?.(run.runId, run.config!.config)}
+                    >
+                      Accept and Continue
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => onConfigEdit?.(run.runId, run.config!.config)}
+                    >
+                      Edit
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
 
               <div className="mt-3 space-y-3">
                 {run.steps.map((step) => {

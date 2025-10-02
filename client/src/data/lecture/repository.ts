@@ -41,6 +41,9 @@ export async function createVideoLecture(
     .insert(videoLecturesTable)
     .values({
       projectId,
+      title: content.title ?? "Untitled Lecture",
+      summary: content.summary ?? null,
+      config: content.config ?? null,
       script: content.script ?? null,
       images: content.images ?? null,
       narration: content.narration ?? null,
@@ -110,6 +113,9 @@ const normaliseLectureContent = (content: LectureContent): NormalisedLectureCont
   };
 
   return {
+    title: content.title,
+    summary: content.summary,
+    config: content.config ?? null,
     script: content.script ?? null,
     images: content.images ?? [],
     narration: content.narration ?? [],
@@ -121,6 +127,9 @@ const normaliseLectureContent = (content: LectureContent): NormalisedLectureCont
 
 const parseLectureSnapshot = (lecture: DbVideoLectureRow): LectureSnapshot => {
   const parsed = lectureContentSchema.safeParse({
+    title: lecture.title,
+    summary: lecture.summary,
+    config: lecture.config,
     script: lecture.script,
     images: lecture.images,
     narration: lecture.narration,
@@ -138,6 +147,9 @@ const parseLectureSnapshot = (lecture: DbVideoLectureRow): LectureSnapshot => {
   return {
     id: lecture.id,
     projectId: lecture.projectId,
+    title: parsed.data.title,
+    summary: parsed.data.summary,
+    config: content.config,
     script: content.script,
     images: content.images,
     narration: content.narration,
@@ -269,6 +281,9 @@ export async function updateLectureSnapshot({
     }
 
     const mergedContent = normaliseLectureContent({
+      title: payload.title ?? currentSnapshot.title,
+      summary: payload.summary ?? currentSnapshot.summary,
+      config: payload.config ?? currentSnapshot.config,
       script: payload.script ?? currentSnapshot.script,
       images: payload.images ?? currentSnapshot.images,
       narration: payload.narration ?? currentSnapshot.narration,
@@ -282,6 +297,9 @@ export async function updateLectureSnapshot({
     const [updated] = await tx
       .update(videoLecturesTable)
       .set({
+        title: payload.title ?? currentSnapshot.title,
+        summary: payload.summary ?? currentSnapshot.summary,
+        config: mergedContent.config,
         script: mergedContent.script,
         images: mergedContent.images,
         narration: mergedContent.narration,
@@ -332,6 +350,9 @@ export async function updateLectureSnapshot({
     const parsedRevision = parseLectureRevision(revision);
     const snapshot = parseLectureSnapshot({
       ...updated,
+      title: payload.title ?? currentSnapshot.title,
+      summary: payload.summary ?? currentSnapshot.summary,
+      config: mergedContent.config,
       script: mergedContent.script,
       images: mergedContent.images,
       narration: mergedContent.narration,

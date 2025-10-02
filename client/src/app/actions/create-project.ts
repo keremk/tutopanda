@@ -15,6 +15,7 @@ import { LECTURE_WORKFLOW_TOTAL_STEPS } from "@/inngest/functions/workflow-utils
 import {
   DEFAULT_IMAGE_GENERATION_DEFAULTS,
   DEFAULT_NARRATION_GENERATION_DEFAULTS,
+  DEFAULT_LECTURE_CONFIG,
 } from "@/types/types";
 
 const inngest = getInngestApp();
@@ -63,7 +64,10 @@ export async function createProjectWithLectureAction({
       tx
     );
 
-    const lecture = await createVideoLecture({ projectId: project.id }, tx);
+    const lecture = await createVideoLecture({
+      projectId: project.id,
+      config: DEFAULT_LECTURE_CONFIG
+    }, tx);
 
     await createWorkflowRun(
       {

@@ -1,6 +1,25 @@
+import { title } from "process";
 import { z } from "zod";
 
+// Application-level schemas (stored in database)
 export const lectureSegmentSchema = z.object({
+  narration: z
+    .string()
+    .min(1, "Provide narration text for the segment."),
+  backgroundMusic: z
+    .string()
+    .min(1, "Describe background music that supports the narration."),
+  effect: z
+    .string()
+    .min(1, "Describe a tasteful sound effect that enhances the scene."),
+});
+
+export const lectureScriptSchema = z.object({
+  segments: z.array(lectureSegmentSchema).min(1, "Include at least one segment."),
+});
+
+// LLM generation schemas (used for AI model output)
+export const generatedSegmentSchema = z.object({
   narration: z
     .string()
     .min(1, "Provide narration text for the segment."),
@@ -18,11 +37,12 @@ export const lectureSegmentSchema = z.object({
     .catch("image"),
 });
 
-export const lectureScriptSchema = z.object({
+export const generatedScriptSchema = z.object({
+  title: z.string().min(1, "Provide a concise title for the lecture, not more than 3 to 5 words."),
   detailedSummary: z
     .string()
     .min(1, "Provide a detailed written summary for supplemental reading."),
-  segments: z.array(lectureSegmentSchema).min(1, "Include at least one segment."),
+  segments: z.array(generatedSegmentSchema).min(1, "Include at least one segment."),
 });
 
 export const aspectRatioValues = [
@@ -157,7 +177,83 @@ export const timelineSchema = z.object({
   tracks: timelineTracksSchema,
 });
 
+// Configuration schemas
+export const videoDurationValues = ["30s", "1min", "3min"] as const;
+export const audienceValues = [
+  "Kids",
+  "Teens",
+  "Young Adults",
+  "Adults",
+  "Older Adults",
+  "Family-Friendly",
+  "Academic",
+  "Enthusiast/Niche"
+] as const;
+export const imageSizeValues = ["480", "720", "1080"] as const;
+export const imageStyleValues = ["Ghibli", "Pixar", "Animated", "Realistic"] as const;
+export const imageFormatValues = ["JPG", "PNG"] as const;
+export const imageModelValues = ["NanoBanana", "SeaDream", "QWEN Image"] as const;
+export const videoModelValues = ["Seadance-1-lite"] as const;
+export const videoDurationSegmentValues = ["5s", "10s"] as const;
+export const segmentLengthValues = ["5s", "10s", "15s"] as const;
+export const musicModelValues = ["Stable Audio", "ElevenLabs"] as const;
+export const soundEffectModelValues = ["Declare Lab Tango", "ElevenLabs"] as const;
+
+export const generalConfigSchema = z.object({
+  duration: z.enum(videoDurationValues),
+  scriptModel: z.string(),
+  audience: z.enum(audienceValues),
+  useSubtitles: z.boolean(),
+  language: z.string(),
+  subtitleLanguage: z.string().optional(),
+  useVideo: z.boolean(),
+  maxVideoSegments: z.number().int().min(0).optional(),
+});
+
+export const imageConfigSchema = z.object({
+  size: z.enum(imageSizeValues),
+  aspectRatio: z.enum(aspectRatioValues),
+  imagesPerSegment: z.number().int().min(1).max(2),
+  style: z.enum(imageStyleValues),
+  format: z.enum(imageFormatValues),
+  model: z.enum(imageModelValues),
+});
+
+export const videoConfigSchema = z.object({
+  model: z.enum(videoModelValues),
+  duration: z.enum(videoDurationSegmentValues),
+});
+
+export const narrationConfigSchema = z.object({
+  segmentLength: z.enum(segmentLengthValues),
+  voice: z.string(),
+  model: z.string(),
+  emotion: z.string().optional(),
+});
+
+export const musicConfigSchema = z.object({
+  model: z.enum(musicModelValues),
+});
+
+export const soundEffectConfigSchema = z.object({
+  model: z.enum(soundEffectModelValues),
+});
+
+export const lectureConfigSchema = z.object({
+  general: generalConfigSchema,
+  image: imageConfigSchema,
+  video: videoConfigSchema,
+  narration: narrationConfigSchema,
+  music: musicConfigSchema,
+  soundEffects: soundEffectConfigSchema,
+});
+
 export const lectureContentSchema = z.object({
+  title: z.string().min(1, "Lecture must have a title."),
+  summary: z
+    .string()
+    .nullable(),
+  config: lectureConfigSchema.nullable(),
   script: lectureScriptSchema.nullable(),
   images: z.array(imageAssetSchema).nullish(),
   narration: z.array(narrationAssetSchema).nullish(),
@@ -207,6 +303,49 @@ export type NarrationGenerationDefaults = {
 export const DEFAULT_NARRATION_GENERATION_DEFAULTS: NarrationGenerationDefaults = {
   model: process.env.DEFAULT_VOICE_MODEL_ID || "eleven_v3",
   voice: process.env.DEFAULT_VOICE_ID || "onwK4e9ZLuTAKqWW03F9",
+};
+
+export type LectureConfig = z.infer<typeof lectureConfigSchema>;
+export type GeneralConfig = z.infer<typeof generalConfigSchema>;
+export type ImageConfig = z.infer<typeof imageConfigSchema>;
+export type VideoConfig = z.infer<typeof videoConfigSchema>;
+export type NarrationConfig = z.infer<typeof narrationConfigSchema>;
+export type MusicConfig = z.infer<typeof musicConfigSchema>;
+export type SoundEffectConfig = z.infer<typeof soundEffectConfigSchema>;
+
+export const DEFAULT_LECTURE_CONFIG: LectureConfig = {
+  general: {
+    duration: "3min",
+    scriptModel: "gpt-5",
+    audience: "Adults",
+    useSubtitles: false,
+    language: "en",
+    useVideo: false,
+    maxVideoSegments: 0,
+  },
+  image: {
+    size: "1080",
+    aspectRatio: "16:9",
+    imagesPerSegment: 1,
+    style: "Realistic",
+    format: "PNG",
+    model: "SeaDream",
+  },
+  video: {
+    model: "Seadance-1-lite",
+    duration: "5s",
+  },
+  narration: {
+    segmentLength: "15s",
+    voice: process.env.DEFAULT_VOICE_ID || "onwK4e9ZLuTAKqWW03F9",
+    model: process.env.DEFAULT_VOICE_MODEL_ID || "eleven_v3",
+  },
+  music: {
+    model: "Stable Audio",
+  },
+  soundEffects: {
+    model: "ElevenLabs",
+  },
 };
 
 export type NormalisedLectureContent = Omit<LectureContent, "timeline"> & {

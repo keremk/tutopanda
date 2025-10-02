@@ -4,9 +4,9 @@ import { Output, streamText } from "ai";
 import {
   buildCreateScriptPrompt,
   createScriptSystemPrompt,
-  lectureScriptSchema,
-  type LectureScript,
+  generatedScriptSchema,
 } from "@/prompts/create-script";
+import type { LectureScript } from "@/types/types";
 import { updateLectureContent } from "@/services/lecture/persist";
 import { getInngestApp } from "@/inngest/client";
 import {
@@ -22,12 +22,13 @@ const REASONING_MIN_DELTA = 120;
 const safeSuggestedFormat = (value: unknown): "image" | "map" =>
   value === "map" || value === "image" ? value : "image";
 
-const normaliseScriptCandidate = (value: unknown): unknown => {
+const normaliseGeneratedScript = (value: unknown): unknown => {
   if (typeof value !== "object" || value === null) {
     return value;
   }
 
   const candidate = value as {
+    title?: unknown;
     detailedSummary?: unknown;
     segments?: unknown;
   };
@@ -109,7 +110,7 @@ export const createLectureScript = inngest.createFunction(
         system: createScriptSystemPrompt,
         prompt: buildCreateScriptPrompt(prompt),
         experimental_output: Output.object({
-          schema: lectureScriptSchema,
+          schema: generatedScriptSchema,
         }),
         providerOptions: {
           openai: {
@@ -187,7 +188,7 @@ export const createLectureScript = inngest.createFunction(
       return finalText;
     });
 
-    const script = await step.run("process-model-output", async () => {
+    const { script, title, summary } = await step.run("process-model-output", async () => {
       await publishStatus("Validating lecture script", 2);
 
       let parsed: unknown;
@@ -202,16 +203,30 @@ export const createLectureScript = inngest.createFunction(
         );
       }
 
-      const scriptFromModel = lectureScriptSchema.parse(
-        normaliseScriptCandidate(parsed)
+      const generatedScript = generatedScriptSchema.parse(
+        normaliseGeneratedScript(parsed)
       );
       log.info("Script validated", {
-        segments: scriptFromModel.segments.length,
+        segments: generatedScript.segments.length,
+        title: generatedScript.title,
       });
 
-      await publishResult(scriptFromModel);
+      // Extract application-level script (without suggestedFormat and detailedSummary)
+      const script: LectureScript = {
+        segments: generatedScript.segments.map(({ narration, backgroundMusic, effect }) => ({
+          narration,
+          backgroundMusic,
+          effect,
+        })),
+      };
 
-      return scriptFromModel;
+      await publishResult(script);
+
+      return {
+        script,
+        title: generatedScript.title,
+        summary: generatedScript.detailedSummary,
+      };
     });
 
     await step.run("save-script", async () => {
@@ -219,7 +234,11 @@ export const createLectureScript = inngest.createFunction(
       await updateLectureContent({
         lectureId,
         actorId: userId,
-        payload: { script },
+        payload: {
+          title,
+          summary,
+          script,
+        },
       });
       await publishStatus("Lecture script ready", 2, "complete");
     });
