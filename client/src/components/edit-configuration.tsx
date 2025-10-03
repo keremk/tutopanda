@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
@@ -23,7 +23,7 @@ interface EditConfigurationProps {
   runId: string | null;
   isEditMode?: boolean;
   onSave?: (config: LectureConfig) => void;
-  onEditAndContinue?: (runId: string, config: LectureConfig) => void;
+  onConfigEditComplete?: (runId: string, config: LectureConfig) => void;
 }
 
 type ConfigSection = "general" | "image" | "narration" | "music" | "effects";
@@ -41,16 +41,21 @@ export default function EditConfiguration({
   runId,
   isEditMode = false,
   onSave,
-  onEditAndContinue,
+  onConfigEditComplete,
 }: EditConfigurationProps) {
   const [activeSection, setActiveSection] = useState<ConfigSection>("general");
   const [editedConfig, setEditedConfig] = useState<LectureConfig | null>(config);
+
+  // Sync editedConfig when config prop changes (e.g., when user clicks Edit in agent progress)
+  useEffect(() => {
+    setEditedConfig(config);
+  }, [config]);
 
   const handleAction = () => {
     if (!editedConfig) return;
 
     if (isEditMode && runId) {
-      onEditAndContinue?.(runId, editedConfig);
+      onConfigEditComplete?.(runId, editedConfig);
     } else {
       onSave?.(editedConfig);
     }

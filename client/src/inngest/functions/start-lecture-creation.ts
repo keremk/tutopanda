@@ -1,5 +1,6 @@
 import { getInngestApp } from "@/inngest/client";
 import { createLectureLogger, LECTURE_WORKFLOW_TOTAL_STEPS } from "@/inngest/functions/workflow-utils";
+import { confirmConfiguration } from "@/inngest/functions/confirm-configuration";
 import { createLectureScript } from "@/inngest/functions/create-lecture-script";
 import { generateSegmentImagePrompts } from "@/inngest/functions/generate-segment-image-prompts";
 import { generateImages } from "@/inngest/functions/generate-images";
@@ -7,7 +8,7 @@ import { generateNarration } from "@/inngest/functions/generate-narration";
 import { generateMusic } from "@/inngest/functions/generate-music";
 import { generateTimeline } from "@/inngest/functions/generate-timeline";
 import type { ImageGenerationDefaults, NarrationGenerationDefaults, NarrationSettings } from "@/types/types";
-import { DEFAULT_NARRATION_GENERATION_DEFAULTS } from "@/types/types";
+import { DEFAULT_NARRATION_GENERATION_DEFAULTS, DEFAULT_LECTURE_CONFIG } from "@/types/types";
 import { getLectureById } from "@/data/lecture/repository";
 
 export type LectureCreationEventData = {
@@ -31,6 +32,21 @@ export const startLectureCreation = inngest.createFunction(
     const log = createLectureLogger(runId, logger);
 
     log.info("Starting lecture workflow");
+
+    // Step 0: Confirm configuration with user
+    const { config } = await step.invoke("confirm-configuration", {
+      function: confirmConfiguration,
+      data: {
+        userId,
+        prompt,
+        runId,
+        lectureId,
+        defaultConfig: DEFAULT_LECTURE_CONFIG,
+        totalWorkflowSteps: LECTURE_WORKFLOW_TOTAL_STEPS,
+      },
+    });
+
+    log.info("Configuration confirmed", { config });
 
     const { script } = await step.invoke("create-lecture-script", {
       function: createLectureScript,

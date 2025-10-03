@@ -3,6 +3,7 @@
 import { createContext, useContext } from "react";
 
 import type { LectureScript } from "@/prompts/create-script";
+import type { LectureConfig } from "@/types/types";
 
 export type AgentPanelTab = "configuration" | "video-preview" | "script" | "assets";
 
@@ -13,6 +14,8 @@ export type AgentPanelContextValue = {
   setSelectedRunId: (runId: string | null) => void;
   scriptsByRun: Record<string, LectureScript>;
   setRunScript: (runId: string, script: LectureScript) => void;
+  configEditState: { runId: string; config: LectureConfig } | null;
+  handleConfigEditComplete: (runId: string, config: LectureConfig) => void;
 };
 
 const AgentPanelContext = createContext<AgentPanelContextValue | undefined>(undefined);

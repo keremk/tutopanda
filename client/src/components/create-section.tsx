@@ -9,8 +9,14 @@ import EditConfiguration from "./edit-configuration";
 import { useLectureEditor } from "./lecture-editor-provider";
 
 export default function CreateSection() {
-  const { activeTab, setActiveTab } = useAgentPanelContext();
+  const { activeTab, setActiveTab, configEditState, handleConfigEditComplete } = useAgentPanelContext();
   const { content } = useLectureEditor();
+
+  // Use config from edit state if available (user clicked Edit in agent progress)
+  // Otherwise use config from content (normal configuration tab)
+  const config = configEditState?.config ?? content.config;
+  const runId = configEditState?.runId ?? null;
+  const isEditMode = configEditState !== null;
 
   return (
     <div className="h-full flex flex-col bg-background text-foreground">
@@ -33,9 +39,10 @@ export default function CreateSection() {
           className="flex-1 p-6 mt-0 overflow-hidden"
         >
           <EditConfiguration
-            config={content.config}
-            runId={null}
-            isEditMode={false}
+            config={config}
+            runId={runId}
+            isEditMode={isEditMode}
+            onConfigEditComplete={handleConfigEditComplete}
           />
         </TabsContent>
 

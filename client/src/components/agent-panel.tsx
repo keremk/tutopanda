@@ -34,11 +34,13 @@ import {
 import type { ChatStatus } from "ai";
 
 import { sendPromptAction } from "@/app/actions/send-prompt";
+import { acceptConfigAction, updateConfigAction } from "@/app/actions/confirm-config";
 import {
   AgentPanelProvider,
   type AgentPanelTab,
 } from "@/hooks/use-agent-panel";
 import type { LectureScript } from "@/prompts/create-script";
+import type { LectureConfig } from "@/types/types";
 
 interface AgentPanelProps {
   lectureId: number;
@@ -53,6 +55,11 @@ export const AgentPanel = ({ lectureId, className, children }: AgentPanelProps) 
   const [activeTab, setActiveTab] = useState<AgentPanelTab>("video-preview");
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
   const [scriptsByRun, setScriptsByRun] = useState<Record<string, LectureScript>>({});
+  const [configEditState, setConfigEditState] = useState<{
+    runId: string;
+    config: LectureConfig;
+  } | null>(null);
+  const [debugTaskCount, setDebugTaskCount] = useState(0);
 
   useEffect(() => {
     return () => {
@@ -96,18 +103,6 @@ export const AgentPanel = ({ lectureId, className, children }: AgentPanelProps) 
     setScriptsByRun((previous) => ({ ...previous, [runId]: script }));
   }, []);
 
-  const contextValue = useMemo(
-    () => ({
-      activeTab,
-      setActiveTab,
-      selectedRunId,
-      setSelectedRunId,
-      scriptsByRun,
-      setRunScript,
-    }),
-    [activeTab, selectedRunId, scriptsByRun, setRunScript]
-  );
-
   const handleRunResult = useCallback(
     (runId: string, script: LectureScript) => {
       setRunScript(runId, script);
@@ -121,6 +116,55 @@ export const AgentPanel = ({ lectureId, className, children }: AgentPanelProps) 
       setActiveTab("script");
     },
     [setActiveTab, setSelectedRunId]
+  );
+
+  const handleConfigAccepted = useCallback(
+    (runId: string, config: LectureConfig) => {
+      startTransition(() => {
+        acceptConfigAction({ runId, lectureId, config }).catch((error) => {
+          console.error("Failed to accept config", error);
+        });
+      });
+    },
+    [lectureId]
+  );
+
+  const handleConfigEdit = useCallback(
+    (runId: string, config: LectureConfig) => {
+      setConfigEditState({ runId, config });
+      setActiveTab("configuration");
+    },
+    [setActiveTab]
+  );
+
+  const handleConfigEditComplete = useCallback(
+    (runId: string, config: LectureConfig) => {
+      startTransition(() => {
+        updateConfigAction({ runId, lectureId, config })
+          .then(() => {
+            setConfigEditState(null);
+            setActiveTab("video-preview");
+          })
+          .catch((error) => {
+            console.error("Failed to update config", error);
+          });
+      });
+    },
+    [lectureId, setActiveTab]
+  );
+
+  const contextValue = useMemo(
+    () => ({
+      activeTab,
+      setActiveTab,
+      selectedRunId,
+      setSelectedRunId,
+      scriptsByRun,
+      setRunScript,
+      configEditState,
+      handleConfigEditComplete,
+    }),
+    [activeTab, selectedRunId, scriptsByRun, setRunScript, configEditState, handleConfigEditComplete]
   );
 
   return (
@@ -137,16 +181,27 @@ export const AgentPanel = ({ lectureId, className, children }: AgentPanelProps) 
         <ResizablePanel defaultSize={30} minSize={25} maxSize={45}>
           <div className="h-full flex flex-col bg-[color:var(--surface-elevated)] border-l border-[color:var(--surface-border)]">
             {/* Header */}
-            <div className="shrink-0 p-4 border-b border-[color:var(--surface-border)]">
+            <div className="shrink-0 p-4 border-b border-[color:var(--surface-border)] flex items-center justify-between">
               <h2 className="text-sm font-medium text-foreground">Agent Progress</h2>
+              {process.env.NODE_ENV === "development" && (
+                <button
+                  onClick={() => setDebugTaskCount((c) => c + 1)}
+                  className="text-xs px-2 py-1 rounded bg-muted hover:bg-muted/80 text-muted-foreground"
+                >
+                  Add Task ({debugTaskCount})
+                </button>
+              )}
             </div>
 
             {/* Scrollable Content Area - Takes remaining space */}
-            <div className="flex-1 min-h-0">
+            <div className="flex-1 min-h-0 overflow-hidden">
               <AgentProgress
                 onRunResult={handleRunResult}
                 onViewScript={handleOpenScript}
+                onConfigAccepted={handleConfigAccepted}
+                onConfigEdit={handleConfigEdit}
                 selectedRunId={selectedRunId}
+                debugTaskCount={debugTaskCount}
               />
             </div>
 

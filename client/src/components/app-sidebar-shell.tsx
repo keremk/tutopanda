@@ -86,14 +86,14 @@ export function AppSidebarShell({
       </Sidebar>
       <SidebarInset
         className="md:h-[calc(100svh-4rem)]"
-        style={{ minHeight: `calc(100svh - ${NAVBAR_HEIGHT_PX}px)` }}
+        style={{ height: `calc(100svh - ${NAVBAR_HEIGHT_PX}px)` }}
       >
-        <div className="flex h-full flex-1 flex-col">
+        <div className="flex h-full flex-col overflow-hidden">
           <div className="flex items-center gap-2 px-4 py-3 md:hidden">
             <SidebarTrigger className="mr-1" />
             <p className="text-sm font-medium text-foreground">Browse projects</p>
           </div>
-          <div className="flex flex-1 flex-col">{children}</div>
+          <div className="flex flex-1 flex-col overflow-hidden">{children}</div>
         </div>
       </SidebarInset>
     </SidebarProvider>

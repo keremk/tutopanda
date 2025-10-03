@@ -38,6 +38,7 @@ interface AgentProgressProps {
   onConfigAccepted?: (runId: string, config: LectureConfig) => void;
   onConfigEdit?: (runId: string, config: LectureConfig) => void;
   selectedRunId?: string | null;
+  debugTaskCount?: number;
 }
 
 type StepProgress = {
@@ -70,10 +71,39 @@ export const AgentProgress = ({
   onConfigAccepted,
   onConfigEdit,
   selectedRunId,
+  debugTaskCount = 0,
 }: AgentProgressProps) => {
   const { data = [], state, error } = useInngestSubscription({
     refreshToken: fetchLectureProgressSubscriptionToken,
   });
+
+  // Generate debug data for testing scroll behavior
+  const debugData = useMemo(() => {
+    if (debugTaskCount === 0) return [];
+
+    const messages: any[] = [];
+    for (let i = 0; i < debugTaskCount; i++) {
+      const runId = `debug-run-${i}`;
+      const timestamp = new Date(Date.now() - i * 60000).toISOString();
+
+      // Add status messages for each step
+      for (let step = 1; step <= 7; step++) {
+        messages.push({
+          topic: "progress",
+          data: {
+            type: "status",
+            runId,
+            step,
+            totalSteps: 7,
+            status: step < 3 ? "complete" : step === 3 ? "in-progress" : "pending",
+            message: `Processing step ${step}`,
+            timestamp,
+          },
+        });
+      }
+    }
+    return messages;
+  }, [debugTaskCount]);
 
   const deliveredResults = useRef(new Set<string>());
 
@@ -107,7 +137,10 @@ export const AgentProgress = ({
   const runs = useMemo(() => {
     const grouped = new Map<string, RunProgress>();
 
-    for (const message of data) {
+    // Merge real data with debug data
+    const allData = [...data, ...debugData];
+
+    for (const message of allData) {
       if (message.topic !== "progress") {
         continue;
       }
@@ -183,7 +216,7 @@ export const AgentProgress = ({
     }
 
     return Array.from(grouped.values()).sort((a, b) => b.lastUpdated - a.lastUpdated);
-  }, [data]);
+  }, [data, debugData]);
 
   const hasRuns = runs.length > 0;
 
