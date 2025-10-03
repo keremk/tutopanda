@@ -2,8 +2,7 @@ import { getInngestApp } from "@/inngest/client";
 import { createLectureLogger, createLectureProgressPublisher, LECTURE_WORKFLOW_TOTAL_STEPS } from "@/inngest/functions/workflow-utils";
 import { confirmConfiguration } from "@/inngest/functions/confirm-configuration";
 import { createLectureScript } from "@/inngest/functions/create-lecture-script";
-import { generateSegmentImagePrompts } from "@/inngest/functions/generate-segment-image-prompts";
-import { generateImages } from "@/inngest/functions/generate-images";
+import { generateSegmentImages } from "@/inngest/functions/generate-segment-images";
 import { generateNarration } from "@/inngest/functions/generate-narration";
 import { generateMusic } from "@/inngest/functions/generate-music";
 import { generateTimeline } from "@/inngest/functions/generate-timeline";
@@ -27,7 +26,7 @@ export const startLectureCreation = inngest.createFunction(
   { id: "start-lecture-creation" },
   { event: "app/start-lecture-creation" },
   async ({ event, logger, step, publish }) => {
-    const { userId, prompt, runId, lectureId, imageDefaults, narrationDefaults } =
+    const { userId, prompt, runId, lectureId, narrationDefaults } =
       event.data as LectureCreationEventData;
     const log = createLectureLogger(runId, logger);
 
@@ -43,7 +42,12 @@ export const startLectureCreation = inngest.createFunction(
     });
     await publishStatus("Starting lecture creation", 0);
 
-    // Step 0: Confirm configuration with user
+    // Get existing lecture config before confirmation
+    const existingLecture = await step.run("get-existing-config", async () => {
+      return await getLectureById({ lectureId });
+    });
+
+    // Step 0: Confirm configuration with user, preserving existing config as base
     const { config } = await step.invoke("confirm-configuration", {
       function: confirmConfiguration,
       data: {
@@ -51,7 +55,7 @@ export const startLectureCreation = inngest.createFunction(
         prompt,
         runId,
         lectureId,
-        defaultConfig: DEFAULT_LECTURE_CONFIG,
+        defaultConfig: existingLecture?.config ?? DEFAULT_LECTURE_CONFIG,
         totalWorkflowSteps: LECTURE_WORKFLOW_TOTAL_STEPS,
       },
     });
@@ -69,19 +73,6 @@ export const startLectureCreation = inngest.createFunction(
       },
     });
 
-    const imagePrompts = await step.invoke("generate-segment-image-prompts", {
-      function: generateSegmentImagePrompts,
-      data: {
-        userId,
-        runId,
-        lectureId,
-        script,
-        imageDefaults,
-        workflowStep: 3,
-        totalWorkflowSteps: LECTURE_WORKFLOW_TOTAL_STEPS,
-      },
-    });
-
     const lecture = await step.run("get-lecture-for-images", async () => {
       return await getLectureById({ lectureId });
     });
@@ -90,15 +81,26 @@ export const startLectureCreation = inngest.createFunction(
       throw new Error(`Lecture ${lectureId} not found`);
     }
 
-    const generatedImages = await step.invoke("generate-images", {
-      function: generateImages,
+    // Extract image settings from confirmed config
+    const confirmedImageSettings: ImageGenerationDefaults = {
+      width: 1024,
+      height: 576,
+      aspectRatio: config.image.aspectRatio,
+      size: config.image.size,
+      style: config.image.style,
+      imagesPerSegment: config.image.imagesPerSegment,
+    };
+
+    const generatedImages = await step.invoke("generate-segment-images", {
+      function: generateSegmentImages,
       data: {
         userId,
         runId,
         lectureId,
         projectId: lecture.projectId,
-        images: lecture.images || [],
-        workflowStep: 4,
+        script,
+        imageDefaults: confirmedImageSettings,
+        workflowStep: 3,
         totalWorkflowSteps: LECTURE_WORKFLOW_TOTAL_STEPS,
       },
     });
@@ -129,7 +131,7 @@ export const startLectureCreation = inngest.createFunction(
         projectId: lecture.projectId,
         script,
         narration: narrationSettings,
-        workflowStep: 5,
+        workflowStep: 4,
         totalWorkflowSteps: LECTURE_WORKFLOW_TOTAL_STEPS,
       },
     });
@@ -157,7 +159,7 @@ export const startLectureCreation = inngest.createFunction(
         projectId: lecture.projectId,
         script,
         durationSeconds: totalDuration,
-        workflowStep: 6,
+        workflowStep: 5,
         totalWorkflowSteps: LECTURE_WORKFLOW_TOTAL_STEPS,
       },
     });
@@ -169,14 +171,13 @@ export const startLectureCreation = inngest.createFunction(
         runId,
         lectureId,
         projectId: lecture.projectId,
-        workflowStep: 7,
+        workflowStep: 6,
         totalWorkflowSteps: LECTURE_WORKFLOW_TOTAL_STEPS,
       },
     });
 
     log.info("Lecture workflow completed", {
       hasScript: Boolean(script),
-      imagePrompts: imagePrompts?.prompts?.length ?? 0,
       generatedImages: generatedImages?.images?.length ?? 0,
       generatedNarration: generatedNarration?.narration?.length ?? 0,
       hasMusic: Boolean(generatedMusic?.music),

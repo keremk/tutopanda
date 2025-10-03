@@ -11,6 +11,7 @@ import {
   type ImageGenerationDefaults,
   type NarrationGenerationDefaults,
 } from "@/types/types";
+import { getLectureAction } from "@/app/actions/lecture/get-lecture";
 
 const inngest = getInngestApp();
 
@@ -36,7 +37,19 @@ export async function sendPromptAction({
   const { user } = await getSession();
   const runId = randomUUID();
 
-  const imageSettings = imageDefaults ?? DEFAULT_IMAGE_GENERATION_DEFAULTS;
+  // Get current lecture to extract config
+  const lecture = await getLectureAction(lectureId);
+
+  // Extract image settings from lecture config if available
+  const imageSettings = imageDefaults ?? (lecture.config?.image ? {
+    width: 1024, // Base width for calculations
+    height: 576, // Base height
+    aspectRatio: lecture.config.image.aspectRatio,
+    size: lecture.config.image.size,
+    style: lecture.config.image.style,
+    imagesPerSegment: lecture.config.image.imagesPerSegment,
+  } : DEFAULT_IMAGE_GENERATION_DEFAULTS);
+
   const narrationSettings = narrationDefaults ?? DEFAULT_NARRATION_GENERATION_DEFAULTS;
 
   await inngest.send({

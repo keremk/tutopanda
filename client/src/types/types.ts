@@ -286,6 +286,8 @@ export type ImageGenerationDefaults = {
   height: number;
   aspectRatio: typeof aspectRatioValues[number];
   size: string;
+  style?: typeof imageStyleValues[number];
+  imagesPerSegment?: number;
 };
 
 export const DEFAULT_IMAGE_GENERATION_DEFAULTS: ImageGenerationDefaults = {
@@ -293,6 +295,8 @@ export const DEFAULT_IMAGE_GENERATION_DEFAULTS: ImageGenerationDefaults = {
   height: 576,
   aspectRatio: "16:9",
   size: "1K",
+  style: "Realistic",
+  imagesPerSegment: 1,
 };
 
 export type NarrationGenerationDefaults = {

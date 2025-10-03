@@ -1,3 +1,4 @@
+import { z } from "zod";
 import type { LectureScript } from "@/prompts/create-script";
 
 export const createImagePromptDeveloperPrompt = [
@@ -11,16 +12,28 @@ export const createImagePromptDeveloperPrompt = [
 
 type LectureSegment = LectureScript["segments"][number];
 
+// Schema for single image prompt
+export const singleImagePromptSchema = z.object({
+  prompt: z.string().describe("A concise, vivid prompt for an image generation model"),
+});
+
+// Schema for multiple image prompts
+export const multipleImagePromptsSchema = z.object({
+  prompts: z.array(z.string()).describe("Array of distinct image prompts, each capturing a different key moment"),
+});
+
 export type ImagePromptRequest = {
   runId: string;
   segmentIndex: number;
   segment: LectureSegment;
+  imagesPerSegment?: number;
 };
 
 export const buildImagePromptUserMessage = ({
   segment,
   segmentIndex,
-}: Pick<ImagePromptRequest, "segment" | "segmentIndex">) => {
+  imagesPerSegment = 1,
+}: Pick<ImagePromptRequest, "segment" | "segmentIndex" | "imagesPerSegment">) => {
   const narration = segment.narration.trim();
   const summary = [
     `Segment ${segmentIndex + 1}`,
@@ -31,10 +44,14 @@ export const buildImagePromptUserMessage = ({
     .filter(Boolean)
     .join("\n\n");
 
+  const countInstruction = imagesPerSegment > 1
+    ? `\n\nGenerate exactly ${imagesPerSegment} distinct image prompts. Each prompt should capture a different key moment or aspect from the narrative.`
+    : "";
+
   return [
     "Narrative excerpt:",
     summary,
-    "Respond with a concise, vivid prompt for an image generation diffusion model that captures the primary idea. Do not include text generation instructions.",
+    `Create a concise, vivid prompt for an image generation diffusion model that captures the primary idea. Do not include text generation instructions.${countInstruction}`,
   ]
     .filter(Boolean)
     .join("\n\n");

@@ -1,7 +1,8 @@
 import { Player, PlayerRef, CallbackListener } from '@remotion/player';
 import { type Timeline } from '@/types/types';
 import { VideoComposition } from './remotion/video-composition';
-import { useRef, useEffect } from 'react';
+import { useRef, useEffect, useMemo } from 'react';
+import type { aspectRatioValues } from '@/types/types';
 
 interface VideoPreviewContentProps {
   timeline: Timeline;
@@ -10,9 +11,10 @@ interface VideoPreviewContentProps {
   onSeek?: (time: number) => void;
   onPlay?: () => void;
   onPause?: () => void;
+  aspectRatio?: typeof aspectRatioValues[number];
 }
 
-export default function VideoPreviewContent({ timeline, currentTime, isPlaying, onSeek, onPlay, onPause }: VideoPreviewContentProps) {
+export default function VideoPreviewContent({ timeline, currentTime, isPlaying, onSeek, onPlay, onPause, aspectRatio = "16:9" }: VideoPreviewContentProps) {
   const playerRef = useRef<PlayerRef>(null);
   const lastCurrentTime = useRef<number>(currentTime);
   const onSeekRef = useRef(onSeek);
@@ -24,6 +26,14 @@ export default function VideoPreviewContent({ timeline, currentTime, isPlaying, 
     ? Math.max(timeline.duration, 0)
     : 0;
   const durationInFrames = Math.max(1, Math.round(timelineSeconds * fps));
+
+  // Calculate dimensions from aspect ratio
+  const { width, height } = useMemo(() => {
+    const [widthRatio, heightRatio] = aspectRatio.split(':').map(Number);
+    const baseHeight = 1080;
+    const calculatedWidth = Math.round((baseHeight / heightRatio) * widthRatio);
+    return { width: calculatedWidth, height: baseHeight };
+  }, [aspectRatio]);
 
   // Keep refs updated with latest callbacks
   useEffect(() => {
@@ -121,8 +131,8 @@ export default function VideoPreviewContent({ timeline, currentTime, isPlaying, 
         inputProps={{ timeline }}
         durationInFrames={durationInFrames}
         fps={fps}
-        compositionWidth={1920}
-        compositionHeight={1080}
+        compositionWidth={width}
+        compositionHeight={height}
         style={{
           width: '100%',
           height: '100%',

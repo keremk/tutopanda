@@ -3,7 +3,7 @@ import { channel, topic } from "@inngest/realtime";
 import type { LectureScript } from "@/prompts/create-script";
 import type { LectureConfig } from "@/types/types";
 
-export const LECTURE_WORKFLOW_TOTAL_STEPS = 7;
+export const LECTURE_WORKFLOW_TOTAL_STEPS = 6; // 0: config, 1: script, 2: images, 3: narration, 4: music, 5: timeline
 
 export type LectureRunStatus = "in-progress" | "complete" | "error";
 

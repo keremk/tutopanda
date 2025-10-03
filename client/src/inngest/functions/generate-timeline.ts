@@ -90,27 +90,82 @@ export const generateTimeline = inngest.createFunction(
       log.info("Timeline duration calculated", { totalDuration });
 
       // Build visual track with Ken Burns effects
+      // Images are labeled as "Segment X Image Y" - extract segment number to map to narration
+      const visualTrack: KenBurnsClip[] = [];
       let accumulatedTime = 0;
-      const visualTrack: KenBurnsClip[] = images.map((image, index) => {
-        const narrationDuration = narration[index]?.duration ?? 0;
-        const clip: KenBurnsClip = {
-          id: `visual-${index}`,
-          name: `Segment ${index + 1}`,
-          kind: "kenBurns",
-          imageAssetId: image.id,
-          imageUrl: `/api/storage/${image.sourceUrl}`,
-          startTime: accumulatedTime,
-          duration: narrationDuration,
-          startScale: 1.0,
-          endScale: 1.2,
-          startX: 0,
-          startY: 0,
-          endX: 0,
-          endY: 0,
-        };
-        accumulatedTime += narrationDuration;
-        return clip;
+
+      // Group images by segment
+      const imagesBySegment = new Map<number, typeof images>();
+      for (const image of images) {
+        // Extract segment index from image ID (format: img-{runId}-{segmentIndex}-{imageIndex})
+        const parts = image.id.split('-');
+        const segmentIndex = parts.length >= 3 ? parseInt(parts[parts.length - 2], 10) : 0;
+
+        log.info("Grouping image", {
+          imageId: image.id,
+          parts,
+          segmentIndex,
+          label: image.label
+        });
+
+        if (!imagesBySegment.has(segmentIndex)) {
+          imagesBySegment.set(segmentIndex, []);
+        }
+        imagesBySegment.get(segmentIndex)?.push(image);
+      }
+
+      log.info("Images grouped by segment", {
+        totalImages: images.length,
+        segmentCount: imagesBySegment.size,
+        segments: Array.from(imagesBySegment.entries()).map(([idx, imgs]) => ({
+          segmentIndex: idx,
+          imageCount: imgs.length
+        }))
       });
+
+      // Create clips for each segment's images
+      for (let segmentIndex = 0; segmentIndex < narration.length; segmentIndex++) {
+        const segmentImages = imagesBySegment.get(segmentIndex) || [];
+        const narrationDuration = narration[segmentIndex]?.duration ?? 0;
+        const imageDuration = segmentImages.length > 0 ? narrationDuration / segmentImages.length : narrationDuration;
+
+        log.info("Creating clips for segment", {
+          segmentIndex,
+          imageCount: segmentImages.length,
+          narrationDuration,
+          imageDuration,
+        });
+
+        for (let imageIndex = 0; imageIndex < segmentImages.length; imageIndex++) {
+          const image = segmentImages[imageIndex];
+          const clip: KenBurnsClip = {
+            id: `visual-${segmentIndex}-${imageIndex}`,
+            name: `Segment ${segmentIndex + 1}${segmentImages.length > 1 ? ` Image ${imageIndex + 1}` : ''}`,
+            kind: "kenBurns",
+            imageAssetId: image.id,
+            imageUrl: `/api/storage/${image.sourceUrl}`,
+            startTime: accumulatedTime,
+            duration: imageDuration,
+            startScale: 1.0,
+            endScale: 1.2,
+            startX: 0,
+            startY: 0,
+            endX: 0,
+            endY: 0,
+          };
+
+          log.info("Created visual clip", {
+            clipId: clip.id,
+            imageAssetId: clip.imageAssetId,
+            startTime: clip.startTime,
+            duration: clip.duration,
+            imageUrl: clip.imageUrl,
+          });
+
+          accumulatedTime += imageDuration;
+          visualTrack.push(clip);
+        }
+      }
 
       // Build voice track
       accumulatedTime = 0;

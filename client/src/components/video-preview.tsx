@@ -16,6 +16,7 @@ export default function VideoPreview() {
     lectureId,
     timeline,
     updateTimeline,
+    content,
   } = useLectureEditor();
   const [currentTime, setCurrentTime] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -196,6 +197,7 @@ export default function VideoPreview() {
             onSeek={handleSeek}
             onPlay={handlePlay}
             onPause={handlePause}
+            aspectRatio={content.config?.image?.aspectRatio}
           />
         </div>
 

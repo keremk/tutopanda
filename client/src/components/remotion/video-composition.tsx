@@ -92,6 +92,8 @@ export const VideoComposition: React.FC<VideoCompositionProps> = ({ timeline }) 
   );
 };
 
+// Note: Dimensions are now dynamic based on aspect ratio config
+// This export is kept for compatibility but dimensions should be set via Player props
 export const videoComposition = {
   id: 'VideoComposition',
   component: VideoComposition,
