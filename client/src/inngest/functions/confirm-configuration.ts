@@ -76,6 +76,9 @@ export const confirmConfiguration = inngest.createFunction(
       log,
     });
 
+    // Send immediate progress update
+    await publishStatus("Starting configuration analysis", 0);
+
     // Step 1: Extract config from prompt using LLM
     const extractedConfig = await step.run("extract-config-from-prompt", async () => {
       await publishStatus("Analyzing prompt for preferences", 0);

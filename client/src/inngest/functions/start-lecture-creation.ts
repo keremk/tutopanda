@@ -1,5 +1,5 @@
 import { getInngestApp } from "@/inngest/client";
-import { createLectureLogger, LECTURE_WORKFLOW_TOTAL_STEPS } from "@/inngest/functions/workflow-utils";
+import { createLectureLogger, createLectureProgressPublisher, LECTURE_WORKFLOW_TOTAL_STEPS } from "@/inngest/functions/workflow-utils";
 import { confirmConfiguration } from "@/inngest/functions/confirm-configuration";
 import { createLectureScript } from "@/inngest/functions/create-lecture-script";
 import { generateSegmentImagePrompts } from "@/inngest/functions/generate-segment-image-prompts";
@@ -26,12 +26,22 @@ const inngest = getInngestApp();
 export const startLectureCreation = inngest.createFunction(
   { id: "start-lecture-creation" },
   { event: "app/start-lecture-creation" },
-  async ({ event, logger, step }) => {
+  async ({ event, logger, step, publish }) => {
     const { userId, prompt, runId, lectureId, imageDefaults, narrationDefaults } =
       event.data as LectureCreationEventData;
     const log = createLectureLogger(runId, logger);
 
     log.info("Starting lecture workflow");
+
+    // Send immediate progress update
+    const { publishStatus } = createLectureProgressPublisher({
+      publish,
+      userId,
+      runId,
+      totalSteps: LECTURE_WORKFLOW_TOTAL_STEPS,
+      log,
+    });
+    await publishStatus("Starting lecture creation", 0);
 
     // Step 0: Confirm configuration with user
     const { config } = await step.invoke("confirm-configuration", {

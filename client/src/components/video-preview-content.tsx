@@ -115,6 +115,7 @@ export default function VideoPreviewContent({ timeline, currentTime, isPlaying, 
   return (
     <div className="bg-black rounded-lg overflow-hidden flex items-center justify-center h-full" data-testid="video-preview">
       <Player
+        key={timeline.id}
         ref={playerRef}
         component={VideoComposition}
         inputProps={{ timeline }}
