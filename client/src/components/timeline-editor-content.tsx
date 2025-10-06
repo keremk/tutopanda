@@ -22,6 +22,9 @@ interface TimelineEditorContentProps {
 export default function TimelineEditorContent({
   timeline,
   currentTime,
+  isPlaying,
+  onPlay,
+  onPause,
   onSeek,
   onRemoveClip,
   onUpdateClip,
@@ -50,7 +53,11 @@ export default function TimelineEditorContent({
     <div className="h-full flex flex-col pb-4" data-timeline-container>
       {/* Composed Timeline: TrackHeaders + ScrollableContent */}
       <div className="bg-muted rounded-lg overflow-hidden flex flex-1">
-        <TrackHeaders />
+        <TrackHeaders
+          isPlaying={isPlaying}
+          onPlay={onPlay}
+          onPause={onPause}
+        />
         <TimelineContent
           timeline={timeline}
           currentTime={currentTime}

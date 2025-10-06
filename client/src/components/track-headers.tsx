@@ -1,6 +1,6 @@
 import React from 'react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { Film, Mic, Music, Volume2 } from 'lucide-react';
+import { Film, Mic, Music, Volume2, Play, Pause } from 'lucide-react';
 import type { TimelineTrackKey } from '@/types/types';
 
 interface TrackChannel {
@@ -39,15 +39,45 @@ const TIMELINE_CHANNELS: TrackChannel[] = [
 
 interface TrackHeadersProps {
   className?: string;
+  isPlaying?: boolean;
+  onPlay?: () => void;
+  onPause?: () => void;
 }
 
-export function TrackHeaders({ className }: TrackHeadersProps) {
+export function TrackHeaders({ className, isPlaying = false, onPlay, onPause }: TrackHeadersProps) {
   const channelHeight = 48;
+
+  const handlePlayPauseClick = () => {
+    if (isPlaying) {
+      onPause?.();
+    } else {
+      onPlay?.();
+    }
+  };
 
   return (
     <div className={`w-16 shrink-0 bg-background/80 border-r border-border/30 ${className || ''}`}>
-      {/* Top spacing to align with slider + tracks padding: 56px (slider) + 16px (tracks padding) = 72px */}
-      <div className="border-b border-muted/90" style={{ height: '72px' }}></div>
+      {/* Top spacing with play/pause button: 56px (slider) + 16px (tracks padding) = 72px */}
+      <div className="border-b border-muted/90 flex items-center justify-center" style={{ height: '72px' }}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              onClick={handlePlayPauseClick}
+              className="p-2 rounded-md hover:bg-muted/50 transition-colors"
+              aria-label={isPlaying ? 'Pause' : 'Play'}
+            >
+              {isPlaying ? (
+                <Pause className="w-5 h-5 text-foreground" />
+              ) : (
+                <Play className="w-5 h-5 text-foreground" />
+              )}
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="right">
+            <p>{isPlaying ? 'Pause' : 'Play'}</p>
+          </TooltipContent>
+        </Tooltip>
+      </div>
       {TIMELINE_CHANNELS.map((channel) => {
         const IconComponent = channel.icon;
         return (

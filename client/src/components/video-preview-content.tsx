@@ -139,7 +139,7 @@ export default function VideoPreviewContent({ timeline, currentTime, isPlaying, 
           maxHeight: '100%',
           objectFit: 'contain',
         }}
-        controls
+        controls={false}
         loop={false}
         showVolumeControls={true}
         numberOfSharedAudioTags={0}

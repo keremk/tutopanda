@@ -202,7 +202,7 @@ export default function VideoPreview() {
         </div>
 
         {/* Timeline section */}
-        <div className="h-80 flex-shrink-0">
+        <div className="h-75 flex-shrink-0">
           <TimelineEditorContent
             timeline={activeTimeline}
             currentTime={currentTime}
