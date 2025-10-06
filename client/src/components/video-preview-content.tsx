@@ -142,6 +142,7 @@ export default function VideoPreviewContent({ timeline, currentTime, isPlaying, 
         controls
         loop={false}
         showVolumeControls={true}
+        numberOfSharedAudioTags={0}
         acknowledgeRemotionLicense={true}
         data-testid="remotion-player"
       />

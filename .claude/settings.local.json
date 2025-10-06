@@ -2,7 +2,9 @@
   "permissions": {
     "allow": [
       "Bash(pnpm type-check:*)",
-      "Read(//Users/keremk/Desktop/**)"
+      "Read(//Users/keremk/Desktop/**)",
+      "WebSearch",
+      "WebFetch(domain:www.remotion.dev)"
     ],
     "deny": [],
     "ask": []
