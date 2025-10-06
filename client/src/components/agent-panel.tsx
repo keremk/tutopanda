@@ -38,6 +38,8 @@ import { acceptConfigAction, updateConfigAction } from "@/app/actions/confirm-co
 import {
   AgentPanelProvider,
   type AgentPanelTab,
+  type TimelineSelection,
+  type TimelineTrackType,
 } from "@/hooks/use-agent-panel";
 import type { LectureScript } from "@/prompts/create-script";
 import type { LectureConfig } from "@/types/types";
@@ -60,6 +62,7 @@ export const AgentPanel = ({ lectureId, className, children }: AgentPanelProps) 
     config: LectureConfig;
   } | null>(null);
   const [debugTaskCount, setDebugTaskCount] = useState(0);
+  const [timelineSelection, setTimelineSelection] = useState<TimelineSelection | null>(null);
 
   useEffect(() => {
     return () => {
@@ -113,7 +116,7 @@ export const AgentPanel = ({ lectureId, className, children }: AgentPanelProps) 
   const handleOpenScript = useCallback(
     (runId: string) => {
       setSelectedRunId(runId);
-      setActiveTab("script");
+      setActiveTab("narration");
     },
     [setActiveTab, setSelectedRunId]
   );
@@ -153,6 +156,21 @@ export const AgentPanel = ({ lectureId, className, children }: AgentPanelProps) 
     [lectureId, setActiveTab]
   );
 
+  const handleTimelineClipSelect = useCallback(
+    (trackType: TimelineTrackType, clipId: string) => {
+      setTimelineSelection({ trackType, clipId });
+
+      // Auto-switch to appropriate tab based on track type
+      const tabMap: Record<TimelineTrackType, AgentPanelTab> = {
+        visual: "visuals",
+        voice: "narration",
+        music: "score",
+      };
+      setActiveTab(tabMap[trackType]);
+    },
+    [setActiveTab]
+  );
+
   const contextValue = useMemo(
     () => ({
       activeTab,
@@ -163,8 +181,10 @@ export const AgentPanel = ({ lectureId, className, children }: AgentPanelProps) 
       setRunScript,
       configEditState,
       handleConfigEditComplete,
+      timelineSelection,
+      handleTimelineClipSelect,
     }),
-    [activeTab, selectedRunId, scriptsByRun, setRunScript, configEditState, handleConfigEditComplete]
+    [activeTab, selectedRunId, scriptsByRun, setRunScript, configEditState, handleConfigEditComplete, timelineSelection, handleTimelineClipSelect]
   );
 
   return (

@@ -53,6 +53,7 @@ interface TimelineTracksProps {
     id: string,
     updates: { startTime?: number; duration?: number }
   ) => void;
+  onClipSelect?: (track: TimelineTrackKey, clipId: string) => void;
   className?: string;
 }
 
@@ -66,6 +67,7 @@ export function TimelineTracks({
   onSeek,
   onRemoveClip,
   onUpdateClip,
+  onClipSelect,
   className,
 }: TimelineTracksProps) {
   const timelineRef = useRef<HTMLDivElement>(null);
@@ -241,10 +243,17 @@ export function TimelineTracks({
                         key={clip.id}
                         className={cn(
                           'absolute rounded transition-all group border border-white/20',
-                          getClipColor(channel.id, clip.kind)
+                          getClipColor(channel.id, clip.kind),
+                          onClipSelect && (channel.id === 'visual' || channel.id === 'voice' || channel.id === 'music') && 'cursor-pointer'
                         )}
                         style={getClipStyle(clip, channelIndex)}
                         data-testid={`timeline-clip-${clip.id}`}
+                        onClick={(e) => {
+                          if (onClipSelect && (channel.id === 'visual' || channel.id === 'voice' || channel.id === 'music')) {
+                            e.stopPropagation();
+                            onClipSelect(channel.id, clip.id);
+                          }
+                        }}
                       >
                         {/* Resize handle - start */}
                         <div

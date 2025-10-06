@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 
-import CreateSection from "@/components/create-section";
+import EditorTabs from "@/components/editor-tabs";
 import { AgentPanel } from "@/components/agent-panel";
 import { AppSidebarShell } from "@/components/app-sidebar-shell";
 import { LectureEditorProvider } from "@/components/lecture-editor-provider";
@@ -54,7 +54,7 @@ export default async function EditLecturePage({
       >
         <div className="flex h-full">
           <AgentPanel lectureId={lectureId}>
-            <CreateSection />
+            <EditorTabs />
           </AgentPanel>
         </div>
       </LectureEditorProvider>

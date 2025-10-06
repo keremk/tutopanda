@@ -17,6 +17,7 @@ interface TimelineEditorContentProps {
     id: string,
     updates: { startTime?: number; duration?: number }
   ) => void;
+  onClipSelect?: (track: TimelineTrackKey, clipId: string) => void;
 }
 
 export default function TimelineEditorContent({
@@ -28,6 +29,7 @@ export default function TimelineEditorContent({
   onSeek,
   onRemoveClip,
   onUpdateClip,
+  onClipSelect,
 }: TimelineEditorContentProps) {
   const [timelineWidth, setTimelineWidth] = useState(800);
 
@@ -68,6 +70,7 @@ export default function TimelineEditorContent({
           onSeek={onSeek}
           onRemoveClip={onRemoveClip}
           onUpdateClip={onUpdateClip}
+          onClipSelect={onClipSelect}
         />
       </div>
     </div>

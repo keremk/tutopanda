@@ -17,6 +17,7 @@ interface TimelineContentProps {
     id: string,
     updates: { startTime?: number; duration?: number }
   ) => void;
+  onClipSelect?: (track: TimelineTrackKey, clipId: string) => void;
 }
 
 export function TimelineContent({
@@ -29,6 +30,7 @@ export function TimelineContent({
   onSeek,
   onRemoveClip,
   onUpdateClip,
+  onClipSelect,
 }: TimelineContentProps) {
   return (
     <div
@@ -62,6 +64,7 @@ export function TimelineContent({
           onSeek={onSeek}
           onRemoveClip={onRemoveClip}
           onUpdateClip={onUpdateClip}
+          onClipSelect={onClipSelect}
         />
       </div>
     </div>

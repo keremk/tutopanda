@@ -5,7 +5,14 @@ import { createContext, useContext } from "react";
 import type { LectureScript } from "@/prompts/create-script";
 import type { LectureConfig } from "@/types/types";
 
-export type AgentPanelTab = "configuration" | "video-preview" | "script" | "assets";
+export type AgentPanelTab = "configuration" | "video-preview" | "narration" | "visuals" | "score";
+
+export type TimelineTrackType = "visual" | "voice" | "music";
+
+export interface TimelineSelection {
+  trackType: TimelineTrackType;
+  clipId: string;
+}
 
 export type AgentPanelContextValue = {
   activeTab: AgentPanelTab;
@@ -16,6 +23,8 @@ export type AgentPanelContextValue = {
   setRunScript: (runId: string, script: LectureScript) => void;
   configEditState: { runId: string; config: LectureConfig } | null;
   handleConfigEditComplete: (runId: string, config: LectureConfig) => void;
+  timelineSelection: TimelineSelection | null;
+  handleTimelineClipSelect: (trackType: TimelineTrackType, clipId: string) => void;
 };
 
 const AgentPanelContext = createContext<AgentPanelContextValue | undefined>(undefined);
