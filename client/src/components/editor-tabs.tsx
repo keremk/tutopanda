@@ -173,7 +173,7 @@ export default function EditorTabs() {
 
         <TabsContent
           value="video-preview"
-          className="flex-1 flex flex-col p-6 mt-0"
+          className="flex-1 flex flex-col p-6 mt-0 min-h-0"
         >
           <PreviewTab
             currentTime={currentTime}
@@ -187,7 +187,7 @@ export default function EditorTabs() {
           />
         </TabsContent>
 
-        <TabsContent value="narration" className="flex-1 flex flex-col p-6 mt-0">
+        <TabsContent value="narration" className="flex-1 flex flex-col p-6 mt-0 min-h-0">
           <NarrationTab
             currentTime={currentTime}
             isPlaying={isPlaying}
@@ -200,7 +200,7 @@ export default function EditorTabs() {
           />
         </TabsContent>
 
-        <TabsContent value="visuals" className="flex-1 flex flex-col p-6 mt-0">
+        <TabsContent value="visuals" className="flex-1 flex flex-col p-6 mt-0 min-h-0">
           <VisualsTab
             currentTime={currentTime}
             isPlaying={isPlaying}
@@ -213,7 +213,7 @@ export default function EditorTabs() {
           />
         </TabsContent>
 
-        <TabsContent value="score" className="flex-1 flex flex-col p-6 mt-0">
+        <TabsContent value="score" className="flex-1 flex flex-col p-6 mt-0 min-h-0">
           <ScoreTab
             currentTime={currentTime}
             isPlaying={isPlaying}

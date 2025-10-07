@@ -55,6 +55,29 @@ export const aspectRatioValues = [
   "3:2",
   "2:3",
 ] as const;
+
+export const imageModelValues = ["NanoBanana", "SeaDream", "QWEN Image"] as const;
+
+export const kenBurnsEffectNames = [
+  "portraitZoomIn",
+  "portraitZoomOut",
+  "landscapePanLeft",
+  "landscapePanRight",
+  "architectureRise",
+  "architectureDescend",
+  "dramaticZoomIn",
+  "dramaticZoomOut",
+  "zoomInPanLeft",
+  "zoomInPanRight",
+  "zoomInPanUp",
+  "zoomInPanDown",
+  "diagonalZoomInUpRight",
+  "diagonalZoomInDownLeft",
+  "technicalSubtleZoom",
+  "technicalPanRight",
+  "energeticReveal",
+] as const;
+
 const baseAssetSchema = z.object({
   id: z.string(),
   label: z.string().optional(),
@@ -63,6 +86,7 @@ const baseAssetSchema = z.object({
 export const imageAssetSchema = baseAssetSchema
   .extend({
     prompt: z.string(),
+    model: z.enum(imageModelValues).optional(),
     aspectRatio: z.enum(aspectRatioValues).optional(),
     width: z.number().nonnegative().optional(),
     height: z.number().nonnegative().optional(),
@@ -112,6 +136,7 @@ const timelineClipBaseSchema = z.object({
 export const kenBurnsClipSchema = timelineClipBaseSchema
   .extend({
     kind: z.literal("kenBurns"),
+    effectName: z.string().optional(),
     imageAssetId: z.string().optional(),
     imageUrl: z.string().optional(),
     startScale: z.number().default(1),
@@ -192,7 +217,6 @@ export const audienceValues = [
 export const imageSizeValues = ["480", "720", "1080"] as const;
 export const imageStyleValues = ["Ghibli", "Pixar", "Animated", "Realistic"] as const;
 export const imageFormatValues = ["JPG", "PNG"] as const;
-export const imageModelValues = ["NanoBanana", "SeaDream", "QWEN Image"] as const;
 export const videoModelValues = ["Seadance-1-lite"] as const;
 export const videoDurationSegmentValues = ["5s", "10s"] as const;
 export const segmentLengthValues = ["5s", "10s", "15s"] as const;

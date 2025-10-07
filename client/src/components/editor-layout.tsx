@@ -55,7 +55,7 @@ export default function EditorLayout({
   return (
     <div className="flex-1 flex flex-col gap-4 min-h-0 overflow-hidden">
       {/* Editor section - constrained height */}
-      <div className="flex-shrink-0" style={{ height: "min(60vh, calc(100% - 18rem))" }}>
+      <div className="flex-shrink-0 overflow-hidden" style={{ height: "min(60vh, calc(100% - 18rem))" }}>
         {children}
       </div>
 

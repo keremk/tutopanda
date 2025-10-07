@@ -71,6 +71,7 @@ export function buildVisualTrack(
         id: `visual-${segmentIndex}-${imageIndex}`,
         name: `Segment ${segmentIndex + 1}${segmentImages.length > 1 ? ` Image ${imageIndex + 1}` : ""}`,
         kind: "kenBurns",
+        effectName: selectedEffect.name,
         imageAssetId: image.id,
         imageUrl: `/api/storage/${image.sourceUrl}`,
         startTime: accumulatedTime,
