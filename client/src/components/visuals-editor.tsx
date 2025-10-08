@@ -1,5 +1,6 @@
 import { useLectureEditor } from "./lecture-editor-provider";
 import type { KenBurnsClip, ImageAsset } from "@/types/types";
+import { imageModelValues } from "@/types/types";
 
 interface VisualsEditorProps {
   selectedClipId: string | null;
@@ -69,14 +70,17 @@ export default function VisualsEditor({ selectedClipId }: VisualsEditorProps) {
             <label className="text-sm font-medium">AI Model</label>
             <select
               className="w-full p-2 border rounded-md"
-              defaultValue={imageAsset?.model || "default"}
+              defaultValue={imageAsset?.model || content.config?.image?.model || ""}
               disabled={!imageAsset}
             >
-              <option value="default">(Default: {content.config?.image?.model || "NanoBanana"})</option>
-              <option value="NanoBanana">NanoBanana</option>
-              <option value="SeaDream">SeaDream</option>
-              <option value="QWEN Image">QWEN Image</option>
+              <option value="" disabled>Unknown Model</option>
+              {imageModelValues.map((model) => (
+                <option key={model} value={model}>{model}</option>
+              ))}
             </select>
+            <p className="text-xs text-muted-foreground">
+              {imageAsset?.model ? "Override model" : content.config?.image?.model ? `Using config: ${content.config.image.model}` : "No model configured"}
+            </p>
           </div>
 
           {/* Ken Burns Effect Select */}

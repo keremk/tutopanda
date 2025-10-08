@@ -56,7 +56,7 @@ export const aspectRatioValues = [
   "2:3",
 ] as const;
 
-export const imageModelValues = ["NanoBanana", "SeaDream", "QWEN Image"] as const;
+export const imageModelValues = ["bytedance/seedream-4", "google/nano-banana", "qwen/qwen-image"] as const;
 
 export const kenBurnsEffectNames = [
   "portraitZoomIn",
@@ -86,7 +86,7 @@ const baseAssetSchema = z.object({
 export const imageAssetSchema = baseAssetSchema
   .extend({
     prompt: z.string(),
-    model: z.enum(imageModelValues).optional(),
+    model: z.string().optional(),
     aspectRatio: z.enum(aspectRatioValues).optional(),
     width: z.number().nonnegative().optional(),
     height: z.number().nonnegative().optional(),
@@ -240,11 +240,11 @@ export const imageConfigSchema = z.object({
   imagesPerSegment: z.number().int().min(1).max(2),
   style: z.enum(imageStyleValues),
   format: z.enum(imageFormatValues),
-  model: z.enum(imageModelValues),
+  model: z.string(),
 });
 
 export const videoConfigSchema = z.object({
-  model: z.enum(videoModelValues),
+  model: z.string(),
   duration: z.enum(videoDurationSegmentValues),
 });
 
@@ -256,11 +256,11 @@ export const narrationConfigSchema = z.object({
 });
 
 export const musicConfigSchema = z.object({
-  model: z.enum(musicModelValues),
+  model: z.string(),
 });
 
 export const soundEffectConfigSchema = z.object({
-  model: z.enum(soundEffectModelValues),
+  model: z.string(),
 });
 
 export const lectureConfigSchema = z.object({
@@ -357,7 +357,7 @@ export const DEFAULT_LECTURE_CONFIG: LectureConfig = {
     imagesPerSegment: 1,
     style: "Realistic",
     format: "PNG",
-    model: "SeaDream",
+    model: "bytedance/seedream-4",
   },
   video: {
     model: "Seadance-1-lite",

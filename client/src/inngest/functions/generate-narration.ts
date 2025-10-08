@@ -1,6 +1,3 @@
-import Replicate from "replicate";
-import { Input, ALL_FORMATS, BlobSource } from "mediabunny";
-
 import { getInngestApp } from "@/inngest/client";
 import {
   createLectureLogger,
@@ -10,12 +7,15 @@ import {
 import type { NarrationSettings, LectureScript } from "@/types/types";
 import { updateLectureContent } from "@/services/lecture/persist";
 import { getProjectById } from "@/data/project";
-import { setupFileStorage, saveFileToStorage } from "@/lib/storage-utils";
+import { setupFileStorage } from "@/lib/storage-utils";
+import { audioProviderRegistry, ReplicateAudioProvider } from "@/services/media-generation/audio";
+import { FileStorageHandler } from "@/services/media-generation/core";
+import { generateLectureAudio } from "@/services/lecture/orchestrators";
 
 const inngest = getInngestApp();
-const replicate = new Replicate({
-  auth: process.env.REPLICATE_API_TOKEN,
-});
+
+// Initialize audio provider registry
+audioProviderRegistry.register(new ReplicateAudioProvider());
 
 const MAX_NARRATION_GENERATION_CALLS = Number.parseInt(
   process.env.MAX_NARRATION_GENERATION_CALLS ?? "3",
@@ -33,48 +33,6 @@ export type GenerateNarrationEvent = {
   narration: NarrationSettings[];
   workflowStep?: number;
   totalWorkflowSteps?: number;
-};
-
-const extractAudioDuration = async (audioBuffer: Buffer): Promise<number> => {
-  const blob = new Blob([audioBuffer] as BlobPart[], { type: "audio/mpeg" });
-  const input = new Input({
-    formats: ALL_FORMATS,
-    source: new BlobSource(blob),
-  });
-
-  const duration = await input.computeDuration();
-  return duration;
-};
-
-const generateAudioForSegment = async (
-  text: string,
-  voiceId: string,
-  modelId: string
-): Promise<Buffer> => {
-  const input = {
-    text,
-    voice_id: voiceId,
-    emotion: "neutral",
-    language_boost: "English",
-    english_normalization: true,
-  };
-
-  // Ensure modelId is in the correct format (owner/model or owner/model:version)
-  const model = modelId as `${string}/${string}` | `${string}/${string}:${string}`;
-  const output = await replicate.run(model, { input }) as any;
-
-  if (!output) {
-    throw new Error("Audio generation failed - no output returned");
-  }
-
-  // Fetch the audio file from the URL
-  const response = await fetch(output.url());
-  if (!response.ok) {
-    throw new Error(`Failed to download audio: ${response.statusText}`);
-  }
-
-  const arrayBuffer = await response.arrayBuffer();
-  return Buffer.from(arrayBuffer);
 };
 
 export const generateNarration = inngest.createFunction(
@@ -134,7 +92,6 @@ export const generateNarration = inngest.createFunction(
       }
     });
 
-    const storage = setupFileStorage();
     const defaultVoiceId = process.env.DEFAULT_VOICE_ID;
     const defaultModelId = process.env.DEFAULT_VOICE_MODEL_ID;
 
@@ -142,59 +99,44 @@ export const generateNarration = inngest.createFunction(
       throw new Error("DEFAULT_VOICE_ID or DEFAULT_VOICE_MODEL_ID not configured");
     }
 
+    // Limit segments to process
+    const limitedScript: LectureScript = {
+      ...script,
+      segments: script.segments?.slice(0, limit) || [],
+    };
+
+    const defaultVoice = narrationToProcess[0]?.voice || defaultVoiceId;
+    const defaultModel = narrationToProcess[0]?.model || defaultModelId;
+
     await publishStatus(
-      `Generating narration for ${narrationToProcess.length} segment${narrationToProcess.length === 1 ? "" : "s"}`,
+      `Generating narration for ${limitedScript.segments.length} segment${limitedScript.segments.length === 1 ? "" : "s"}`,
       workflowStep
     );
 
-    const updatedNarration = await Promise.all(
-      narrationToProcess.map((narrationAsset, index) =>
-        step.run(`generate-narration-${index}`, async () => {
-          const segmentNo = index + 1;
-          const segment = script.segments[index];
+    const updatedNarration = await step.run("generate-lecture-audio", async () => {
+      const storage = setupFileStorage();
+      const storageHandler = new FileStorageHandler(storage);
 
-          if (!segment) {
-            throw new Error(`No script segment found for narration ${index}`);
-          }
-
-          const finalScript = segment.narration;
-
-          log.info("Generating narration", {
-            narrationId: narrationAsset.id,
-            segmentNo,
-            scriptLength: finalScript.length,
-            voice: narrationAsset.voice || defaultVoiceId,
-            model: narrationAsset.model || defaultModelId,
-          });
-
-          const voiceId = narrationAsset.voice || defaultVoiceId;
-          const modelId = narrationAsset.model || defaultModelId;
-
-          const audioBuffer = await generateAudioForSegment(
-            finalScript,
-            voiceId,
-            modelId
-          );
-
-          const duration = await extractAudioDuration(audioBuffer);
-
-          const filePath = `${userId}/${projectId}/narration/lecture-${lectureId}-${segmentNo}.mp3`;
-          await saveFileToStorage(storage, audioBuffer, filePath);
-
-          await publishStatus(
-            `Narration ${segmentNo}/${narrationToProcess.length} generated`,
-            workflowStep
-          );
-
-          return {
-            ...narrationAsset,
-            finalScript,
-            duration,
-            sourceUrl: filePath,
-          } satisfies NarrationSettings;
-        })
-      )
-    );
+      return generateLectureAudio(
+        {
+          script: limitedScript,
+          voice: defaultVoice,
+          model: defaultModel,
+          runId,
+        },
+        {
+          userId,
+          projectId,
+          maxConcurrency: 5,
+        },
+        {
+          saveFile: async (buffer, path) => {
+            await storageHandler.saveFile(buffer, path);
+          },
+          logger: log,
+        }
+      );
+    });
 
     await publishStatus("Narration generated successfully", workflowStep, "complete");
 
