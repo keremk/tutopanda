@@ -1,6 +1,6 @@
-import { eq } from "drizzle-orm";
+import { eq, desc } from "drizzle-orm";
 
-import { workflowRunsTable } from "@/db/app-schema";
+import { workflowRunsTable, videoLecturesTable } from "@/db/app-schema";
 import { db } from "@/db/db";
 import type { DbWorkflowRunRow } from "@/db/types";
 import type { WorkflowRun, WorkflowStatus } from "@/types/types";
@@ -162,4 +162,32 @@ export async function markStepComplete(
     },
     database
   );
+}
+
+export async function getRecentWorkflowRuns(
+  userId: string,
+  lectureId: number,
+  limit: number = 10,
+  database?: DbOrTx
+): Promise<Array<WorkflowRun & { lecture: any }>> {
+  const dbClient = resolveDb(database);
+
+  const runs = await dbClient
+    .select({
+      workflowRun: workflowRunsTable,
+      lecture: videoLecturesTable,
+    })
+    .from(workflowRunsTable)
+    .innerJoin(
+      videoLecturesTable,
+      eq(workflowRunsTable.lectureId, videoLecturesTable.id)
+    )
+    .where(eq(workflowRunsTable.lectureId, lectureId))
+    .orderBy(desc(workflowRunsTable.updatedAt))
+    .limit(limit);
+
+  return runs.map((row) => ({
+    ...toWorkflowRun(row.workflowRun),
+    lecture: row.lecture,
+  }));
 }

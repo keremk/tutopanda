@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { useInngestSubscription } from "@inngest/realtime/hooks";
 import { cancelWorkflowAction, rerunWorkflowAction } from "@/app/actions/workflow-controls";
+import { getWorkflowHistoryAction } from "@/app/actions/get-workflow-history";
 
 import {
   Task,
@@ -21,6 +22,7 @@ import {
 } from "@/components/ai-elements/task";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { cn } from "@/lib/utils";
 import { fetchLectureProgressSubscriptionToken } from "@/app/actions/get-subscribe-token";
 import type {
@@ -35,6 +37,7 @@ import type { LectureScript } from "@/prompts/create-script";
 import type { LectureConfig } from "@/types/types";
 
 interface AgentProgressProps {
+  lectureId: number;
   className?: string;
   onRunResult?: (runId: string, script: LectureScript) => void;
   onViewScript?: (runId: string) => void;
@@ -68,6 +71,7 @@ const getTimestamp = (value?: string) => {
 };
 
 export const AgentProgress = ({
+  lectureId,
   className,
   onRunResult,
   onViewScript,
@@ -80,8 +84,27 @@ export const AgentProgress = ({
     refreshToken: fetchLectureProgressSubscriptionToken,
   });
 
+  const [initialData, setInitialData] = useState<any[]>([]);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(true);
   const [cancelingRun, setCancelingRun] = useState<string | null>(null);
   const [rerunningRun, setRerunningRun] = useState<string | null>(null);
+  const [expandedRuns, setExpandedRuns] = useState<Set<string>>(new Set());
+
+  // Load historical workflow data on mount
+  useEffect(() => {
+    const loadHistory = async () => {
+      try {
+        const history = await getWorkflowHistoryAction(lectureId);
+        setInitialData(history);
+      } catch (error) {
+        console.error("Failed to load workflow history:", error);
+      } finally {
+        setIsLoadingHistory(false);
+      }
+    };
+
+    loadHistory();
+  }, [lectureId]);
 
   const handleCancel = async (runId: string) => {
     try {
@@ -106,6 +129,18 @@ export const AgentProgress = ({
     } finally {
       setRerunningRun(null);
     }
+  };
+
+  const toggleRunExpanded = (runId: string) => {
+    setExpandedRuns((prev) => {
+      const newExpanded = new Set(prev);
+      if (newExpanded.has(runId)) {
+        newExpanded.delete(runId);
+      } else {
+        newExpanded.add(runId);
+      }
+      return newExpanded;
+    });
   };
 
   // Generate debug data for testing scroll behavior
@@ -168,8 +203,13 @@ export const AgentProgress = ({
   const runs = useMemo(() => {
     const grouped = new Map<string, RunProgress>();
 
-    // Merge real data with debug data
-    const allData = [...data, ...debugData];
+    // Merge initial (historical), real-time, and debug data
+    // Real-time data takes precedence over historical data for the same runId
+    const runIdsWithRealTimeData = new Set(data.map(msg => (msg.data as any)?.runId).filter(Boolean));
+    const historicalDataToUse = initialData.filter(
+      msg => !runIdsWithRealTimeData.has((msg.data as any)?.runId)
+    );
+    const allData = [...historicalDataToUse, ...data, ...debugData];
 
     for (const message of allData) {
       if (message.topic !== "progress") {
@@ -247,7 +287,20 @@ export const AgentProgress = ({
     }
 
     return Array.from(grouped.values()).sort((a, b) => b.lastUpdated - a.lastUpdated);
-  }, [data, debugData]);
+  }, [data, debugData, initialData]);
+
+  // Auto-expand in-progress runs
+  useEffect(() => {
+    setExpandedRuns((prev) => {
+      const newExpanded = new Set(prev);
+      for (const run of runs) {
+        if (run.status === "in-progress" && !newExpanded.has(run.runId)) {
+          newExpanded.add(run.runId);
+        }
+      }
+      return newExpanded;
+    });
+  }, [runs]);
 
   const hasRuns = runs.length > 0;
 
@@ -264,14 +317,16 @@ export const AgentProgress = ({
   }
 
   if (!hasRuns) {
-    if (state === "connecting" || state === "refresh_token") {
+    if (isLoadingHistory || state === "connecting" || state === "refresh_token") {
       return (
         <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
           <Loader2Icon className="size-10 animate-spin text-muted-foreground" />
           <div>
-            <h3 className="text-lg font-medium text-foreground">Connecting</h3>
+            <h3 className="text-lg font-medium text-foreground">
+              {isLoadingHistory ? "Loading workflow history" : "Connecting"}
+            </h3>
             <p className="text-sm text-muted-foreground">
-              Listening for realtime agent updates…
+              {isLoadingHistory ? "Fetching previous runs…" : "Listening for realtime agent updates…"}
             </p>
           </div>
         </div>
@@ -305,55 +360,69 @@ export const AgentProgress = ({
               : "in progress";
           const descriptor = `Lecture creation · ${completedSteps}/${totalSteps} steps • ${statusLabel}`;
           const isSelected = selectedRunId === run.runId;
+          const isExpanded = expandedRuns.has(run.runId);
 
           return (
-            <div
+            <Collapsible
               key={run.runId}
-              className={cn(
-                "rounded-lg border border-border/60 bg-card/50 p-3",
-                isSelected && "border-primary bg-primary/5"
-              )}
+              open={isExpanded}
+              onOpenChange={() => toggleRunExpanded(run.runId)}
             >
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <NotebookPenIcon className="size-4" />
-                  <span>{descriptor}</span>
-                </div>
-                <div className="flex gap-2">
-                  {run.status === "in-progress" && (
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => handleCancel(run.runId)}
-                      disabled={cancelingRun === run.runId}
-                    >
-                      {cancelingRun === run.runId ? (
-                        <Loader2Icon className="size-4 animate-spin" />
-                      ) : (
-                        <XIcon className="size-4" />
+              <div
+                className={cn(
+                  "rounded-lg border border-border/60 bg-card/50 p-3",
+                  isSelected && "border-primary bg-primary/5"
+                )}
+              >
+                <CollapsibleTrigger asChild>
+                  <div className="flex cursor-pointer items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <NotebookPenIcon className="size-4" />
+                      <span>{descriptor}</span>
+                      <ChevronDownIcon
+                        className={cn(
+                          "size-4 transition-transform",
+                          isExpanded && "rotate-180"
+                        )}
+                      />
+                    </div>
+                    <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
+                      {run.status === "in-progress" && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => handleCancel(run.runId)}
+                          disabled={cancelingRun === run.runId}
+                        >
+                          {cancelingRun === run.runId ? (
+                            <Loader2Icon className="size-4 animate-spin" />
+                          ) : (
+                            <XIcon className="size-4" />
+                          )}
+                          <span className="ml-1">Cancel</span>
+                        </Button>
                       )}
-                      <span className="ml-1">Cancel</span>
-                    </Button>
-                  )}
-                  {(run.status === "error" || run.status === "complete") && (
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => handleRerun(run.runId, false)}
-                      disabled={rerunningRun === run.runId}
-                    >
-                      {rerunningRun === run.runId ? (
-                        <Loader2Icon className="size-4 animate-spin" />
-                      ) : (
-                        <RotateCcwIcon className="size-4" />
+                      {(run.status === "error" || run.status === "complete") && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => handleRerun(run.runId, false)}
+                          disabled={rerunningRun === run.runId}
+                        >
+                          {rerunningRun === run.runId ? (
+                            <Loader2Icon className="size-4 animate-spin" />
+                          ) : (
+                            <RotateCcwIcon className="size-4" />
+                          )}
+                          <span className="ml-1">Rerun</span>
+                        </Button>
                       )}
-                      <span className="ml-1">Rerun</span>
-                    </Button>
-                  )}
-                </div>
-              </div>
+                    </div>
+                  </div>
+                </CollapsibleTrigger>
 
-              {run.config ? (
+                <CollapsibleContent>
+                  {run.config ? (
                 <div className="mt-3 rounded-md border border-border/60 bg-card/30 p-3">
                   <h4 className="mb-2 text-sm font-medium text-foreground">Configuration Summary</h4>
                   <div className="space-y-1 text-sm text-muted-foreground">
@@ -470,7 +539,9 @@ export const AgentProgress = ({
                   );
                 })}
               </div>
-            </div>
+                </CollapsibleContent>
+              </div>
+            </Collapsible>
           );
         })}
       </div>

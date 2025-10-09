@@ -216,6 +216,7 @@ export const AgentPanel = ({ lectureId, className, children }: AgentPanelProps) 
             {/* Scrollable Content Area - Takes remaining space */}
             <div className="flex-1 min-h-0 overflow-hidden">
               <AgentProgress
+                lectureId={lectureId}
                 onRunResult={handleRunResult}
                 onViewScript={handleOpenScript}
                 onConfigAccepted={handleConfigAccepted}
