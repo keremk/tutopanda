@@ -4,8 +4,7 @@ import EditorTabs from "@/components/editor-tabs";
 import { AgentPanel } from "@/components/agent-panel";
 import { AppSidebarShell } from "@/components/app-sidebar-shell";
 import { LectureEditorProvider } from "@/components/lecture-editor-provider";
-import { listProjectsWithLatestLecture } from "@/data/project";
-import { getLectureForUser, toSerializableLectureSnapshot } from "@/data/lecture/repository";
+import { getLectureForUser, listVideoLecturesForUser, toSerializableLectureSnapshot } from "@/data/lecture/repository";
 import { getSession } from "@/lib/session";
 
 type EditPageParams = {
@@ -18,7 +17,7 @@ export default async function EditLecturePage({
   params: Promise<EditPageParams>;
 }) {
   const { user } = await getSession();
-  const projects = await listProjectsWithLatestLecture(user.id);
+  const lectures = await listVideoLecturesForUser(user.id);
 
   const { lectureId: rawLectureId } = await params;
   const lectureId = Number.parseInt(rawLectureId, 10);
@@ -40,11 +39,7 @@ export default async function EditLecturePage({
 
   return (
     <AppSidebarShell
-      projects={projects.map(({ project, latestLectureId }) => ({
-        id: project.id,
-        name: project.name,
-        lectureId: latestLectureId,
-      }))}
+      lectures={lectures}
       activeLectureId={lectureId}
       sidebarDefaultOpen={false}
     >

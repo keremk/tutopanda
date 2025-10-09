@@ -27,14 +27,13 @@ import { Folder, PanelLeftOpen, PanelRightOpen } from "lucide-react";
 
 const NAVBAR_HEIGHT_PX = 64;
 
-export type SidebarProjectItem = {
+export type SidebarLectureItem = {
   id: number;
-  name: string | null;
-  lectureId: number | null;
+  title: string;
 };
 
 export type AppSidebarShellProps = {
-  projects: SidebarProjectItem[];
+  lectures: SidebarLectureItem[];
   children: React.ReactNode;
   sidebarDefaultOpen?: boolean;
   activeLectureId?: number | null;
@@ -42,23 +41,22 @@ export type AppSidebarShellProps = {
 };
 
 export function AppSidebarShell({
-  projects,
+  lectures,
   children,
   sidebarDefaultOpen = true,
   activeLectureId,
   className,
 }: AppSidebarShellProps) {
-  const projectItems = useMemo(() => {
-    return projects.map((project) => {
-      const trimmedName = project.name?.trim();
+  const lectureItems = useMemo(() => {
+    return lectures.map((lecture) => {
+      const trimmedTitle = lecture.title?.trim();
 
       return {
-        id: project.id,
-        name: trimmedName && trimmedName.length > 0 ? trimmedName : `Untitled project ${project.id}`,
-        lectureId: project.lectureId ?? null,
+        id: lecture.id,
+        title: trimmedTitle && trimmedTitle.length > 0 ? trimmedTitle : "Untitled",
       };
     });
-  }, [projects]);
+  }, [lectures]);
 
   return (
     <SidebarProvider
@@ -74,15 +72,14 @@ export function AppSidebarShell({
           height: `calc(100svh - ${NAVBAR_HEIGHT_PX}px)`,
         }}
       >
-        <SidebarHeader className="px-4 pb-3 pt-4">
+        <SidebarHeader className="px-1 pb-3 pt-7">
+          <SidebarCollapseControl />
           <SidebarTopSection />
         </SidebarHeader>
         <SidebarContent className="flex-1 px-2 pb-4">
-          <ProjectsMenu projectItems={projectItems} activeLectureId={activeLectureId ?? null} />
+          <LecturesMenu lectureItems={lectureItems} activeLectureId={activeLectureId ?? null} />
         </SidebarContent>
-        <SidebarFooter className="px-2 pb-4 pt-2">
-          <SidebarCollapseControl />
-        </SidebarFooter>
+        <SidebarFooter className="px-2 pb-4 pt-2" />
       </Sidebar>
       <SidebarInset
         className="md:h-[calc(100svh-4rem)]"
@@ -91,7 +88,7 @@ export function AppSidebarShell({
         <div className="flex h-full flex-col overflow-hidden">
           <div className="flex items-center gap-2 px-4 py-3 md:hidden">
             <SidebarTrigger className="mr-1" />
-            <p className="text-sm font-medium text-foreground">Browse projects</p>
+            <p className="text-sm font-medium text-foreground">Browse lectures</p>
           </div>
           <div className="flex flex-1 flex-col overflow-hidden">{children}</div>
         </div>
@@ -100,10 +97,9 @@ export function AppSidebarShell({
   );
 }
 
-type NormalizedProjectItem = {
+type NormalizedLectureItem = {
   id: number;
-  name: string;
-  lectureId: number | null;
+  title: string;
 };
 
 function SidebarTopSection() {
@@ -115,11 +111,11 @@ function SidebarTopSection() {
   }
 
   return (
-    <div className="flex items-center gap-3 text-sidebar-foreground/80">
+    <div className="mt-4 flex items-center gap-3 text-sidebar-foreground/80">
       <span className="flex h-9 w-9 items-center justify-center rounded-lg text-sidebar-accent">
         <Folder className="size-4" />
       </span>
-      <span className="text-sm font-semibold text-sidebar-foreground">Projects</span>
+      <span className="text-sm font-semibold text-sidebar-foreground">Lectures</span>
     </div>
   );
 }
@@ -141,11 +137,11 @@ function SidebarCollapseControl() {
     >
       {isExpanded ? (
         <>
-          <PanelLeftOpen className="size-4" />
+          <PanelLeftOpen className="!size-5" />
           <span>Collapse</span>
         </>
       ) : (
-        <PanelRightOpen className="size-4" />
+        <PanelRightOpen className="!size-5" />
       )}
     </Button>
   );
@@ -164,11 +160,11 @@ function SidebarCollapseControl() {
   );
 }
 
-function ProjectsMenu({
-  projectItems,
+function LecturesMenu({
+  lectureItems,
   activeLectureId,
 }: {
-  projectItems: NormalizedProjectItem[];
+  lectureItems: NormalizedLectureItem[];
   activeLectureId: number | null;
 }) {
   const { state } = useSidebar();
@@ -178,10 +174,10 @@ function ProjectsMenu({
     return null;
   }
 
-  if (projectItems.length === 0) {
+  if (lectureItems.length === 0) {
     return (
       <div className="rounded-md border border-sidebar-border/40 bg-sidebar/80 px-3 py-4 text-xs text-sidebar-foreground/70">
-        No projects yet. Create one to get started.
+        No lectures yet. Create one to get started.
       </div>
     );
   }
@@ -189,47 +185,28 @@ function ProjectsMenu({
   return (
     <div className="flex h-full flex-col">
       <SidebarMenu className="flex-1 space-y-1 overflow-y-auto">
-        {projectItems.map((project) => {
-          const canOpen = project.lectureId !== null;
-          const isActive = canOpen && project.lectureId === activeLectureId;
+        {lectureItems.map((lecture) => {
+          const isActive = lecture.id === activeLectureId;
 
           return (
-            <SidebarMenuItem key={project.id}>
+            <SidebarMenuItem key={lecture.id}>
               <SidebarMenuButton
-                asChild={canOpen}
-                tooltip={project.name}
+                asChild
+                tooltip={lecture.title}
                 isActive={isActive}
-                aria-disabled={!canOpen}
-                className={cn(
-                  "transition-colors data-[active=true]:bg-[color:var(--sidebar-active-bg)] data-[active=true]:text-sidebar-foreground data-[active=true]:shadow-sm",
-                  !canOpen && "opacity-60 cursor-not-allowed",
-                )}
+                className="transition-colors data-[active=true]:bg-[color:var(--sidebar-active-bg)] data-[active=true]:text-sidebar-foreground data-[active=true]:shadow-sm"
               >
-                {canOpen ? (
-                  <Link href={`/edit/${project.lectureId}`} className="flex w-full">
-                    <span
-                      className={cn(
-                        "flex-1 truncate text-sm text-sidebar-foreground/90",
-                        "group-data-[collapsible=icon]:sr-only"
-                      )}
-                      aria-hidden={!isExpanded}
-                    >
-                      {project.name}
-                    </span>
-                  </Link>
-                ) : (
-                  <div className="flex w-full select-none">
-                    <span
-                      className={cn(
-                        "flex-1 truncate text-sm text-sidebar-foreground/60",
-                        "group-data-[collapsible=icon]:sr-only"
-                      )}
-                      aria-hidden={!isExpanded}
-                    >
-                      {project.name}
-                    </span>
-                  </div>
-                )}
+                <Link href={`/edit/${lecture.id}`} className="flex w-full">
+                  <span
+                    className={cn(
+                      "flex-1 truncate text-sm text-sidebar-foreground/90",
+                      "group-data-[collapsible=icon]:sr-only"
+                    )}
+                    aria-hidden={!isExpanded}
+                  >
+                    {lecture.title}
+                  </span>
+                </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>
           );

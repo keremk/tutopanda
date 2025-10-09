@@ -22,7 +22,7 @@ import {
 } from "@/components/ai-elements/prompt-input";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { AppSidebarShell, type SidebarProjectItem } from "@/components/app-sidebar-shell";
+import { AppSidebarShell, type SidebarLectureItem } from "@/components/app-sidebar-shell";
 
 const SAMPLE_PROMPTS = [
   "Create a lecture outlining the key events of the American Revolution.",
@@ -31,10 +31,10 @@ const SAMPLE_PROMPTS = [
 ];
 
 type CreatePageContentProps = {
-  projects: SidebarProjectItem[];
+  lectures: SidebarLectureItem[];
 };
 
-export function CreatePageContent({ projects }: CreatePageContentProps) {
+export function CreatePageContent({ lectures }: CreatePageContentProps) {
   const router = useRouter();
   const { toast } = useToast();
   const [prompt, setPrompt] = useState("");
@@ -95,7 +95,7 @@ export function CreatePageContent({ projects }: CreatePageContentProps) {
   };
 
   return (
-    <AppSidebarShell projects={projects} sidebarDefaultOpen>
+    <AppSidebarShell lectures={lectures} sidebarDefaultOpen>
       <div className="flex h-full flex-1 items-center justify-center px-6 py-10">
         <div className="flex w-full max-w-2xl flex-col gap-8">
           <div className="flex flex-col gap-3 text-center md:text-left">

@@ -238,6 +238,28 @@ export async function getLectureForUser({
   return parseLectureSnapshot(lecture);
 }
 
+export async function listVideoLecturesForUser(
+  userId: string,
+  database?: DbOrTx
+): Promise<Array<{ id: number; title: string }>> {
+  const dbClient = resolveDb(database);
+
+  const rows = await dbClient
+    .select({
+      id: videoLecturesTable.id,
+      title: videoLecturesTable.title,
+    })
+    .from(videoLecturesTable)
+    .innerJoin(
+      projectsTable,
+      eq(projectsTable.id, videoLecturesTable.projectId)
+    )
+    .where(eq(projectsTable.createdBy, userId))
+    .orderBy(desc(videoLecturesTable.id));
+
+  return rows;
+}
+
 type UpdateLectureSnapshotInput = {
   lectureId: number;
   payload: Partial<LectureContent>;
