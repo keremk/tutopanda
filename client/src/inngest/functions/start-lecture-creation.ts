@@ -18,6 +18,7 @@ export type LectureCreationEventData = {
   imageDefaults: ImageGenerationDefaults;
   narrationDefaults?: NarrationGenerationDefaults;
   totalWorkflowSteps?: number;
+  context?: Record<string, unknown>;
 };
 
 const inngest = getInngestApp();
@@ -26,7 +27,7 @@ export const startLectureCreation = inngest.createFunction(
   { id: "start-lecture-creation" },
   { event: "app/start-lecture-creation" },
   async ({ event, logger, step, publish }) => {
-    const { userId, prompt, runId, lectureId, narrationDefaults } =
+    const { userId, prompt, runId, lectureId, narrationDefaults, context } =
       event.data as LectureCreationEventData;
     const log = createLectureLogger(runId, logger);
 
@@ -57,6 +58,7 @@ export const startLectureCreation = inngest.createFunction(
         lectureId,
         defaultConfig: existingLecture?.config ?? DEFAULT_LECTURE_CONFIG,
         totalWorkflowSteps: LECTURE_WORKFLOW_TOTAL_STEPS,
+        context,
       },
     });
 
@@ -70,6 +72,7 @@ export const startLectureCreation = inngest.createFunction(
         runId,
         lectureId,
         totalWorkflowSteps: LECTURE_WORKFLOW_TOTAL_STEPS,
+        context,
       },
     });
 
@@ -102,6 +105,7 @@ export const startLectureCreation = inngest.createFunction(
         imageDefaults: confirmedImageSettings,
         workflowStep: 3,
         totalWorkflowSteps: LECTURE_WORKFLOW_TOTAL_STEPS,
+        context,
       },
     });
 
@@ -133,6 +137,7 @@ export const startLectureCreation = inngest.createFunction(
         narration: narrationSettings,
         workflowStep: 4,
         totalWorkflowSteps: LECTURE_WORKFLOW_TOTAL_STEPS,
+        context,
       },
     });
 
@@ -161,6 +166,7 @@ export const startLectureCreation = inngest.createFunction(
         durationSeconds: totalDuration,
         workflowStep: 5,
         totalWorkflowSteps: LECTURE_WORKFLOW_TOTAL_STEPS,
+        context,
       },
     });
 
@@ -173,6 +179,7 @@ export const startLectureCreation = inngest.createFunction(
         projectId: lecture.projectId,
         workflowStep: 6,
         totalWorkflowSteps: LECTURE_WORKFLOW_TOTAL_STEPS,
+        context,
       },
     });
 

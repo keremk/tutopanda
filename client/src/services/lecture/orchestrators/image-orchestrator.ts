@@ -131,10 +131,11 @@ export async function generateLectureImages(
     buffers.map(async (buffer, index) => {
       const { segmentIndex, imageIndex, prompt } = allPrompts[index];
       const id = `img-${runId}-${segmentIndex}-${imageIndex}`;
-      const sourceUrl = `images/${id}.jpg`;
+      const relativePath = `images/${id}.jpg`;
+      const sourceUrl = `${userId}/${projectId}/${relativePath}`;
 
       // Save to storage
-      const fullPath = `${userId}/${projectId}/${sourceUrl}`;
+      const fullPath = sourceUrl;
       await saveFile(buffer, fullPath);
 
       logger?.info("Image saved", {
@@ -225,8 +226,9 @@ export async function regenerateImage(
   );
 
   // Save image
-  const sourceUrl = `images/${imageId}.jpg`;
-  const fullPath = `${userId}/${projectId}/${sourceUrl}`;
+  const relativePath = `images/${imageId}.jpg`;
+  const sourceUrl = `${userId}/${projectId}/${relativePath}`;
+  const fullPath = sourceUrl;
   await saveFile(buffer, fullPath);
 
   logger?.info("Image regenerated and saved", {

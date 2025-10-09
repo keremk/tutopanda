@@ -7,6 +7,7 @@ import {
 import type { LectureScript, ImageGenerationDefaults, ImageAsset } from "@/types/types";
 import { updateLectureContent } from "@/services/lecture/persist";
 import { getProjectById } from "@/data/project";
+import { getLectureById } from "@/data/lecture/repository";
 import { setupFileStorage } from "@/lib/storage-utils";
 import { imageProviderRegistry, ReplicateImageProvider } from "@/services/media-generation/image";
 import { FileStorageHandler } from "@/services/media-generation/core";
@@ -58,6 +59,21 @@ export const generateSegmentImages = inngest.createFunction(
       totalSteps: totalWorkflowSteps,
       log,
     });
+
+    // Check if we should skip this step (resume mode)
+    const shouldSkip = await step.run("check-existing-images", async () => {
+      const lecture = await getLectureById({ lectureId });
+      const hasImages = lecture?.images && lecture.images.length > 0;
+      const forceRegenerate = (event.data as any).context?.forceRegenerate === true;
+      return hasImages && !forceRegenerate;
+    });
+
+    if (shouldSkip) {
+      const lecture = await getLectureById({ lectureId });
+      await publishStatus("Using existing images", workflowStep, "complete");
+      log.info("Skipping image generation - using existing images");
+      return { runId, images: lecture!.images!, skipped: true };
+    }
 
     const segments = script.segments ?? [];
     if (segments.length === 0) {

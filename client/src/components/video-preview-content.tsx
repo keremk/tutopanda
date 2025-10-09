@@ -3,6 +3,7 @@ import { type Timeline } from '@/types/types';
 import { VideoComposition } from './remotion/video-composition';
 import { useRef, useEffect, useMemo } from 'react';
 import type { aspectRatioValues } from '@/types/types';
+import { useLectureEditor } from './lecture-editor-provider';
 
 interface VideoPreviewContentProps {
   timeline: Timeline;
@@ -20,6 +21,7 @@ export default function VideoPreviewContent({ timeline, currentTime, isPlaying, 
   const onSeekRef = useRef(onSeek);
   const onPlayRef = useRef(onPlay);
   const onPauseRef = useRef(onPause);
+  const { content } = useLectureEditor();
 
   const fps = 30;
   const timelineSeconds = Number.isFinite(timeline?.duration)
@@ -70,7 +72,7 @@ export default function VideoPreviewContent({ timeline, currentTime, isPlaying, 
         return null;
       }
 
-      const onTimeUpdate: CallbackListener<'timeupdate'> = (e) => {
+      const onTimeUpdate: CallbackListener<'frameupdate'> = (e) => {
         const time = e.detail.frame / fps; // Convert frame to seconds
         if (onSeekRef.current && Math.abs(time - lastCurrentTime.current) > 0.01) {
           lastCurrentTime.current = time;
@@ -93,12 +95,12 @@ export default function VideoPreviewContent({ timeline, currentTime, isPlaying, 
       };
 
       // Add event listeners
-      player.addEventListener('timeupdate', onTimeUpdate);
+      player.addEventListener('frameupdate', onTimeUpdate);
       player.addEventListener('play', onPlayerPlay);
       player.addEventListener('pause', onPlayerPause);
 
       return () => {
-        player.removeEventListener('timeupdate', onTimeUpdate);
+        player.removeEventListener('frameupdate', onTimeUpdate);
         player.removeEventListener('play', onPlayerPlay);
         player.removeEventListener('pause', onPlayerPause);
       };
@@ -128,7 +130,12 @@ export default function VideoPreviewContent({ timeline, currentTime, isPlaying, 
         key={timeline.id}
         ref={playerRef}
         component={VideoComposition}
-        inputProps={{ timeline }}
+        inputProps={{
+          timeline,
+          images: content.images ?? [],
+          narration: content.narration ?? [],
+          music: content.music ?? [],
+        }}
         durationInFrames={durationInFrames}
         fps={fps}
         compositionWidth={width}

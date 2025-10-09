@@ -44,7 +44,7 @@ describe("generateLectureMusic", () => {
       label: "Background Score",
       prompt: "Upbeat background music with piano",
       duration: 60,
-      audioUrl: "musical-score/music-test-run-music-123.mp3",
+      audioUrl: "user-1/42/musical-score/music-test-run-music-123.mp3",
     });
 
     expect(mockGeneratePrompt).toHaveBeenCalledTimes(1);
@@ -140,7 +140,10 @@ describe("generateLectureMusic", () => {
 
     // Check logger for default model
     expect(
-      mockLogger.logs.some((log) => log.context?.model === "stability-ai/stable-audio-2.5")
+      mockLogger.logs.some((log) => {
+        const context = log.context as { model?: string } | undefined;
+        return context?.model === "stability-ai/stable-audio-2.5";
+      })
     ).toBe(true);
   });
 
@@ -210,7 +213,7 @@ describe("regenerateMusic", () => {
       label: "Regenerated Music",
       prompt: "New orchestral music with strings",
       duration: 45,
-      audioUrl: "musical-score/music-regen-123.mp3",
+      audioUrl: "user-1/42/musical-score/music-regen-123.mp3",
     });
 
     expect(mockGenerateMusics).toHaveBeenCalledTimes(1);
@@ -298,7 +301,10 @@ describe("regenerateMusic", () => {
 
     // Check logger for default model
     expect(
-      mockLogger.logs.some((log) => log.context?.model === "stability-ai/stable-audio-2.5")
+      mockLogger.logs.some((log) => {
+        const context = log.context as { model?: string } | undefined;
+        return context?.model === "stability-ai/stable-audio-2.5";
+      })
     ).toBe(true);
   });
 });

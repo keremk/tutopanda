@@ -6,9 +6,11 @@ import {
   createLectureProgressPublisher,
   LECTURE_WORKFLOW_TOTAL_STEPS,
 } from "@/inngest/functions/workflow-utils";
-import { updateLectureContent } from "@/services/lecture/persist";
+import { updateLectureContent, type LectureUpdatePayload } from "@/services/lecture/persist";
 import { getLectureById } from "@/data/lecture/repository";
 import { assembleTimeline } from "@/lib/timeline/timeline-assembler";
+
+type LoadedLecture = NonNullable<Awaited<ReturnType<typeof getLectureById>>>;
 
 const inngest = getInngestApp();
 
@@ -45,6 +47,7 @@ export const generateTimeline = inngest.createFunction(
       log,
     });
 
+    // Check if we should skip this step (resume mode)
     await publishStatus("Building timeline", workflowStep);
 
     const lecture = await step.run("load-lecture-assets", async () => {
@@ -58,14 +61,85 @@ export const generateTimeline = inngest.createFunction(
         narration: lecture.narration?.length ?? 0,
         music: lecture.music?.length ?? 0,
       });
-
-      return lecture;
+      return lecture as LoadedLecture;
     });
 
+    const assetBasePath = `${userId}/${lecture.projectId}`;
+
+    const preparedLecture = (await step.run("normalize-asset-paths", async () => {
+      const normalizePath = (path?: string | null) => {
+        if (!path) return path;
+        const trimmed = path.replace(/^\/+/, "");
+        if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+          return trimmed;
+        }
+        if (trimmed.startsWith(assetBasePath)) {
+          return trimmed;
+        }
+        return `${assetBasePath}/${trimmed}`;
+      };
+
+      const payload: LectureUpdatePayload = {};
+
+      if (lecture.images && lecture.images.length > 0) {
+        const normalisedImages = lecture.images.map((image) => {
+          const nextSource = normalizePath(image.sourceUrl);
+          return nextSource && nextSource !== image.sourceUrl
+            ? { ...image, sourceUrl: nextSource }
+            : image;
+        });
+
+        if (normalisedImages.some((img, idx) => img !== lecture.images![idx])) {
+          payload.images = normalisedImages;
+        }
+      }
+
+      if (lecture.narration && lecture.narration.length > 0) {
+        const normalisedNarration = lecture.narration.map((item) => {
+          const nextSource = normalizePath(item.sourceUrl);
+          return nextSource && nextSource !== item.sourceUrl
+            ? { ...item, sourceUrl: nextSource }
+            : item;
+        });
+
+        if (normalisedNarration.some((n, idx) => n !== lecture.narration![idx])) {
+          payload.narration = normalisedNarration;
+        }
+      }
+
+      if (lecture.music && lecture.music.length > 0) {
+        const normalisedMusic = lecture.music.map((item) => {
+          const nextAudio = normalizePath(item.audioUrl);
+          return nextAudio && nextAudio !== item.audioUrl
+            ? { ...item, audioUrl: nextAudio }
+            : item;
+        });
+
+        if (normalisedMusic.some((m, idx) => m !== lecture.music![idx])) {
+          payload.music = normalisedMusic;
+        }
+      }
+
+      if (Object.keys(payload).length === 0) {
+        return lecture;
+      }
+
+      const updated = await updateLectureContent({
+        lectureId,
+        actorId: userId,
+        baseRevision: lecture.revision,
+        payload,
+      });
+
+      log.info("Asset paths normalised", payload);
+
+      return updated;
+    })) as LoadedLecture;
+
     const timeline = await step.run("assemble-timeline", async () => {
-      const images = lecture.images ?? [];
-      const narration = lecture.narration ?? [];
-      const music = lecture.music ?? [];
+      const images = preparedLecture.images ?? [];
+      const narration = preparedLecture.narration ?? [];
+      const music = preparedLecture.music ?? [];
 
       // Assemble timeline using pure function
       const timeline = assembleTimeline({
@@ -85,14 +159,43 @@ export const generateTimeline = inngest.createFunction(
       return timeline;
     });
 
-    await step.run("save-timeline", async () => {
-      await updateLectureContent({
+    const savedSnapshot = await step.run("save-timeline", async () => {
+      const snapshot = await updateLectureContent({
         lectureId,
         actorId: userId,
         payload: { timeline },
       });
 
-      log.info("Timeline saved to database");
+      const savedTimeline = snapshot.timeline;
+
+      if (!savedTimeline) {
+        log.error("Timeline missing after save", { lectureId, runId });
+        throw new Error("Timeline not persisted");
+      }
+
+      log.info("Timeline saved to database", {
+        timelineId: savedTimeline.id,
+        visualClips: savedTimeline.tracks.visual.length,
+        voiceClips: savedTimeline.tracks.voice.length,
+        musicClips: savedTimeline.tracks.music.length,
+        duration: savedTimeline.duration,
+        lectureUpdatedAt: snapshot.updatedAt.toISOString(),
+      });
+
+      return snapshot;
+    });
+
+    await step.run("verify-timeline", async () => {
+      const latestLecture = await getLectureById({ lectureId });
+      const timelineTracks = latestLecture?.timeline?.tracks;
+
+      log.info("Timeline verification", {
+        visualClips: timelineTracks?.visual.length ?? 0,
+        voiceClips: timelineTracks?.voice.length ?? 0,
+        musicClips: timelineTracks?.music.length ?? 0,
+        duration: latestLecture?.timeline?.duration ?? 0,
+        lectureUpdatedAt: latestLecture?.updatedAt.toISOString(),
+      });
     });
 
     await step.run("revalidate-paths", async () => {
@@ -118,6 +221,10 @@ export const generateTimeline = inngest.createFunction(
 
     log.info("Timeline generation complete");
 
-    return { runId, timeline };
+    if (!savedSnapshot.timeline) {
+      throw new Error("Timeline not found after persistence");
+    }
+
+    return { runId, timeline: savedSnapshot.timeline };
   }
 );

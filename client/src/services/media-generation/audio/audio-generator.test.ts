@@ -64,7 +64,12 @@ describe("generateAudio", () => {
     });
 
     expect(result.buffer).toBeInstanceOf(Buffer);
-    expect(mockLogger.logs.some((log) => log.context?.model === "aura-orpheus-en")).toBe(true);
+    expect(
+      mockLogger.logs.some((log) => {
+        const context = log.context as { model?: string } | undefined;
+        return context?.model === "aura-orpheus-en";
+      })
+    ).toBe(true);
   });
 
   it("looks up provider from registry when custom provider not provided", async () => {
@@ -110,8 +115,9 @@ describe("generateAudio", () => {
 
     const genLog = mockLogger.logs.find((log) => log.message === "Generating audio");
     expect(genLog).toBeDefined();
-    expect(genLog?.context?.textLength).toBe(text.length);
-    expect(genLog?.context?.voice).toBe("aura-asteria-en");
+    const genContext = genLog?.context as { textLength?: number; voice?: string } | undefined;
+    expect(genContext?.textLength).toBe(text.length);
+    expect(genContext?.voice).toBe("aura-asteria-en");
   });
 
   it("logs buffer size and duration after generation", async () => {
@@ -127,8 +133,9 @@ describe("generateAudio", () => {
 
     const completeLog = mockLogger.logs.find((log) => log.message === "Audio generated");
     expect(completeLog).toBeDefined();
-    expect(completeLog?.context?.duration).toBe(5.5);
-    expect(completeLog?.context?.bufferSize).toBeGreaterThan(0);
+    const completeContext = completeLog?.context as { duration?: number; bufferSize?: number } | undefined;
+    expect(completeContext?.duration).toBe(5.5);
+    expect(completeContext?.bufferSize).toBeGreaterThan(0);
   });
 
   it("handles provider errors gracefully", async () => {
@@ -162,7 +169,8 @@ describe("generateAudio", () => {
 
     expect(result.buffer).toBeInstanceOf(Buffer);
     const genLog = mockLogger.logs.find((log) => log.message === "Generating audio");
-    expect(genLog?.context?.textLength).toBe(0);
+    const genContext = genLog?.context as { textLength?: number } | undefined;
+    expect(genContext?.textLength).toBe(0);
   });
 
   it("handles very long text", async () => {

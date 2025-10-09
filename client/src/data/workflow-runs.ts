@@ -122,3 +122,44 @@ export async function updateWorkflowRun(
 
   return workflowRun ? toWorkflowRun(workflowRun) : null;
 }
+
+export async function getWorkflowRun(
+  runId: string,
+  database?: DbOrTx
+): Promise<WorkflowRun | null> {
+  const dbClient = resolveDb(database);
+
+  const [workflowRun] = await dbClient
+    .select()
+    .from(workflowRunsTable)
+    .where(eq(workflowRunsTable.runId, runId))
+    .limit(1);
+
+  return workflowRun ? toWorkflowRun(workflowRun) : null;
+}
+
+export async function markStepComplete(
+  runId: string,
+  step: number,
+  database?: DbOrTx
+): Promise<WorkflowRun | null> {
+  const run = await getWorkflowRun(runId, database);
+
+  if (!run) {
+    return null;
+  }
+
+  const completedSteps = (run.context?.completedSteps as number[]) || [];
+
+  return updateWorkflowRun(
+    {
+      runId,
+      currentStep: step,
+      context: {
+        ...run.context,
+        completedSteps: [...new Set([...completedSteps, step])],
+      },
+    },
+    database
+  );
+}

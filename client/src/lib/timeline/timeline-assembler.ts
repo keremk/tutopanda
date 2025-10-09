@@ -12,6 +12,17 @@ import type {
 } from "@/types/types";
 import { selectKenBurnsEffect } from "./ken-burns";
 
+const MIN_CLIP_DURATION = 1;
+
+function ensurePositiveDuration(value?: number): number {
+  if (typeof value !== "number") {
+    return MIN_CLIP_DURATION;
+  }
+
+  const numeric = Number(value);
+  return Number.isFinite(numeric) && numeric > 0 ? numeric : MIN_CLIP_DURATION;
+}
+
 export interface TimelineAssemblyInput {
   images: ImageAsset[];
   narration: NarrationSettings[];
@@ -43,7 +54,8 @@ export function groupImagesBySegment(
 // Build visual track with Ken Burns effects
 export function buildVisualTrack(
   imagesBySegment: Map<number, ImageAsset[]>,
-  narration: NarrationSettings[]
+  narration: NarrationSettings[],
+  segmentDurations: number[]
 ): KenBurnsClip[] {
   const visualTrack: KenBurnsClip[] = [];
   let accumulatedTime = 0;
@@ -51,7 +63,8 @@ export function buildVisualTrack(
 
   for (let segmentIndex = 0; segmentIndex < narration.length; segmentIndex++) {
     const segmentImages = imagesBySegment.get(segmentIndex) || [];
-    const narrationDuration = narration[segmentIndex]?.duration ?? 0;
+    const narrationDuration =
+      segmentDurations[segmentIndex] ?? ensurePositiveDuration();
     const imageDuration =
       segmentImages.length > 0
         ? narrationDuration / segmentImages.length
@@ -73,7 +86,6 @@ export function buildVisualTrack(
         kind: "kenBurns",
         effectName: selectedEffect.name,
         imageAssetId: image.id,
-        imageUrl: `/api/storage/${image.sourceUrl}`,
         startTime: accumulatedTime,
         duration: imageDuration,
         startScale: selectedEffect.startScale,
@@ -87,6 +99,10 @@ export function buildVisualTrack(
       accumulatedTime += imageDuration;
       visualTrack.push(clip);
     }
+
+    if (segmentImages.length === 0) {
+      accumulatedTime += narrationDuration;
+    }
   }
 
   return visualTrack;
@@ -94,22 +110,23 @@ export function buildVisualTrack(
 
 // Build voice track from narration assets
 export function buildVoiceTrack(
-  narration: NarrationSettings[]
+  narration: NarrationSettings[],
+  segmentDurations: number[]
 ): VoiceClip[] {
   let accumulatedTime = 0;
 
   return narration.map((narrationAsset, index) => {
+    const duration = segmentDurations[index] ?? ensurePositiveDuration();
     const clip: VoiceClip = {
       id: `voice-${index}`,
       name: `Narration ${index + 1}`,
       kind: "voice",
       narrationAssetId: narrationAsset.id,
-      audioUrl: `/api/storage/${narrationAsset.sourceUrl}`,
       startTime: accumulatedTime,
-      duration: narrationAsset.duration ?? 0,
+      duration,
       volume: 1.0,
     };
-    accumulatedTime += narrationAsset.duration ?? 0;
+    accumulatedTime += duration;
     return clip;
   });
 }
@@ -125,7 +142,6 @@ export function buildMusicTrack(
     name: "Background Score",
     kind: "music",
     musicAssetId: musicAsset.id,
-    audioUrl: `/api/storage/${musicAsset.audioUrl}`,
     startTime: 0,
     duration: totalDuration,
     volume: 0.3,
@@ -136,9 +152,9 @@ export function buildMusicTrack(
 
 // Calculate total duration from narration
 export function calculateTotalDuration(
-  narration: NarrationSettings[]
+  segmentDurations: number[]
 ): number {
-  return narration.reduce((sum, n) => sum + (n.duration ?? 0), 0);
+  return segmentDurations.reduce((sum, duration) => sum + duration, 0);
 }
 
 // Main timeline assembly function
@@ -156,15 +172,23 @@ export function assembleTimeline(
     throw new Error("No narration available for timeline");
   }
 
+  const segmentDurations = narration.map((segment) =>
+    ensurePositiveDuration(segment.duration)
+  );
+
   // Calculate total duration
-  const totalDuration = calculateTotalDuration(narration);
+  const totalDuration = calculateTotalDuration(segmentDurations);
 
   // Group images by segment
   const imagesBySegment = groupImagesBySegment(images);
 
   // Build all tracks
-  const visualTrack = buildVisualTrack(imagesBySegment, narration);
-  const voiceTrack = buildVoiceTrack(narration);
+  const visualTrack = buildVisualTrack(
+    imagesBySegment,
+    narration,
+    segmentDurations
+  );
+  const voiceTrack = buildVoiceTrack(narration, segmentDurations);
   const musicTrack = buildMusicTrack(music, totalDuration, runId);
 
   const tracks: TimelineTracks = {

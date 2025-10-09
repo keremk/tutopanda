@@ -52,6 +52,7 @@ describe("generateLectureImages", () => {
       aspectRatio: "16:9",
       width: 1024,
       model: "bytedance/seedream-4",
+      sourceUrl: "user-1/42/images/img-test-run-123-0-0.jpg",
     });
   });
 
@@ -258,7 +259,7 @@ describe("regenerateImage", () => {
       prompt: "New updated prompt",
       aspectRatio: "16:9",
       model: "bytedance/seedream-4",
-      sourceUrl: "images/img-regen-123.jpg",
+      sourceUrl: "user-1/42/images/img-regen-123.jpg",
     });
 
     expect(mockGenerateImages).toHaveBeenCalledTimes(1);

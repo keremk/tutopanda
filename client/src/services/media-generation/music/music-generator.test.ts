@@ -61,7 +61,12 @@ describe("generateMusic", () => {
     });
 
     expect(result).toBeInstanceOf(Buffer);
-    expect(mockLogger.logs.some((log) => log.context?.model === "stable-audio-2.5")).toBe(true);
+    expect(
+      mockLogger.logs.some((log) => {
+        const context = log.context as { model?: string } | undefined;
+        return context?.model === "stable-audio-2.5";
+      })
+    ).toBe(true);
   });
 
   it("looks up provider from registry when custom provider not provided", async () => {
@@ -92,10 +97,11 @@ describe("generateMusic", () => {
 
     const genLog = mockLogger.logs.find((log) => log.message === "Generating music");
     expect(genLog).toBeDefined();
-    expect(genLog?.context?.promptPreview).toBeDefined();
+    const genContext = genLog?.context as { promptPreview?: string; durationSeconds?: number } | undefined;
+    expect(genContext?.promptPreview).toBeDefined();
     // Should truncate to 100 chars + "..."
-    expect(genLog?.context?.promptPreview.length).toBeLessThanOrEqual(104);
-    expect(genLog?.context?.durationSeconds).toBe(60);
+    expect(genContext?.promptPreview?.length).toBeLessThanOrEqual(104);
+    expect(genContext?.durationSeconds).toBe(60);
   });
 
   it("logs buffer size after generation", async () => {
@@ -111,7 +117,8 @@ describe("generateMusic", () => {
 
     const completeLog = mockLogger.logs.find((log) => log.message === "Music generated");
     expect(completeLog).toBeDefined();
-    expect(completeLog?.context?.bufferSize).toBeGreaterThan(0);
+    const completeContext = completeLog?.context as { bufferSize?: number } | undefined;
+    expect(completeContext?.bufferSize).toBeGreaterThan(0);
   });
 
   it("handles provider errors gracefully", async () => {
@@ -157,7 +164,8 @@ describe("generateMusic", () => {
 
     expect(result).toBeInstanceOf(Buffer);
     const genLog = mockLogger.logs.find((log) => log.message === "Generating music");
-    expect(genLog?.context?.promptPreview).toBe("...");
+    const genContext = genLog?.context as { promptPreview?: string } | undefined;
+    expect(genContext?.promptPreview).toBe("...");
   });
 
   it("passes correct parameters to provider", async () => {

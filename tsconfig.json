@@ -1,8 +1,12 @@
 {
   "files": [],
+  "extends": "./tsconfig.base.json",
   "references": [
     {
       "path": "./client"
+    },
+    {
+      "path": "./client/tsconfig.vitest.json"
     },
     {
       "path": "./server"

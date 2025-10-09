@@ -81,10 +81,11 @@ export async function generateLectureAudio(
   const narrationAssets: NarrationSettings[] = await Promise.all(
     audioResults.map(async (result, segmentIndex) => {
       const id = `narration-${runId}-${segmentIndex}`;
-      const sourceUrl = `narration/${id}.mp3`;
+      const relativePath = `narration/${id}.mp3`;
+      const sourceUrl = `${userId}/${projectId}/${relativePath}`;
 
       // Save to storage
-      const fullPath = `${userId}/${projectId}/${sourceUrl}`;
+      const fullPath = sourceUrl;
       await saveFile(result.buffer, fullPath);
 
       logger?.info("Audio saved", {
@@ -160,8 +161,9 @@ export async function regenerateAudio(
   );
 
   // Save audio
-  const sourceUrl = `narration/${narrationId}.mp3`;
-  const fullPath = `${userId}/${projectId}/${sourceUrl}`;
+  const relativePath = `narration/${narrationId}.mp3`;
+  const sourceUrl = `${userId}/${projectId}/${relativePath}`;
+  const fullPath = sourceUrl;
   await saveFile(result.buffer, fullPath);
 
   logger?.info("Audio regenerated and saved", {

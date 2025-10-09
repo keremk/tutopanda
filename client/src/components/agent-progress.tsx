@@ -1,14 +1,17 @@
 "use client";
 
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangleIcon,
   BrainIcon,
   ChevronDownIcon,
   Loader2Icon,
   NotebookPenIcon,
+  XIcon,
+  RotateCcwIcon,
 } from "lucide-react";
 import { useInngestSubscription } from "@inngest/realtime/hooks";
+import { cancelWorkflowAction, rerunWorkflowAction } from "@/app/actions/workflow-controls";
 
 import {
   Task,
@@ -76,6 +79,34 @@ export const AgentProgress = ({
   const { data = [], state, error } = useInngestSubscription({
     refreshToken: fetchLectureProgressSubscriptionToken,
   });
+
+  const [cancelingRun, setCancelingRun] = useState<string | null>(null);
+  const [rerunningRun, setRerunningRun] = useState<string | null>(null);
+
+  const handleCancel = async (runId: string) => {
+    try {
+      setCancelingRun(runId);
+      await cancelWorkflowAction(runId);
+    } catch (error) {
+      console.error("Failed to cancel workflow:", error);
+    } finally {
+      setCancelingRun(null);
+    }
+  };
+
+  const handleRerun = async (runId: string, forceAll: boolean = false) => {
+    try {
+      setRerunningRun(runId);
+      await rerunWorkflowAction(runId, {
+        resumeFromFailure: !forceAll,
+        forceAll
+      });
+    } catch (error) {
+      console.error("Failed to rerun workflow:", error);
+    } finally {
+      setRerunningRun(null);
+    }
+  };
 
   // Generate debug data for testing scroll behavior
   const debugData = useMemo(() => {
@@ -283,9 +314,43 @@ export const AgentProgress = ({
                 isSelected && "border-primary bg-primary/5"
               )}
             >
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <NotebookPenIcon className="size-4" />
-                <span>{descriptor}</span>
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <NotebookPenIcon className="size-4" />
+                  <span>{descriptor}</span>
+                </div>
+                <div className="flex gap-2">
+                  {run.status === "in-progress" && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => handleCancel(run.runId)}
+                      disabled={cancelingRun === run.runId}
+                    >
+                      {cancelingRun === run.runId ? (
+                        <Loader2Icon className="size-4 animate-spin" />
+                      ) : (
+                        <XIcon className="size-4" />
+                      )}
+                      <span className="ml-1">Cancel</span>
+                    </Button>
+                  )}
+                  {(run.status === "error" || run.status === "complete") && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => handleRerun(run.runId, false)}
+                      disabled={rerunningRun === run.runId}
+                    >
+                      {rerunningRun === run.runId ? (
+                        <Loader2Icon className="size-4 animate-spin" />
+                      ) : (
+                        <RotateCcwIcon className="size-4" />
+                      )}
+                      <span className="ml-1">Rerun</span>
+                    </Button>
+                  )}
+                </div>
               </div>
 
               {run.config ? (

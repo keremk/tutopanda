@@ -86,8 +86,9 @@ export async function generateLectureMusic(
 
   // Step 3: Save music file
   const id = `music-${runId}`;
-  const audioUrl = `musical-score/${id}.mp3`;
-  const fullPath = `${userId}/${projectId}/${audioUrl}`;
+  const relativePath = `musical-score/${id}.mp3`;
+  const audioUrl = `${userId}/${projectId}/${relativePath}`;
+  const fullPath = audioUrl;
   await saveFile(buffer, fullPath);
 
   logger?.info("Music saved", {
@@ -160,8 +161,9 @@ export async function regenerateMusic(
   );
 
   // Save music file
-  const audioUrl = `musical-score/${musicId}.mp3`;
-  const fullPath = `${userId}/${projectId}/${audioUrl}`;
+  const relativePath = `musical-score/${musicId}.mp3`;
+  const audioUrl = `${userId}/${projectId}/${relativePath}`;
+  const fullPath = audioUrl;
   await saveFile(buffer, fullPath);
 
   logger?.info("Music regenerated and saved", {

@@ -8,6 +8,7 @@ import {
 } from "@/prompts/create-script";
 import type { LectureScript } from "@/types/types";
 import { updateLectureContent } from "@/services/lecture/persist";
+import { getLectureById } from "@/data/lecture/repository";
 import { getInngestApp } from "@/inngest/client";
 import {
   createLectureLogger,
@@ -98,6 +99,22 @@ export const createLectureScript = inngest.createFunction(
         totalSteps: totalWorkflowSteps,
         log,
       });
+
+    // Check if we should skip this step (resume mode)
+    const shouldSkip = await step.run("check-existing-script", async () => {
+      const lecture = await getLectureById({ lectureId });
+      const hasScript = lecture?.script != null;
+      const forceRegenerate = (event.data as any).context?.forceRegenerate === true;
+      return hasScript && !forceRegenerate;
+    });
+
+    if (shouldSkip) {
+      const lecture = await getLectureById({ lectureId });
+      await publishStatus("Using existing script", 1, "complete");
+      await publishStatus("Lecture script ready", 2, "complete");
+      log.info("Skipping script generation - using existing script");
+      return { runId, script: lecture!.script!, skipped: true };
+    }
 
     const rawModelOutput = await step.run("generate-script", async () => {
       await publishStatus("Prompt received", 1);

@@ -49,6 +49,7 @@ describe("generateLectureAudio", () => {
       model: "aura-asteria-en",
       voice: "aura-asteria-en",
       duration: 5.5,
+      sourceUrl: "user-1/42/narration/narration-test-run-audio-123-0.mp3",
     });
   });
 
@@ -215,7 +216,7 @@ describe("regenerateAudio", () => {
       model: "aura-orpheus-en",
       voice: "aura-orpheus-en",
       duration: 8.5,
-      sourceUrl: "narration/narration-regen-123.mp3",
+      sourceUrl: "user-1/42/narration/narration-regen-123.mp3",
     });
 
     expect(mockGenerateAudios).toHaveBeenCalledTimes(1);

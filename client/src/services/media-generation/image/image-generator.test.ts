@@ -70,7 +70,12 @@ describe("generateImage", () => {
     });
 
     expect(result).toBeInstanceOf(Buffer);
-    expect(mockLogger.logs.some((log) => log.context?.model === "google/nano-banana")).toBe(true);
+    expect(
+      mockLogger.logs.some((log) => {
+        const context = log.context as { model?: string } | undefined;
+        return context?.model === "google/nano-banana";
+      })
+    ).toBe(true);
   });
 
   it("looks up provider from registry when custom provider not provided", async () => {
@@ -188,9 +193,10 @@ describe("generateImage", () => {
 
     const logMessage = mockLogger.logs.find((log) => log.message === "Generating image");
     expect(logMessage).toBeDefined();
-    expect(logMessage?.context?.promptPreview).toBeDefined();
+    const logContext = logMessage?.context as { promptPreview?: string } | undefined;
+    expect(logContext?.promptPreview).toBeDefined();
     // Should truncate to 100 chars + "..."
-    expect(logMessage?.context?.promptPreview.length).toBeLessThanOrEqual(104);
+    expect(logContext?.promptPreview?.length).toBeLessThanOrEqual(104);
   });
 
   it("handles provider errors gracefully", async () => {

@@ -98,7 +98,8 @@ describe("buildVisualTrack", () => {
       },
     ];
 
-    const track = buildVisualTrack(imagesBySegment, narration);
+    const segmentDurations = narration.map((n) => n.duration ?? 1);
+    const track = buildVisualTrack(imagesBySegment, narration, segmentDurations);
 
     expect(track.length).toBe(1);
     expect(track[0].duration).toBe(10);
@@ -136,7 +137,8 @@ describe("buildVisualTrack", () => {
       },
     ];
 
-    const track = buildVisualTrack(imagesBySegment, narration);
+    const segmentDurations = narration.map((n) => n.duration ?? 1);
+    const track = buildVisualTrack(imagesBySegment, narration, segmentDurations);
 
     expect(track.length).toBe(2);
     expect(track[0].duration).toBe(5); // 10 / 2
@@ -175,7 +177,8 @@ describe("buildVisualTrack", () => {
       },
     ];
 
-    const track = buildVisualTrack(imagesBySegment, narration);
+    const segmentDurations = narration.map((n) => n.duration ?? 1);
+    const track = buildVisualTrack(imagesBySegment, narration, segmentDurations);
 
     // For portraits with only 2 effects, they should be different
     expect(track[0].startScale).not.toBe(track[1].startScale);
@@ -199,7 +202,8 @@ describe("buildVoiceTrack", () => {
       },
     ];
 
-    const track = buildVoiceTrack(narration);
+    const segmentDurations = narration.map((n) => n.duration ?? 1);
+    const track = buildVoiceTrack(narration, segmentDurations);
 
     expect(track.length).toBe(2);
     expect(track[0].startTime).toBe(0);
@@ -207,10 +211,12 @@ describe("buildVoiceTrack", () => {
     expect(track[1].startTime).toBe(5);
     expect(track[1].duration).toBe(7);
     expect(track[0].volume).toBe(1.0);
+    expect(track[0].narrationAssetId).toBe("narr-0");
+    expect(track[1].narrationAssetId).toBe("narr-1");
   });
 
   it("handles empty narration array", () => {
-    const track = buildVoiceTrack([]);
+    const track = buildVoiceTrack([], []);
     expect(track.length).toBe(0);
   });
 });
@@ -233,6 +239,7 @@ describe("buildMusicTrack", () => {
     expect(track[0].volume).toBe(0.3);
     expect(track[0].fadeInDuration).toBe(2);
     expect(track[0].fadeOutDuration).toBe(3);
+    expect(track[0].musicAssetId).toBe("music-0");
   });
 
   it("handles empty music array", () => {
@@ -243,24 +250,15 @@ describe("buildMusicTrack", () => {
 
 describe("calculateTotalDuration", () => {
   it("sums narration durations", () => {
-    const narration: NarrationSettings[] = [
-      { id: "n1", label: "N1", duration: 5, sourceUrl: "a1.mp3" },
-      { id: "n2", label: "N2", duration: 10, sourceUrl: "a2.mp3" },
-      { id: "n3", label: "N3", duration: 3, sourceUrl: "a3.mp3" },
-    ];
-
-    const total = calculateTotalDuration(narration);
+    const durations = [5, 10, 3];
+    const total = calculateTotalDuration(durations);
     expect(total).toBe(18);
   });
 
   it("handles missing durations", () => {
-    const narration: NarrationSettings[] = [
-      { id: "n1", label: "N1", duration: 5, sourceUrl: "a1.mp3" },
-      { id: "n2", label: "N2", sourceUrl: "a2.mp3" }, // no duration
-    ];
-
-    const total = calculateTotalDuration(narration);
-    expect(total).toBe(5);
+    const durations = [5, 1]; // previously missing duration defaults to 1
+    const total = calculateTotalDuration(durations);
+    expect(total).toBe(6);
   });
 
   it("returns 0 for empty array", () => {

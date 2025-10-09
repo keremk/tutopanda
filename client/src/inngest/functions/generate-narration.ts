@@ -7,6 +7,7 @@ import {
 import type { NarrationSettings, LectureScript } from "@/types/types";
 import { updateLectureContent } from "@/services/lecture/persist";
 import { getProjectById } from "@/data/project";
+import { getLectureById } from "@/data/lecture/repository";
 import { setupFileStorage } from "@/lib/storage-utils";
 import { audioProviderRegistry, ReplicateAudioProvider } from "@/services/media-generation/audio";
 import { FileStorageHandler } from "@/services/media-generation/core";
@@ -58,6 +59,21 @@ export const generateNarration = inngest.createFunction(
       totalSteps: totalWorkflowSteps,
       log,
     });
+
+    // Check if we should skip this step (resume mode)
+    const shouldSkip = await step.run("check-existing-narration", async () => {
+      const lecture = await getLectureById({ lectureId });
+      const hasNarration = lecture?.narration && lecture.narration.length > 0;
+      const forceRegenerate = (event.data as any).context?.forceRegenerate === true;
+      return hasNarration && !forceRegenerate;
+    });
+
+    if (shouldSkip) {
+      const lecture = await getLectureById({ lectureId });
+      await publishStatus("Using existing narration", workflowStep, "complete");
+      log.info("Skipping narration generation - using existing narration");
+      return { runId, narration: lecture!.narration!, skipped: true };
+    }
 
     const segments = script?.segments ?? [];
     if (segments.length === 0) {

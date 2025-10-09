@@ -25,6 +25,7 @@ export type ConfirmConfigurationEvent = {
   lectureId: number;
   defaultConfig: LectureConfig;
   totalWorkflowSteps?: number;
+  context?: Record<string, unknown>;
 };
 
 export type ConfirmConfigurationResult = {
@@ -64,7 +65,15 @@ export const confirmConfiguration = inngest.createFunction(
   { id: "confirm-configuration" },
   { event: "app/confirm-configuration" },
   async ({ event, publish, logger, step }) => {
-    const { userId, prompt, runId, lectureId, defaultConfig, totalWorkflowSteps = 7 } =
+    const {
+      userId,
+      prompt,
+      runId,
+      lectureId,
+      defaultConfig,
+      totalWorkflowSteps = 7,
+      context: eventContext,
+    } =
       event.data as ConfirmConfigurationEvent;
 
     const log = createLectureLogger(runId, logger);
@@ -121,15 +130,22 @@ export const confirmConfiguration = inngest.createFunction(
       log.info("Config published to UI");
     });
 
-    // Step 5: Wait for user confirmation or update
-    const confirmationEvent = await step.waitForEvent("wait-for-config-confirmation", {
-      event: "app/config.confirmed",
-      timeout: "5m",
-      match: "data.runId",
-    });
+    const skipConfirmation = eventContext?.skipConfirmation === true;
 
-    if (!confirmationEvent) {
-      throw new Error("Configuration confirmation timeout");
+    if (!skipConfirmation) {
+      // Step 5: Wait for user confirmation or update
+      const confirmationEvent = await step.waitForEvent("wait-for-config-confirmation", {
+        event: "app/config.confirmed",
+        timeout: "5m",
+        match: "data.runId",
+      });
+
+      if (!confirmationEvent) {
+        throw new Error("Configuration confirmation timeout");
+      }
+    } else {
+      await publishStatus("Configuration auto-confirmed", 0, "complete");
+      log.info("Skipping configuration confirmation due to context flag");
     }
 
     // Step 6: Get final config (might have been updated by user)

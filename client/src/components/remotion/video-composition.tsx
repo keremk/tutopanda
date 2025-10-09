@@ -1,9 +1,19 @@
 import { AbsoluteFill, useCurrentFrame, useVideoConfig, Audio, Sequence } from 'remotion';
-import { type Timeline } from '@/types/types';
+import { useMemo } from 'react';
+import type {
+  Timeline,
+  ImageAsset,
+  NarrationSettings,
+  MusicSettings,
+  KenBurnsClip,
+} from '@/types/types';
 import { KenBurnsComponent } from './KenBurns-component';
 
 interface VideoCompositionProps {
   timeline: Timeline;
+  images: ImageAsset[];
+  narration: NarrationSettings[];
+  music: MusicSettings[];
 }
 
 // Helper to ensure URL has the correct API prefix
@@ -14,10 +24,63 @@ const normalizeStorageUrl = (url: string | undefined): string | undefined => {
   return `/api/storage/${url}`;
 };
 
-export const VideoComposition: React.FC<VideoCompositionProps> = ({ timeline }) => {
+const buildAssetMaps = (
+  images: ImageAsset[],
+  narration: NarrationSettings[],
+  music: MusicSettings[]
+) => {
+  const imageMap = new Map<string, ImageAsset>();
+  const narrationMap = new Map<string, NarrationSettings>();
+  const musicMap = new Map<string, MusicSettings>();
+
+  images.forEach((asset) => {
+    imageMap.set(asset.id, asset);
+  });
+  narration.forEach((asset) => {
+    narrationMap.set(asset.id, asset);
+  });
+  music.forEach((asset) => {
+    musicMap.set(asset.id, asset);
+  });
+
+  return { imageMap, narrationMap, musicMap };
+};
+
+const resolveImageUrl = (
+  clip: KenBurnsClip,
+  imageMap: Map<string, ImageAsset>
+) => {
+  if (!clip.imageAssetId) {
+    return undefined;
+  }
+  const asset = imageMap.get(clip.imageAssetId);
+  return normalizeStorageUrl(asset?.sourceUrl);
+};
+
+const resolveAudioUrl = (
+  assetId: string | undefined,
+  assetMap: Map<string, { sourceUrl?: string; audioUrl?: string }>
+) => {
+  if (!assetId) {
+    return undefined;
+  }
+  const asset = assetMap.get(assetId);
+  return normalizeStorageUrl(asset?.sourceUrl ?? (asset as MusicSettings | undefined)?.audioUrl);
+};
+
+export const VideoComposition: React.FC<VideoCompositionProps> = ({
+  timeline,
+  images,
+  narration,
+  music,
+}) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const currentTime = frame / fps;
+  const { imageMap, narrationMap, musicMap } = useMemo(
+    () => buildAssetMaps(images, narration, music),
+    [images, narration, music]
+  );
 
   return (
     <AbsoluteFill style={{ backgroundColor: '#000' }}>
@@ -34,6 +97,11 @@ export const VideoComposition: React.FC<VideoCompositionProps> = ({ timeline }) 
 
         const relativeTime = currentTime - clip.startTime;
         const progress = Math.min(relativeTime / clip.duration, 1);
+        const imageUrl = resolveImageUrl(clip, imageMap);
+
+        if (!imageUrl) {
+          return null;
+        }
 
         switch (clip.kind) {
           case 'kenBurns':
@@ -42,7 +110,7 @@ export const VideoComposition: React.FC<VideoCompositionProps> = ({ timeline }) 
                 key={clip.id}
                 component={{
                   ...clip,
-                  imageUrl: normalizeStorageUrl(clip.imageUrl)
+                  imageUrl,
                 }}
                 progress={progress}
               />
@@ -54,7 +122,9 @@ export const VideoComposition: React.FC<VideoCompositionProps> = ({ timeline }) 
 
       {/* Voice track - Narration audio */}
       {(timeline.tracks?.voice ?? []).map((clip) => {
-        if (!clip.audioUrl || !Number.isFinite(clip.duration) || clip.duration <= 0) {
+        const audioUrl = resolveAudioUrl(clip.narrationAssetId, narrationMap);
+
+        if (!audioUrl || !Number.isFinite(clip.duration) || clip.duration <= 0) {
           return null;
         }
 
@@ -64,7 +134,7 @@ export const VideoComposition: React.FC<VideoCompositionProps> = ({ timeline }) 
         return (
           <Sequence key={clip.id} from={startFrame} durationInFrames={durationInFrames}>
             <Audio
-              src={normalizeStorageUrl(clip.audioUrl)}
+              src={audioUrl}
               volume={clip.volume ?? 1.0}
             />
           </Sequence>
@@ -73,7 +143,9 @@ export const VideoComposition: React.FC<VideoCompositionProps> = ({ timeline }) 
 
       {/* Music track - Background music */}
       {(timeline.tracks?.music ?? []).map((clip) => {
-        if (!clip.audioUrl || !Number.isFinite(clip.duration) || clip.duration <= 0) {
+        const audioUrl = resolveAudioUrl(clip.musicAssetId, musicMap);
+
+        if (!audioUrl || !Number.isFinite(clip.duration) || clip.duration <= 0) {
           return null;
         }
 
@@ -82,7 +154,7 @@ export const VideoComposition: React.FC<VideoCompositionProps> = ({ timeline }) 
         return (
           <Sequence key={clip.id} from={0} durationInFrames={durationInFrames}>
             <Audio
-              src={normalizeStorageUrl(clip.audioUrl)}
+              src={audioUrl}
               volume={clip.volume ?? 0.3}
             />
           </Sequence>
