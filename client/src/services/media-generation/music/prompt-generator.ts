@@ -5,6 +5,7 @@ import {
   buildMusicPromptUserMessage,
 } from "@/prompts/create-music-prompt";
 import type { LectureScript } from "@/types/types";
+import { LLM_MODELS } from "@/lib/models";
 
 /**
  * Generate a music prompt for a lecture script using Vercel AI SDK.
@@ -20,7 +21,7 @@ export async function generateMusicPrompt(
   });
 
   const { text } = await generateText({
-    model: openai("gpt-4o"),
+    model: openai(LLM_MODELS.GPT_4O),
     system: createMusicPromptSystemPrompt,
     prompt: userPrompt,
   });

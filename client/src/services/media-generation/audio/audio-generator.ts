@@ -1,6 +1,7 @@
 import { ProviderRegistry } from "../core";
 import type { AudioProvider, AudioGenerationParams, AudioConfig } from "./types";
 import type { Logger } from "../core";
+import { NARRATION_MODELS } from "@/lib/models";
 
 /**
  * Global registry for audio providers
@@ -35,7 +36,7 @@ export async function generateAudio(
 ): Promise<AudioResult> {
   const { provider: customProvider, logger } = options || {};
 
-  const model = config.model || "aura-asteria-en";
+  const model = config.model || NARRATION_MODELS.DEEPGRAM_AURA_ASTERIA;
   const provider = customProvider || audioProviderRegistry.getProvider(model);
 
   logger?.info("Generating audio", {

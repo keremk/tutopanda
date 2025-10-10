@@ -44,6 +44,15 @@ export default function SegmentAudioPlayer({
     return segmentStartTime + audioTime;
   };
 
+  // Force reload audio when URL changes
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    audio.load();
+    console.log("🔄 Segment audio reloaded due to URL change:", audioUrl.substring(0, 60));
+  }, [audioUrl]);
+
   // Handle play/pause state changes
   useEffect(() => {
     const audio = audioRef.current;
@@ -137,6 +146,7 @@ export default function SegmentAudioPlayer({
 
   return (
     <audio
+      key={audioUrl}
       ref={audioRef}
       src={audioUrl}
       preload="auto"

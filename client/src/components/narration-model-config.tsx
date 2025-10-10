@@ -3,20 +3,7 @@
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-
-// Voice configuration for different models
-const MINIMAX_VOICES = [
-  { id: "male-qn-qingse", name: "Male - Qingse" },
-  { id: "female-shaonv", name: "Female - Shaonv" },
-  { id: "female-yujie", name: "Female - Yujie" },
-  { id: "male-qingse-jingpin", name: "Male - Qingse (Premium)" },
-  { id: "female-shaonv-jingpin", name: "Female - Shaonv (Premium)" },
-] as const;
-
-const NARRATION_MODELS = [
-  { id: "minimax/speech-02-hd", name: "MiniMax Speech HD", supportsEmotion: true },
-  { id: "eleven_v3", name: "ElevenLabs V3", supportsEmotion: false },
-] as const;
+import { minimaxVoiceOptions, narrationModelOptions, isMiniMaxModel } from "@/lib/models";
 
 interface NarrationModelConfigProps {
   model: string;
@@ -35,8 +22,8 @@ export default function NarrationModelConfig({
   onVoiceChange,
   onEmotionChange,
 }: NarrationModelConfigProps) {
-  const selectedModel = NARRATION_MODELS.find((m) => m.id === model);
-  const isMinimax = model === "minimax/speech-02-hd";
+  const selectedModel = narrationModelOptions.find((m) => m.id === model);
+  const isMinimax = isMiniMaxModel(model);
 
   return (
     <div className="space-y-4">
@@ -48,7 +35,7 @@ export default function NarrationModelConfig({
             <SelectValue placeholder="Select a model..." />
           </SelectTrigger>
           <SelectContent>
-            {NARRATION_MODELS.map((m) => (
+            {narrationModelOptions.map((m) => (
               <SelectItem key={m.id} value={m.id}>
                 {m.name}
               </SelectItem>
@@ -66,7 +53,7 @@ export default function NarrationModelConfig({
               <SelectValue placeholder="Select a voice..." />
             </SelectTrigger>
             <SelectContent>
-              {MINIMAX_VOICES.map((v) => (
+              {minimaxVoiceOptions.map((v) => (
                 <SelectItem key={v.id} value={v.id}>
                   {v.name}
                 </SelectItem>
@@ -104,6 +91,3 @@ export default function NarrationModelConfig({
     </div>
   );
 }
-
-// Export for use in other components
-export { MINIMAX_VOICES, NARRATION_MODELS };

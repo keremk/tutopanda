@@ -1,7 +1,7 @@
 import { channel, topic } from "@inngest/realtime";
 
 import type { LectureScript } from "@/prompts/create-script";
-import type { LectureConfig, ImageAsset } from "@/types/types";
+import type { LectureConfig, ImageAsset, NarrationSettings, MusicSettings } from "@/types/types";
 
 export const LECTURE_WORKFLOW_TOTAL_STEPS = 6; // 0: config, 1: script, 2: images, 3: narration, 4: music, 5: timeline
 
@@ -62,6 +62,38 @@ export type LectureImageCompleteMessage = {
   timestamp: string;
 };
 
+export type LectureNarrationPreviewMessage = {
+  type: "narration-preview";
+  runId: string;
+  narrationAssetId: string;
+  narrationAsset: NarrationSettings;
+  timestamp: string;
+};
+
+export type LectureNarrationCompleteMessage = {
+  type: "narration-complete";
+  runId: string;
+  lectureId: number;
+  narrationAssetId: string;
+  timestamp: string;
+};
+
+export type LectureMusicPreviewMessage = {
+  type: "music-preview";
+  runId: string;
+  musicAssetId: string;
+  musicAsset: MusicSettings;
+  timestamp: string;
+};
+
+export type LectureMusicCompleteMessage = {
+  type: "music-complete";
+  runId: string;
+  lectureId: number;
+  musicAssetId: string;
+  timestamp: string;
+};
+
 export type LectureProgressMessage =
   | LectureStatusMessage
   | LectureReasoningMessage
@@ -69,7 +101,11 @@ export type LectureProgressMessage =
   | LectureTimelineCompleteMessage
   | LectureConfigMessage
   | LectureImagePreviewMessage
-  | LectureImageCompleteMessage;
+  | LectureImageCompleteMessage
+  | LectureNarrationPreviewMessage
+  | LectureNarrationCompleteMessage
+  | LectureMusicPreviewMessage
+  | LectureMusicCompleteMessage;
 
 export const lectureProgressChannel = channel((userId: string) => `user:${userId}`)
   .addTopic(topic("progress").type<LectureProgressMessage>());
@@ -203,6 +239,62 @@ export const createLectureProgressPublisher = <TPublish extends (event: any) => 
     log.info("Image completion published", { lectureId, imageAssetId });
   };
 
+  const publishNarrationPreview = async (narrationAssetId: string, narrationAsset: NarrationSettings) => {
+    await publish(
+      lectureProgressChannel(userId).progress({
+        type: "narration-preview",
+        runId,
+        narrationAssetId,
+        narrationAsset,
+        timestamp: nowIso(),
+      })
+    );
+
+    log.info("Narration preview published", { narrationAssetId, narrationAsset });
+  };
+
+  const publishNarrationComplete = async (lectureId: number, narrationAssetId: string) => {
+    await publish(
+      lectureProgressChannel(userId).progress({
+        type: "narration-complete",
+        runId,
+        lectureId,
+        narrationAssetId,
+        timestamp: nowIso(),
+      })
+    );
+
+    log.info("Narration completion published", { lectureId, narrationAssetId });
+  };
+
+  const publishMusicPreview = async (musicAssetId: string, musicAsset: MusicSettings) => {
+    await publish(
+      lectureProgressChannel(userId).progress({
+        type: "music-preview",
+        runId,
+        musicAssetId,
+        musicAsset,
+        timestamp: nowIso(),
+      })
+    );
+
+    log.info("Music preview published", { musicAssetId, musicAsset });
+  };
+
+  const publishMusicComplete = async (lectureId: number, musicAssetId: string) => {
+    await publish(
+      lectureProgressChannel(userId).progress({
+        type: "music-complete",
+        runId,
+        lectureId,
+        musicAssetId,
+        timestamp: nowIso(),
+      })
+    );
+
+    log.info("Music completion published", { lectureId, musicAssetId });
+  };
+
   return {
     publishStatus,
     publishReasoning,
@@ -210,5 +302,9 @@ export const createLectureProgressPublisher = <TPublish extends (event: any) => 
     publishConfig,
     publishImagePreview,
     publishImageComplete,
+    publishNarrationPreview,
+    publishNarrationComplete,
+    publishMusicPreview,
+    publishMusicComplete,
   };
 };

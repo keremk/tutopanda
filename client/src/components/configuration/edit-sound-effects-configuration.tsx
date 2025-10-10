@@ -3,7 +3,7 @@
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { SoundEffectConfig } from "@/types/types";
-import { soundEffectModelValues } from "@/types/types";
+import { soundEffectModelValues } from "@/lib/models";
 
 interface EditSoundEffectsConfigurationProps {
   config: SoundEffectConfig;

@@ -1,5 +1,18 @@
 import { title } from "process";
 import { z } from "zod";
+import {
+  imageModelValues,
+  musicModelValues,
+  soundEffectModelValues,
+  videoModelValues,
+  DEFAULT_IMAGE_MODEL,
+  DEFAULT_MUSIC_MODEL,
+  DEFAULT_SOUND_EFFECT_MODEL,
+  DEFAULT_VIDEO_MODEL,
+  DEFAULT_SCRIPT_MODEL,
+  DEFAULT_VOICE_ID,
+  DEFAULT_VOICE_MODEL_ID,
+} from "@/lib/models";
 
 // Application-level schemas (stored in database)
 export const lectureSegmentSchema = z.object({
@@ -55,8 +68,6 @@ export const aspectRatioValues = [
   "3:2",
   "2:3",
 ] as const;
-
-export const imageModelValues = ["bytedance/seedream-4", "google/nano-banana", "qwen/qwen-image"] as const;
 
 export const kenBurnsEffectNames = [
   "portraitZoomIn",
@@ -217,11 +228,8 @@ export const audienceValues = [
 export const imageSizeValues = ["480", "720", "1080"] as const;
 export const imageStyleValues = ["Ghibli", "Pixar", "Animated", "Realistic"] as const;
 export const imageFormatValues = ["JPG", "PNG"] as const;
-export const videoModelValues = ["Seadance-1-lite"] as const;
 export const videoDurationSegmentValues = ["5s", "10s"] as const;
 export const segmentLengthValues = ["5s", "10s", "15s"] as const;
-export const musicModelValues = ["Stable Audio", "ElevenLabs"] as const;
-export const soundEffectModelValues = ["Declare Lab Tango", "ElevenLabs"] as const;
 
 export const generalConfigSchema = z.object({
   duration: z.enum(videoDurationValues),
@@ -329,8 +337,8 @@ export type NarrationGenerationDefaults = {
 };
 
 export const DEFAULT_NARRATION_GENERATION_DEFAULTS: NarrationGenerationDefaults = {
-  model: process.env.DEFAULT_VOICE_MODEL_ID || "eleven_v3",
-  voice: process.env.DEFAULT_VOICE_ID || "onwK4e9ZLuTAKqWW03F9",
+  model: DEFAULT_VOICE_MODEL_ID,
+  voice: DEFAULT_VOICE_ID,
 };
 
 export type LectureConfig = z.infer<typeof lectureConfigSchema>;
@@ -344,7 +352,7 @@ export type SoundEffectConfig = z.infer<typeof soundEffectConfigSchema>;
 export const DEFAULT_LECTURE_CONFIG: LectureConfig = {
   general: {
     duration: "3min",
-    scriptModel: "gpt-5",
+    scriptModel: DEFAULT_SCRIPT_MODEL,
     audience: "Adults",
     useSubtitles: false,
     language: "en",
@@ -357,22 +365,22 @@ export const DEFAULT_LECTURE_CONFIG: LectureConfig = {
     imagesPerSegment: 1,
     style: "Realistic",
     format: "PNG",
-    model: "bytedance/seedream-4",
+    model: DEFAULT_IMAGE_MODEL,
   },
   video: {
-    model: "Seadance-1-lite",
+    model: DEFAULT_VIDEO_MODEL,
     duration: "5s",
   },
   narration: {
     segmentLength: "15s",
-    voice: process.env.DEFAULT_VOICE_ID || "onwK4e9ZLuTAKqWW03F9",
-    model: process.env.DEFAULT_VOICE_MODEL_ID || "eleven_v3",
+    voice: DEFAULT_VOICE_ID,
+    model: DEFAULT_VOICE_MODEL_ID,
   },
   music: {
-    model: "Stable Audio",
+    model: DEFAULT_MUSIC_MODEL,
   },
   soundEffects: {
-    model: "ElevenLabs",
+    model: DEFAULT_SOUND_EFFECT_MODEL,
   },
 };
 

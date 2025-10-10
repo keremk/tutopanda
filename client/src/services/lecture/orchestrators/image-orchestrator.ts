@@ -6,6 +6,7 @@ import {
   type BatchOptions,
 } from "@/services/media-generation/core";
 import type { Logger } from "@/services/media-generation/core";
+import { DEFAULT_IMAGE_MODEL } from "@/lib/models";
 
 /**
  * Request for generating all lecture images
@@ -113,7 +114,7 @@ export async function generateLectureImages(
       size: config.size,
       width: config.width,
       height: computedHeight,
-      model: "bytedance/seedream-4",
+      model: DEFAULT_IMAGE_MODEL,
     },
   }));
 
@@ -153,7 +154,7 @@ export async function generateLectureImages(
         width: config.width,
         height: computedHeight,
         size: config.size,
-        model: "bytedance/seedream-4",
+        model: DEFAULT_IMAGE_MODEL,
         sourceUrl,
       };
     })
@@ -218,7 +219,7 @@ export async function regenerateImage(
           size: config.size,
           width: config.width,
           height: computedHeight,
-          model: "bytedance/seedream-4",
+          model: DEFAULT_IMAGE_MODEL,
         },
       },
     ],
@@ -244,7 +245,7 @@ export async function regenerateImage(
     width: config.width,
     height: computedHeight,
     size: config.size,
-    model: "bytedance/seedream-4",
+    model: DEFAULT_IMAGE_MODEL,
     sourceUrl,
   };
 }

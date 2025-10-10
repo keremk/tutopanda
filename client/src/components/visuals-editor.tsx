@@ -1,7 +1,7 @@
 import { useState, useEffect, useTransition } from "react";
 import { useLectureEditor } from "./lecture-editor-provider";
 import type { KenBurnsClip, ImageAsset } from "@/types/types";
-import { imageModelValues } from "@/types/types";
+import { imageModelValues } from "@/lib/models";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import EffectPreview from "./effect-preview";

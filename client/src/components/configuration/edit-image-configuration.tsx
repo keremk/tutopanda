@@ -9,8 +9,8 @@ import {
   aspectRatioValues,
   imageStyleValues,
   imageFormatValues,
-  imageModelValues,
 } from "@/types/types";
+import { imageModelValues } from "@/lib/models";
 
 interface EditImageConfigurationProps {
   config: ImageConfig;

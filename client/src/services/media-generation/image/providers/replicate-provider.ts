@@ -1,5 +1,6 @@
 import Replicate from "replicate";
 import type { ImageProvider, ImageGenerationParams } from "../types";
+import { imageModelValues, DEFAULT_IMAGE_MODEL } from "@/lib/models";
 
 /**
  * Replicate image generation provider.
@@ -7,7 +8,7 @@ import type { ImageProvider, ImageGenerationParams } from "../types";
  */
 export class ReplicateImageProvider implements ImageProvider {
   name = "replicate";
-  supportedModels = ["bytedance/seedream-4", "google/nano-banana", "qwen/qwen-image"];
+  supportedModels = [...imageModelValues];
 
   private replicate: Replicate;
 
@@ -18,7 +19,7 @@ export class ReplicateImageProvider implements ImageProvider {
   }
 
   async generateImage(params: ImageGenerationParams): Promise<Buffer> {
-    const { prompt, aspectRatio, size, model = "bytedance/seedream-4" } = params;
+    const { prompt, aspectRatio, size, model = DEFAULT_IMAGE_MODEL } = params;
 
     // Map config size values to Replicate API size values
     const sizeMapping: Record<string, string> = {

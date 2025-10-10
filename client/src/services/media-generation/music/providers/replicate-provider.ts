@@ -1,5 +1,6 @@
 import Replicate from "replicate";
 import type { MusicProvider, MusicGenerationParams } from "../types";
+import { MUSIC_MODELS, DEFAULT_MUSIC_MODEL } from "@/lib/models";
 
 /**
  * Replicate music generation provider.
@@ -7,9 +8,7 @@ import type { MusicProvider, MusicGenerationParams } from "../types";
  */
 export class ReplicateMusicProvider implements MusicProvider {
   name = "replicate";
-  supportedModels = [
-    "stability-ai/stable-audio-2.5",
-  ];
+  supportedModels = [MUSIC_MODELS.STABILITY_STABLE_AUDIO_2_5];
 
   private replicate: Replicate;
 
@@ -20,7 +19,7 @@ export class ReplicateMusicProvider implements MusicProvider {
   }
 
   async generateMusic(params: MusicGenerationParams): Promise<Buffer> {
-    const { prompt, durationSeconds, model = "stability-ai/stable-audio-2.5" } = params;
+    const { prompt, durationSeconds, model = DEFAULT_MUSIC_MODEL } = params;
 
     const input = {
       prompt,

@@ -15,6 +15,7 @@ import {
 import { updateLectureContent } from "@/services/lecture/persist";
 import { getLectureById } from "@/data/lecture/repository";
 import type { LectureConfig } from "@/types/types";
+import { LLM_MODELS } from "@/lib/models";
 
 const inngest = getInngestApp();
 
@@ -95,7 +96,7 @@ export const confirmConfiguration = inngest.createFunction(
       log.info("Extracting config from prompt", { promptLength: prompt.length });
 
       const result = await generateObject({
-        model: openai("gpt-4o-mini"),
+        model: openai(LLM_MODELS.GPT_4O_MINI),
         system: extractConfigSystemPrompt,
         prompt: buildExtractConfigPrompt(prompt),
         schema: extractedConfigSchema,

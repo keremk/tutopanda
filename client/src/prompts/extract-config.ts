@@ -5,12 +5,14 @@ import {
   imageSizeValues,
   imageStyleValues,
   imageFormatValues,
-  imageModelValues,
   aspectRatioValues,
   segmentLengthValues,
+} from "@/types/types";
+import {
+  imageModelValues,
   musicModelValues,
   soundEffectModelValues,
-} from "@/types/types";
+} from "@/lib/models";
 
 // Partial schemas for config extraction - all fields optional
 export const partialGeneralConfigSchema = z.object({

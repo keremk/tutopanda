@@ -1,6 +1,7 @@
 import { ProviderRegistry } from "../core";
 import type { MusicProvider, MusicGenerationParams, MusicConfig } from "./types";
 import type { Logger } from "../core";
+import { DEFAULT_MUSIC_MODEL } from "@/lib/models";
 
 /**
  * Global registry for music providers
@@ -27,7 +28,7 @@ export async function generateMusic(
 ): Promise<Buffer> {
   const { provider: customProvider, logger } = options || {};
 
-  const model = config.model || "stability-ai/stable-audio-2.5";
+  const model = config.model || DEFAULT_MUSIC_MODEL;
   const provider = customProvider || musicProviderRegistry.getProvider(model);
 
   logger?.info("Generating music", {

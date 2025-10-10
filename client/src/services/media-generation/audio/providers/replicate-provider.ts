@@ -1,6 +1,7 @@
 import Replicate from "replicate";
 import { Input, ALL_FORMATS, BlobSource } from "mediabunny";
 import type { AudioProvider, AudioGenerationParams, AudioGenerationResult } from "../types";
+import { NARRATION_MODELS, DEFAULT_NARRATION_MODEL } from "@/lib/models";
 
 /**
  * Extract audio duration from buffer using mediabunny
@@ -22,9 +23,7 @@ async function extractAudioDuration(audioBuffer: Buffer): Promise<number> {
  */
 export class ReplicateAudioProvider implements AudioProvider {
   name = "replicate";
-  supportedModels = [
-    "minimax/speech-02-hd",
-  ];
+  supportedModels = [NARRATION_MODELS.MINIMAX_SPEECH_02_HD];
 
   private replicate: Replicate;
 
@@ -35,7 +34,7 @@ export class ReplicateAudioProvider implements AudioProvider {
   }
 
   async generateAudio(params: AudioGenerationParams): Promise<AudioGenerationResult> {
-    const { text, voiceId, modelId = "minimax/speech-02-hd", emotion = "neutral", languageBoost = "English" } = params;
+    const { text, voiceId, modelId = DEFAULT_NARRATION_MODEL, emotion = "neutral", languageBoost = "English" } = params;
 
     const input = {
       text,

@@ -5,6 +5,7 @@ import {
   type MusicGenerationRequest,
 } from "@/services/media-generation/core";
 import type { Logger } from "@/services/media-generation/core";
+import { DEFAULT_MUSIC_MODEL } from "@/lib/models";
 
 /**
  * Request for generating lecture music
@@ -48,7 +49,7 @@ export async function generateLectureMusic(
   context: MusicGenerationContext,
   deps: MusicOrchestratorDeps
 ): Promise<MusicSettings> {
-  const { script, durationSeconds, model = "stability-ai/stable-audio-2.5", runId } = request;
+  const { script, durationSeconds, model = DEFAULT_MUSIC_MODEL, runId } = request;
   const { userId, projectId } = context;
   const {
     generatePrompt = generateMusicPrompt,
@@ -136,7 +137,7 @@ export async function regenerateMusic(
   context: MusicGenerationContext,
   deps: MusicOrchestratorDeps
 ): Promise<MusicSettings> {
-  const { prompt, durationSeconds, model = "stability-ai/stable-audio-2.5", musicId } = request;
+  const { prompt, durationSeconds, model = DEFAULT_MUSIC_MODEL, musicId } = request;
   const { userId, projectId } = context;
   const { generateMusics = generateMusicsThrottled, saveFile, logger } = deps;
 

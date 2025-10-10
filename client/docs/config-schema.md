@@ -33,7 +33,7 @@ Narration Audio Section:
 - Emotion: (string: )
 
 Background Music Section:
-- Model: (string, E.g. Stable Audio, ElevenLabs)
+- Model: (string, E.g. stability-ai/stable-audio-2.5, ElevenLabs)
 
 Sound Effects Section:
 - Model: (string, E.g. Declare Lab Tango, ElevenLabs)

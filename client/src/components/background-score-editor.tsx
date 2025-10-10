@@ -3,11 +3,11 @@
 import { useState, useEffect, useTransition } from "react";
 import { useLectureEditor } from "./lecture-editor-provider";
 import type { MusicClip } from "@/types/types";
-import { musicModelValues } from "@/types/types";
+import { musicModelValues, migrateMusicModel, DEFAULT_MUSIC_MODEL } from "@/lib/models";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import SegmentAudioPlayer from "./segment-audio-player";
+import { regenerateMusicAction } from "@/app/actions/regenerate-music";
 
 interface BackgroundScoreEditorProps {
   selectedClipId: string | null;
@@ -41,11 +41,22 @@ export default function BackgroundScoreEditor({
 
   // Reset local state when clip changes
   useEffect(() => {
-    if (selectedClip && musicAsset) {
-      setLocalPrompt(musicAsset.prompt || "");
-      setLocalModel(musicAsset.type || content.config?.music?.model || "Stable Audio");
+    if (selectedClip) {
+      setLocalPrompt(musicAsset?.prompt || "");
+
+      // Migrate old model names to new ones
+      const rawModel = musicAsset?.type || content.config?.music?.model || DEFAULT_MUSIC_MODEL;
+      const modelValue = migrateMusicModel(rawModel);
+
+      console.log("🎵 Background Score Editor - Setting model:", {
+        musicAssetType: musicAsset?.type,
+        configModel: content.config?.music?.model,
+        rawModel,
+        finalValue: modelValue,
+      });
+      setLocalModel(modelValue);
     }
-  }, [selectedClipId, selectedClip, musicAsset, content.config?.music]);
+  }, [selectedClipId, selectedClip, musicAsset, content.config?.music?.model]);
 
   // Auto-seek to segment start when play button pressed
   useEffect(() => {
@@ -67,18 +78,18 @@ export default function BackgroundScoreEditor({
   };
 
   const handleGenerateMusic = () => {
-    if (!musicAsset || !localPrompt.trim()) {
+    if (!musicAsset || !localPrompt.trim() || !selectedClip) {
       return;
     }
 
     startTransition(async () => {
       try {
-        // TODO: Wire up regeneration action
-        console.log("Generate music:", {
+        await regenerateMusicAction({
           lectureId,
           musicAssetId: musicAsset.id,
           prompt: localPrompt,
-          model: localModel,
+          durationSeconds: selectedClip.duration,
+          model: localModel || undefined,
         });
       } catch (error) {
         console.error("Failed to generate music:", error);
@@ -134,22 +145,23 @@ export default function BackgroundScoreEditor({
           <h3 className="text-base font-semibold">Music Configuration</h3>
           <div className="space-y-2">
             <Label htmlFor="musicModel">Model</Label>
-            <Select
+            <select
+              id="musicModel"
+              className="w-full p-2 border border-border rounded-md bg-background"
               value={localModel}
-              onValueChange={setLocalModel}
+              onChange={(e) => setLocalModel(e.target.value)}
               disabled={!musicAsset}
             >
-              <SelectTrigger id="musicModel">
-                <SelectValue placeholder="Select a model..." />
-              </SelectTrigger>
-              <SelectContent>
-                {musicModelValues.map((model) => (
-                  <SelectItem key={model} value={model}>
-                    {model}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              <option value="" disabled>Select a model...</option>
+              {musicModelValues.map((model) => (
+                <option key={model} value={model}>
+                  {model}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-muted-foreground">
+              {musicAsset?.type ? "Override model" : content.config?.music?.model ? `Using config: ${content.config.music.model}` : "No model configured"}
+            </p>
           </div>
         </div>
       </div>

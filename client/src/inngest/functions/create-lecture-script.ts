@@ -15,6 +15,7 @@ import {
   createLectureProgressPublisher,
   LECTURE_WORKFLOW_TOTAL_STEPS,
 } from "@/inngest/functions/workflow-utils";
+import { LLM_MODELS } from "@/lib/models";
 
 const inngest = getInngestApp();
 
@@ -123,7 +124,7 @@ export const createLectureScript = inngest.createFunction(
       log.info("Starting OpenAI generation", { promptLength: prompt.length });
 
       const result = streamText({
-        model: openai("gpt-5"),
+        model: openai(LLM_MODELS.GPT_5),
         system: createScriptSystemPrompt,
         prompt: buildCreateScriptPrompt(prompt),
         experimental_output: Output.object({

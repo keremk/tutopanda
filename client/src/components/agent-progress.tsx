@@ -33,9 +33,11 @@ import type {
   LectureStatusMessage,
   LectureConfigMessage,
   LectureImagePreviewMessage,
+  LectureNarrationPreviewMessage,
+  LectureMusicPreviewMessage,
 } from "@/inngest/functions/workflow-utils";
 import type { LectureScript } from "@/prompts/create-script";
-import type { LectureConfig, ImageAsset } from "@/types/types";
+import type { LectureConfig, ImageAsset, NarrationSettings, MusicSettings } from "@/types/types";
 
 interface AgentProgressProps {
   lectureId: number;
@@ -46,6 +48,10 @@ interface AgentProgressProps {
   onConfigEdit?: (runId: string, config: LectureConfig) => void;
   onImagePreview?: (runId: string, imageAsset: ImageAsset, imageAssetId: string) => void;
   onImageAccept?: (runId: string, imageAssetId: string) => void;
+  onNarrationPreview?: (runId: string, narrationAsset: NarrationSettings, narrationAssetId: string) => void;
+  onNarrationAccept?: (runId: string, narrationAssetId: string) => void;
+  onMusicPreview?: (runId: string, musicAsset: MusicSettings, musicAssetId: string) => void;
+  onMusicAccept?: (runId: string, musicAssetId: string) => void;
   selectedRunId?: string | null;
   debugTaskCount?: number;
 }
@@ -65,6 +71,8 @@ type RunProgress = {
   result?: LectureResultMessage;
   config?: LectureConfigMessage;
   imagePreview?: LectureImagePreviewMessage;
+  narrationPreview?: LectureNarrationPreviewMessage;
+  musicPreview?: LectureMusicPreviewMessage;
   lastUpdated: number;
   totalSteps: number;
 };
@@ -83,6 +91,10 @@ export const AgentProgress = ({
   onConfigEdit,
   onImagePreview,
   onImageAccept,
+  onNarrationPreview,
+  onNarrationAccept,
+  onMusicPreview,
+  onMusicAccept,
   selectedRunId,
   debugTaskCount = 0,
 }: AgentProgressProps) => {
@@ -290,6 +302,23 @@ export const AgentProgress = ({
           current.lastUpdated = Math.max(current.lastUpdated, getTimestamp(payload.timestamp));
           break;
         }
+        case "narration-preview": {
+          current.narrationPreview = payload;
+          current.lastUpdated = Math.max(current.lastUpdated, getTimestamp(payload.timestamp));
+          break;
+        }
+        case "music-preview": {
+          current.musicPreview = payload;
+          current.lastUpdated = Math.max(current.lastUpdated, getTimestamp(payload.timestamp));
+          break;
+        }
+        case "image-complete":
+        case "narration-complete":
+        case "music-complete": {
+          // These are completion events, no need to store them in state
+          // They trigger UI refresh through revalidation
+          break;
+        }
         default:
           break;
       }
@@ -481,6 +510,62 @@ export const AgentProgress = ({
                       size="sm"
                       variant="outline"
                       onClick={() => onImageAccept?.(run.runId, run.imagePreview!.imageAssetId)}
+                    >
+                      Accept & Replace
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
+
+                  {run.narrationPreview ? (
+                <div className="mt-3 rounded-md border border-border/60 bg-card/30 p-3">
+                  <h4 className="mb-2 text-sm font-medium text-foreground">Narration Generated</h4>
+                  <p className="text-sm text-muted-foreground mb-3">
+                    A new narration has been generated. Preview and accept to replace the existing narration.
+                  </p>
+                  <div className="mt-3 flex gap-2">
+                    <Button
+                      size="sm"
+                      onClick={() => onNarrationPreview?.(
+                        run.runId,
+                        run.narrationPreview!.narrationAsset,
+                        run.narrationPreview!.narrationAssetId
+                      )}
+                    >
+                      Preview Narration
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => onNarrationAccept?.(run.runId, run.narrationPreview!.narrationAssetId)}
+                    >
+                      Accept & Replace
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
+
+                  {run.musicPreview ? (
+                <div className="mt-3 rounded-md border border-border/60 bg-card/30 p-3">
+                  <h4 className="mb-2 text-sm font-medium text-foreground">Music Generated</h4>
+                  <p className="text-sm text-muted-foreground mb-3">
+                    A new background music track has been generated. Preview and accept to replace the existing music.
+                  </p>
+                  <div className="mt-3 flex gap-2">
+                    <Button
+                      size="sm"
+                      onClick={() => onMusicPreview?.(
+                        run.runId,
+                        run.musicPreview!.musicAsset,
+                        run.musicPreview!.musicAssetId
+                      )}
+                    >
+                      Preview Music
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => onMusicAccept?.(run.runId, run.musicPreview!.musicAssetId)}
                     >
                       Accept & Replace
                     </Button>

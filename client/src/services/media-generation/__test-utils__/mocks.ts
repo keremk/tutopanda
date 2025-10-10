@@ -7,13 +7,14 @@ import type { AudioProvider, AudioGenerationParams, AudioGenerationResult } from
 import type { MusicProvider, MusicGenerationParams } from "../music/types";
 import type { Logger } from "../core/types";
 import type { LectureScript, ImageGenerationDefaults } from "@/types/types";
+import { imageModelValues, NARRATION_MODELS, MUSIC_MODELS } from "@/lib/models";
 
 /**
  * Mock Image Provider for testing
  */
 export class MockImageProvider implements ImageProvider {
   name = "mock-image";
-  supportedModels = ["bytedance/seedream-4", "google/nano-banana", "qwen/qwen-image"];
+  supportedModels = [...imageModelValues];
 
   async generateImage(_params: ImageGenerationParams): Promise<Buffer> {
     // Return a tiny 1x1 PNG buffer
@@ -26,7 +27,7 @@ export class MockImageProvider implements ImageProvider {
   }
 
   isModelSupported(model: string): boolean {
-    return this.supportedModels.includes(model);
+    return this.supportedModels.includes(model as typeof imageModelValues[number]);
   }
 }
 
@@ -51,7 +52,7 @@ export class MockImageProviderWithURL implements ImageProvider {
  */
 export class MockAudioProvider implements AudioProvider {
   name = "mock-audio";
-  supportedModels = ["minimax/speech-02-hd"];
+  supportedModels = [NARRATION_MODELS.MINIMAX_SPEECH_02_HD];
 
   async generateAudio(_params: AudioGenerationParams): Promise<AudioGenerationResult> {
     // Return a tiny audio buffer with mock duration
@@ -62,7 +63,7 @@ export class MockAudioProvider implements AudioProvider {
   }
 
   isModelSupported(model: string): boolean {
-    return this.supportedModels.includes(model);
+    return (this.supportedModels as string[]).includes(model);
   }
 }
 
@@ -71,14 +72,14 @@ export class MockAudioProvider implements AudioProvider {
  */
 export class MockMusicProvider implements MusicProvider {
   name = "mock-music";
-  supportedModels = ["stability-ai/stable-audio-2.5"];
+  supportedModels = [MUSIC_MODELS.STABILITY_STABLE_AUDIO_2_5];
 
   async generateMusic(_params: MusicGenerationParams): Promise<Buffer> {
     return Buffer.from("mock-music-data");
   }
 
   isModelSupported(model: string): boolean {
-    return this.supportedModels.includes(model);
+    return (this.supportedModels as string[]).includes(model);
   }
 }
 

@@ -7,6 +7,7 @@ import {
   multipleImagePromptsSchema,
 } from "@/prompts/create-image-prompt";
 import type { PromptGenerationOptions } from "./types";
+import { LLM_MODELS } from "@/lib/models";
 
 /**
  * Generate image prompts for a segment using Vercel AI SDK.
@@ -27,7 +28,7 @@ export async function generatePromptsForSegment(
     imagesPerSegment > 1 ? multipleImagePromptsSchema : singleImagePromptSchema;
 
   const { object } = await generateObject({
-    model: openai("gpt-5-mini"),
+    model: openai(LLM_MODELS.GPT_5_MINI),
     system: createImagePromptDeveloperPrompt,
     prompt: userPrompt,
     schema,

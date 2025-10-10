@@ -3,10 +3,12 @@
 import { useState, useEffect, useTransition } from "react";
 import { useLectureEditor } from "./lecture-editor-provider";
 import type { VoiceClip } from "@/types/types";
+import { DEFAULT_NARRATION_MODEL } from "@/lib/models";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import NarrationModelConfig from "./narration-model-config";
 import SegmentAudioPlayer from "./segment-audio-player";
+import { regenerateNarrationAction } from "@/app/actions/regenerate-narration";
 
 interface NarrationEditorProps {
   selectedClipId: string | null;
@@ -42,13 +44,13 @@ export default function NarrationEditor({
 
   // Reset local state when clip changes
   useEffect(() => {
-    if (selectedClip && narrationAsset) {
-      setLocalScript(narrationAsset.finalScript || "");
-      setLocalModel(narrationAsset.model || content.config?.narration?.model || "minimax/speech-02-hd");
-      setLocalVoice(narrationAsset.voice || content.config?.narration?.voice || "");
+    if (selectedClip) {
+      setLocalScript(narrationAsset?.finalScript || "");
+      setLocalModel(narrationAsset?.model || content.config?.narration?.model || DEFAULT_NARRATION_MODEL);
+      setLocalVoice(narrationAsset?.voice || content.config?.narration?.voice || "");
       setLocalEmotion(content.config?.narration?.emotion || "");
     }
-  }, [selectedClipId, selectedClip, narrationAsset, content.config?.narration]);
+  }, [selectedClipId, selectedClip, narrationAsset, content.config?.narration?.model, content.config?.narration?.voice, content.config?.narration?.emotion]);
 
   // Auto-seek to segment start when play button pressed
   useEffect(() => {
@@ -76,8 +78,7 @@ export default function NarrationEditor({
 
     startTransition(async () => {
       try {
-        // TODO: Wire up regeneration action
-        console.log("Generate narration:", {
+        await regenerateNarrationAction({
           lectureId,
           narrationAssetId: narrationAsset.id,
           script: localScript,

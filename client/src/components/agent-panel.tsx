@@ -36,6 +36,8 @@ import type { ChatStatus } from "ai";
 import { sendPromptAction } from "@/app/actions/send-prompt";
 import { acceptConfigAction, updateConfigAction } from "@/app/actions/confirm-config";
 import { acceptImageAction } from "@/app/actions/accept-image";
+import { acceptNarrationAction } from "@/app/actions/accept-narration";
+import { acceptMusicAction } from "@/app/actions/accept-music";
 import {
   AgentPanelProvider,
   type AgentPanelTab,
@@ -43,8 +45,9 @@ import {
   type TimelineTrackType,
 } from "@/hooks/use-agent-panel";
 import type { LectureScript } from "@/prompts/create-script";
-import type { LectureConfig, ImageAsset } from "@/types/types";
+import type { LectureConfig, ImageAsset, NarrationSettings, MusicSettings } from "@/types/types";
 import ImagePreviewModal from "@/components/image-preview-modal";
+import AudioPreviewModal from "@/components/audio-preview-modal";
 
 interface AgentPanelProps {
   lectureId: number;
@@ -69,6 +72,16 @@ export const AgentPanel = ({ lectureId, className, children }: AgentPanelProps) 
     runId: string;
     imageAsset: ImageAsset;
     imageAssetId: string;
+  } | null>(null);
+  const [narrationPreviewState, setNarrationPreviewState] = useState<{
+    runId: string;
+    narrationAsset: NarrationSettings;
+    narrationAssetId: string;
+  } | null>(null);
+  const [musicPreviewState, setMusicPreviewState] = useState<{
+    runId: string;
+    musicAsset: MusicSettings;
+    musicAssetId: string;
   } | null>(null);
 
   useEffect(() => {
@@ -200,6 +213,50 @@ export const AgentPanel = ({ lectureId, className, children }: AgentPanelProps) 
     []
   );
 
+  const handleNarrationPreview = useCallback(
+    (runId: string, narrationAsset: NarrationSettings, narrationAssetId: string) => {
+      setNarrationPreviewState({ runId, narrationAsset, narrationAssetId });
+    },
+    []
+  );
+
+  const handleNarrationAccept = useCallback(
+    (runId: string, narrationAssetId: string) => {
+      startTransition(() => {
+        acceptNarrationAction({ runId, narrationAssetId })
+          .then(() => {
+            setNarrationPreviewState(null);
+          })
+          .catch((error) => {
+            console.error("Failed to accept narration", error);
+          });
+      });
+    },
+    []
+  );
+
+  const handleMusicPreview = useCallback(
+    (runId: string, musicAsset: MusicSettings, musicAssetId: string) => {
+      setMusicPreviewState({ runId, musicAsset, musicAssetId });
+    },
+    []
+  );
+
+  const handleMusicAccept = useCallback(
+    (runId: string, musicAssetId: string) => {
+      startTransition(() => {
+        acceptMusicAction({ runId, musicAssetId })
+          .then(() => {
+            setMusicPreviewState(null);
+          })
+          .catch((error) => {
+            console.error("Failed to accept music", error);
+          });
+      });
+    },
+    []
+  );
+
   const contextValue = useMemo(
     () => ({
       activeTab,
@@ -252,6 +309,10 @@ export const AgentPanel = ({ lectureId, className, children }: AgentPanelProps) 
                 onConfigEdit={handleConfigEdit}
                 onImagePreview={handleImagePreview}
                 onImageAccept={handleImageAccept}
+                onNarrationPreview={handleNarrationPreview}
+                onNarrationAccept={handleNarrationAccept}
+                onMusicPreview={handleMusicPreview}
+                onMusicAccept={handleMusicAccept}
                 selectedRunId={selectedRunId}
                 debugTaskCount={debugTaskCount}
               />
@@ -303,6 +364,34 @@ export const AgentPanel = ({ lectureId, className, children }: AgentPanelProps) 
           }
         }}
         onClose={() => setImagePreviewState(null)}
+      />
+
+      <AudioPreviewModal
+        isOpen={narrationPreviewState !== null}
+        audioAsset={narrationPreviewState?.narrationAsset || null}
+        title="Preview Generated Narration"
+        description="Review the generated narration before accepting it. This will replace the existing narration."
+        acceptLabel="Accept & Replace Narration"
+        onAccept={() => {
+          if (narrationPreviewState) {
+            handleNarrationAccept(narrationPreviewState.runId, narrationPreviewState.narrationAssetId);
+          }
+        }}
+        onClose={() => setNarrationPreviewState(null)}
+      />
+
+      <AudioPreviewModal
+        isOpen={musicPreviewState !== null}
+        audioAsset={musicPreviewState?.musicAsset || null}
+        title="Preview Generated Music"
+        description="Review the generated background music before accepting it. This will replace the existing music."
+        acceptLabel="Accept & Replace Music"
+        onAccept={() => {
+          if (musicPreviewState) {
+            handleMusicAccept(musicPreviewState.runId, musicPreviewState.musicAssetId);
+          }
+        }}
+        onClose={() => setMusicPreviewState(null)}
       />
     </AgentPanelProvider>
   );

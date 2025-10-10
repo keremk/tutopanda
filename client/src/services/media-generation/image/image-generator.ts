@@ -1,6 +1,7 @@
 import { ProviderRegistry } from "../core";
 import type { ImageProvider, ImageGenerationParams, ImageConfig } from "./types";
 import type { Logger } from "../core";
+import { DEFAULT_IMAGE_MODEL } from "@/lib/models";
 
 /**
  * Global registry for image providers
@@ -28,7 +29,7 @@ export async function generateImage(
   const { provider: customProvider, logger } = options || {};
 
   // Select provider based on model
-  const model = config.model || "bytedance/seedream-4";
+  const model = config.model || DEFAULT_IMAGE_MODEL;
   const provider = customProvider || imageProviderRegistry.getProvider(model);
 
   logger?.info("Generating image", {
