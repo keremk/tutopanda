@@ -32,9 +32,10 @@ import type {
   LectureRunStatus,
   LectureStatusMessage,
   LectureConfigMessage,
+  LectureImagePreviewMessage,
 } from "@/inngest/functions/workflow-utils";
 import type { LectureScript } from "@/prompts/create-script";
-import type { LectureConfig } from "@/types/types";
+import type { LectureConfig, ImageAsset } from "@/types/types";
 
 interface AgentProgressProps {
   lectureId: number;
@@ -43,6 +44,8 @@ interface AgentProgressProps {
   onViewScript?: (runId: string) => void;
   onConfigAccepted?: (runId: string, config: LectureConfig) => void;
   onConfigEdit?: (runId: string, config: LectureConfig) => void;
+  onImagePreview?: (runId: string, imageAsset: ImageAsset, imageAssetId: string) => void;
+  onImageAccept?: (runId: string, imageAssetId: string) => void;
   selectedRunId?: string | null;
   debugTaskCount?: number;
 }
@@ -61,6 +64,7 @@ type RunProgress = {
   reasoning?: LectureReasoningMessage;
   result?: LectureResultMessage;
   config?: LectureConfigMessage;
+  imagePreview?: LectureImagePreviewMessage;
   lastUpdated: number;
   totalSteps: number;
 };
@@ -77,6 +81,8 @@ export const AgentProgress = ({
   onViewScript,
   onConfigAccepted,
   onConfigEdit,
+  onImagePreview,
+  onImageAccept,
   selectedRunId,
   debugTaskCount = 0,
 }: AgentProgressProps) => {
@@ -279,6 +285,11 @@ export const AgentProgress = ({
           current.lastUpdated = Math.max(current.lastUpdated, getTimestamp(payload.timestamp));
           break;
         }
+        case "image-preview": {
+          current.imagePreview = payload;
+          current.lastUpdated = Math.max(current.lastUpdated, getTimestamp(payload.timestamp));
+          break;
+        }
         default:
           break;
       }
@@ -286,7 +297,7 @@ export const AgentProgress = ({
       grouped.set(payload.runId, current);
     }
 
-    return Array.from(grouped.values()).sort((a, b) => b.lastUpdated - a.lastUpdated);
+    return Array.from(grouped.values()).sort((a, b) => a.lastUpdated - b.lastUpdated);
   }, [data, debugData, initialData]);
 
   // Auto-expand in-progress runs
@@ -402,7 +413,7 @@ export const AgentProgress = ({
                           <span className="ml-1">Cancel</span>
                         </Button>
                       )}
-                      {(run.status === "error" || run.status === "complete") && (
+                      {(run.status === "error" || run.status === "complete") && run.totalSteps > 1 && (
                         <Button
                           size="sm"
                           variant="ghost"
@@ -444,6 +455,34 @@ export const AgentProgress = ({
                       onClick={() => onConfigEdit?.(run.runId, run.config!.config)}
                     >
                       Edit
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
+
+                  {run.imagePreview ? (
+                <div className="mt-3 rounded-md border border-border/60 bg-card/30 p-3">
+                  <h4 className="mb-2 text-sm font-medium text-foreground">Image Generated</h4>
+                  <p className="text-sm text-muted-foreground mb-3">
+                    A new image has been generated. Preview and accept to replace the existing image.
+                  </p>
+                  <div className="mt-3 flex gap-2">
+                    <Button
+                      size="sm"
+                      onClick={() => onImagePreview?.(
+                        run.runId,
+                        run.imagePreview!.imageAsset,
+                        run.imagePreview!.imageAssetId
+                      )}
+                    >
+                      Preview Image
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => onImageAccept?.(run.runId, run.imagePreview!.imageAssetId)}
+                    >
+                      Accept & Replace
                     </Button>
                   </div>
                 </div>

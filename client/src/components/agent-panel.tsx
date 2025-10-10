@@ -35,6 +35,7 @@ import type { ChatStatus } from "ai";
 
 import { sendPromptAction } from "@/app/actions/send-prompt";
 import { acceptConfigAction, updateConfigAction } from "@/app/actions/confirm-config";
+import { acceptImageAction } from "@/app/actions/accept-image";
 import {
   AgentPanelProvider,
   type AgentPanelTab,
@@ -42,7 +43,8 @@ import {
   type TimelineTrackType,
 } from "@/hooks/use-agent-panel";
 import type { LectureScript } from "@/prompts/create-script";
-import type { LectureConfig } from "@/types/types";
+import type { LectureConfig, ImageAsset } from "@/types/types";
+import ImagePreviewModal from "@/components/image-preview-modal";
 
 interface AgentPanelProps {
   lectureId: number;
@@ -63,6 +65,11 @@ export const AgentPanel = ({ lectureId, className, children }: AgentPanelProps) 
   } | null>(null);
   const [debugTaskCount, setDebugTaskCount] = useState(0);
   const [timelineSelection, setTimelineSelection] = useState<TimelineSelection | null>(null);
+  const [imagePreviewState, setImagePreviewState] = useState<{
+    runId: string;
+    imageAsset: ImageAsset;
+    imageAssetId: string;
+  } | null>(null);
 
   useEffect(() => {
     return () => {
@@ -171,6 +178,28 @@ export const AgentPanel = ({ lectureId, className, children }: AgentPanelProps) 
     [setActiveTab]
   );
 
+  const handleImagePreview = useCallback(
+    (runId: string, imageAsset: ImageAsset, imageAssetId: string) => {
+      setImagePreviewState({ runId, imageAsset, imageAssetId });
+    },
+    []
+  );
+
+  const handleImageAccept = useCallback(
+    (runId: string, imageAssetId: string) => {
+      startTransition(() => {
+        acceptImageAction({ runId, imageAssetId })
+          .then(() => {
+            setImagePreviewState(null);
+          })
+          .catch((error) => {
+            console.error("Failed to accept image", error);
+          });
+      });
+    },
+    []
+  );
+
   const contextValue = useMemo(
     () => ({
       activeTab,
@@ -221,6 +250,8 @@ export const AgentPanel = ({ lectureId, className, children }: AgentPanelProps) 
                 onViewScript={handleOpenScript}
                 onConfigAccepted={handleConfigAccepted}
                 onConfigEdit={handleConfigEdit}
+                onImagePreview={handleImagePreview}
+                onImageAccept={handleImageAccept}
                 selectedRunId={selectedRunId}
                 debugTaskCount={debugTaskCount}
               />
@@ -262,6 +293,17 @@ export const AgentPanel = ({ lectureId, className, children }: AgentPanelProps) 
           </div>
         </ResizablePanel>
       </ResizablePanelGroup>
+
+      <ImagePreviewModal
+        isOpen={imagePreviewState !== null}
+        imageAsset={imagePreviewState?.imageAsset || null}
+        onAccept={() => {
+          if (imagePreviewState) {
+            handleImageAccept(imagePreviewState.runId, imagePreviewState.imageAssetId);
+          }
+        }}
+        onClose={() => setImagePreviewState(null)}
+      />
     </AgentPanelProvider>
   );
 };

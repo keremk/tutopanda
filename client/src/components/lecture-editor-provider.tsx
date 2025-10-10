@@ -78,7 +78,7 @@ export function LectureEditorProvider({
     refreshToken: fetchLectureProgressSubscriptionToken,
   });
 
-  // Handle timeline completion
+  // Handle timeline completion and image completion
   useEffect(() => {
     for (const message of subscriptionData) {
       if (message.topic !== "progress") {
@@ -101,6 +101,27 @@ export function LectureEditorProvider({
             console.log("Timeline loaded successfully");
           } catch (error) {
             console.error("Failed to refresh lecture after timeline completion", error);
+          }
+        };
+
+        void refreshLecture();
+        break; // Only process once
+      }
+
+      if (payload?.type === "image-complete" && payload.lectureId === lectureId) {
+        console.log("Image regeneration completed, refreshing lecture data...");
+
+        // Refetch the lecture snapshot
+        const refreshLecture = async () => {
+          try {
+            const snapshot = await getLectureAction(lectureId);
+            setDraft(snapshotToContent(snapshot));
+            setRevision(snapshot.revision);
+            setUpdatedAt(new Date(snapshot.updatedAt));
+            setDirtyFields(new Set());
+            console.log("Lecture refreshed with new image");
+          } catch (error) {
+            console.error("Failed to refresh lecture after image completion", error);
           }
         };
 

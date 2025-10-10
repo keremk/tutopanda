@@ -8,6 +8,7 @@ import { generateNarration } from "@/inngest/functions/generate-narration";
 import { generateMusic } from "@/inngest/functions/generate-music";
 import { generateTimeline } from "@/inngest/functions/generate-timeline";
 import { confirmConfiguration } from "@/inngest/functions/confirm-configuration";
+import { regenerateSingleImage } from "@/inngest/functions/regenerate-single-image";
 
 const inngest = getInngestApp();
 
@@ -22,6 +23,7 @@ export const { GET, POST, PUT } = serve({
     generateSegmentImages,
     generateNarration,
     generateMusic,
-    generateTimeline
+    generateTimeline,
+    regenerateSingleImage,
   ],
 });

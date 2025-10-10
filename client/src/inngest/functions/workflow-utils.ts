@@ -1,7 +1,7 @@
 import { channel, topic } from "@inngest/realtime";
 
 import type { LectureScript } from "@/prompts/create-script";
-import type { LectureConfig } from "@/types/types";
+import type { LectureConfig, ImageAsset } from "@/types/types";
 
 export const LECTURE_WORKFLOW_TOTAL_STEPS = 6; // 0: config, 1: script, 2: images, 3: narration, 4: music, 5: timeline
 
@@ -46,12 +46,30 @@ export type LectureConfigMessage = {
   timestamp: string;
 };
 
+export type LectureImagePreviewMessage = {
+  type: "image-preview";
+  runId: string;
+  imageAssetId: string;
+  imageAsset: ImageAsset;
+  timestamp: string;
+};
+
+export type LectureImageCompleteMessage = {
+  type: "image-complete";
+  runId: string;
+  lectureId: number;
+  imageAssetId: string;
+  timestamp: string;
+};
+
 export type LectureProgressMessage =
   | LectureStatusMessage
   | LectureReasoningMessage
   | LectureResultMessage
   | LectureTimelineCompleteMessage
-  | LectureConfigMessage;
+  | LectureConfigMessage
+  | LectureImagePreviewMessage
+  | LectureImageCompleteMessage;
 
 export const lectureProgressChannel = channel((userId: string) => `user:${userId}`)
   .addTopic(topic("progress").type<LectureProgressMessage>());
@@ -157,10 +175,40 @@ export const createLectureProgressPublisher = <TPublish extends (event: any) => 
     log.info("Config published", { config });
   };
 
+  const publishImagePreview = async (imageAssetId: string, imageAsset: ImageAsset) => {
+    await publish(
+      lectureProgressChannel(userId).progress({
+        type: "image-preview",
+        runId,
+        imageAssetId,
+        imageAsset,
+        timestamp: nowIso(),
+      })
+    );
+
+    log.info("Image preview published", { imageAssetId, imageAsset });
+  };
+
+  const publishImageComplete = async (lectureId: number, imageAssetId: string) => {
+    await publish(
+      lectureProgressChannel(userId).progress({
+        type: "image-complete",
+        runId,
+        lectureId,
+        imageAssetId,
+        timestamp: nowIso(),
+      })
+    );
+
+    log.info("Image completion published", { lectureId, imageAssetId });
+  };
+
   return {
     publishStatus,
     publishReasoning,
     publishResult,
     publishConfig,
+    publishImagePreview,
+    publishImageComplete,
   };
 };

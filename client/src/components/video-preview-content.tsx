@@ -21,7 +21,7 @@ export default function VideoPreviewContent({ timeline, currentTime, isPlaying, 
   const onSeekRef = useRef(onSeek);
   const onPlayRef = useRef(onPlay);
   const onPauseRef = useRef(onPause);
-  const { content } = useLectureEditor();
+  const { content, updatedAt } = useLectureEditor();
 
   const fps = 30;
   const timelineSeconds = Number.isFinite(timeline?.duration)
@@ -129,12 +129,13 @@ export default function VideoPreviewContent({ timeline, currentTime, isPlaying, 
       <Player
         key={timeline.id}
         ref={playerRef}
-        component={VideoComposition}
+        component={VideoComposition as any}
         inputProps={{
           timeline,
           images: content.images ?? [],
           narration: content.narration ?? [],
           music: content.music ?? [],
+          cacheKey: updatedAt.getTime(),
         }}
         durationInFrames={durationInFrames}
         fps={fps}

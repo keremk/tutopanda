@@ -14,14 +14,29 @@ interface VideoCompositionProps {
   images: ImageAsset[];
   narration: NarrationSettings[];
   music: MusicSettings[];
+  cacheKey?: number;
 }
 
-// Helper to ensure URL has the correct API prefix
-const normalizeStorageUrl = (url: string | undefined): string | undefined => {
+// Helper to ensure URL has the correct API prefix with cache-busting
+const normalizeStorageUrl = (url: string | undefined, cacheKey?: number): string | undefined => {
   if (!url) return undefined;
-  if (url.startsWith('/api/storage/')) return url;
-  if (url.startsWith('http://') || url.startsWith('https://')) return url;
-  return `/api/storage/${url}`;
+
+  let baseUrl: string;
+  if (url.startsWith('/api/storage/')) {
+    baseUrl = url;
+  } else if (url.startsWith('http://') || url.startsWith('https://')) {
+    baseUrl = url;
+  } else {
+    baseUrl = `/api/storage/${url}`;
+  }
+
+  // Add cache-busting parameter if provided
+  if (cacheKey) {
+    const separator = baseUrl.includes('?') ? '&' : '?';
+    return `${baseUrl}${separator}v=${cacheKey}`;
+  }
+
+  return baseUrl;
 };
 
 const buildAssetMaps = (
@@ -48,24 +63,26 @@ const buildAssetMaps = (
 
 const resolveImageUrl = (
   clip: KenBurnsClip,
-  imageMap: Map<string, ImageAsset>
+  imageMap: Map<string, ImageAsset>,
+  cacheKey?: number
 ) => {
   if (!clip.imageAssetId) {
     return undefined;
   }
   const asset = imageMap.get(clip.imageAssetId);
-  return normalizeStorageUrl(asset?.sourceUrl);
+  return normalizeStorageUrl(asset?.sourceUrl, cacheKey);
 };
 
 const resolveAudioUrl = (
   assetId: string | undefined,
-  assetMap: Map<string, { sourceUrl?: string; audioUrl?: string }>
+  assetMap: Map<string, { sourceUrl?: string; audioUrl?: string }>,
+  cacheKey?: number
 ) => {
   if (!assetId) {
     return undefined;
   }
   const asset = assetMap.get(assetId);
-  return normalizeStorageUrl(asset?.sourceUrl ?? (asset as MusicSettings | undefined)?.audioUrl);
+  return normalizeStorageUrl(asset?.sourceUrl ?? (asset as MusicSettings | undefined)?.audioUrl, cacheKey);
 };
 
 export const VideoComposition: React.FC<VideoCompositionProps> = ({
@@ -73,6 +90,7 @@ export const VideoComposition: React.FC<VideoCompositionProps> = ({
   images,
   narration,
   music,
+  cacheKey,
 }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
@@ -97,7 +115,7 @@ export const VideoComposition: React.FC<VideoCompositionProps> = ({
 
         const relativeTime = currentTime - clip.startTime;
         const progress = Math.min(relativeTime / clip.duration, 1);
-        const imageUrl = resolveImageUrl(clip, imageMap);
+        const imageUrl = resolveImageUrl(clip, imageMap, cacheKey);
 
         if (!imageUrl) {
           return null;
@@ -122,7 +140,7 @@ export const VideoComposition: React.FC<VideoCompositionProps> = ({
 
       {/* Voice track - Narration audio */}
       {(timeline.tracks?.voice ?? []).map((clip) => {
-        const audioUrl = resolveAudioUrl(clip.narrationAssetId, narrationMap);
+        const audioUrl = resolveAudioUrl(clip.narrationAssetId, narrationMap, cacheKey);
 
         if (!audioUrl || !Number.isFinite(clip.duration) || clip.duration <= 0) {
           return null;
@@ -143,7 +161,7 @@ export const VideoComposition: React.FC<VideoCompositionProps> = ({
 
       {/* Music track - Background music */}
       {(timeline.tracks?.music ?? []).map((clip) => {
-        const audioUrl = resolveAudioUrl(clip.musicAssetId, musicMap);
+        const audioUrl = resolveAudioUrl(clip.musicAssetId, musicMap, cacheKey);
 
         if (!audioUrl || !Number.isFinite(clip.duration) || clip.duration <= 0) {
           return null;

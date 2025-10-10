@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useTransition } from "react";
 import { useLectureEditor } from "./lecture-editor-provider";
 import type { KenBurnsClip, ImageAsset } from "@/types/types";
 import { imageModelValues } from "@/types/types";
@@ -6,13 +6,15 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import EffectPreview from "./effect-preview";
 import { kenBurnsEffects } from "@/lib/timeline/ken-burns";
+import { regenerateImageAction } from "@/app/actions/regenerate-image";
 
 interface VisualsEditorProps {
   selectedClipId: string | null;
 }
 
 export default function VisualsEditor({ selectedClipId }: VisualsEditorProps) {
-  const { timeline, content, updateTimeline } = useLectureEditor();
+  const { timeline, content, updateTimeline, lectureId, updatedAt } = useLectureEditor();
+  const [isGenerating, startTransition] = useTransition();
 
   // Find the selected clip
   const selectedClip = timeline?.tracks.visual.find(
@@ -41,8 +43,10 @@ export default function VisualsEditor({ selectedClipId }: VisualsEditorProps) {
   // Check if there are unsaved effect changes
   const hasEffectChanges = selectedClip && localEffectName !== (selectedClip.effectName || "");
 
-  // Get image URL for preview
-  const imageUrl = selectedClip?.imageUrl || (imageAsset?.sourceUrl ? `/api/storage/${imageAsset.sourceUrl}` : "");
+  // Get image URL for preview with cache-busting
+  const imageUrl = selectedClip?.imageUrl || (imageAsset?.sourceUrl
+    ? `/api/storage/${imageAsset.sourceUrl}?v=${updatedAt.getTime()}`
+    : "");
 
   // Debug logging
   useEffect(() => {
@@ -90,6 +94,25 @@ export default function VisualsEditor({ selectedClipId }: VisualsEditorProps) {
     if (selectedClip) {
       setLocalEffectName(selectedClip.effectName || "");
     }
+  };
+
+  const handleGenerateImage = () => {
+    if (!imageAsset || !localPrompt.trim()) {
+      return;
+    }
+
+    startTransition(async () => {
+      try {
+        await regenerateImageAction({
+          lectureId,
+          imageAssetId: imageAsset.id,
+          prompt: localPrompt,
+          model: localModel || undefined,
+        });
+      } catch (error) {
+        console.error("Failed to generate image:", error);
+      }
+    });
   };
 
   if (!selectedClipId || !selectedClip) {
@@ -168,16 +191,19 @@ export default function VisualsEditor({ selectedClipId }: VisualsEditorProps) {
                 </p>
               </div>
 
-              {/* Generate Button (Placeholder) */}
+              {/* Generate Button */}
               <div className="pt-4">
                 <Button
                   className="w-full"
-                  disabled={true}
+                  disabled={!imageAsset || !localPrompt.trim() || isGenerating}
+                  onClick={handleGenerateImage}
                 >
-                  Generate Image
+                  {isGenerating ? "Generating..." : "Generate Image"}
                 </Button>
                 <p className="text-xs text-muted-foreground mt-2">
-                  Image generation will be available soon
+                  {isGenerating
+                    ? "Generating new image with AI..."
+                    : "Generate a new image to replace the current one"}
                 </p>
               </div>
             </div>
