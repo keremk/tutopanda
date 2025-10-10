@@ -8,20 +8,34 @@ import NarrationTab from "./narration-tab";
 import VisualsTab from "./visuals-tab";
 import ScoreTab from "./score-tab";
 import EditConfiguration from "./edit-configuration";
+import SegmentAudioPlayer from "./segment-audio-player";
 import { useLectureEditor } from "./lecture-editor-provider";
 import type {
   Timeline,
   TimelineTrackKey,
   TimelineTracks,
+  VoiceClip,
 } from "@/types/types";
 
 export default function EditorTabs() {
   const { activeTab, setActiveTab, configEditState, handleConfigEditComplete, timelineSelection, handleTimelineClipSelect } = useAgentPanelContext();
-  const { lectureId, timeline, updateTimeline, content } = useLectureEditor();
+  const { lectureId, timeline, updateTimeline, content, updatedAt } = useLectureEditor();
 
   // Playback state - lifted from preview-tab
   const [currentTime, setCurrentTime] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
+
+  // Segment playback mode detection
+  const isNarrationSegmentMode = activeTab === 'narration' && timelineSelection?.trackType === 'voice' && timelineSelection?.clipId !== null;
+  const selectedNarrationClip = useMemo(() => {
+    if (!isNarrationSegmentMode || !timeline) return null;
+    return timeline.tracks.voice.find((c) => c.id === timelineSelection?.clipId) as VoiceClip | undefined;
+  }, [isNarrationSegmentMode, timeline, timelineSelection?.clipId]);
+
+  const narrationAsset = useMemo(() => {
+    if (!selectedNarrationClip?.narrationAssetId || !content.narration) return null;
+    return content.narration.find((n) => n.id === selectedNarrationClip.narrationAssetId);
+  }, [selectedNarrationClip, content.narration]);
 
   // Use config from edit state if available (user clicked Edit in agent progress)
   // Otherwise use config from content (normal configuration tab)
@@ -55,9 +69,15 @@ export default function EditorTabs() {
   }, [currentTime, activeTimeline.duration]);
 
   const handlePlay = useCallback(() => {
+    // If in narration segment mode, jump to segment start
+    if (isNarrationSegmentMode && selectedNarrationClip) {
+      setCurrentTime(selectedNarrationClip.startTime);
+      console.log("▶️ Segment playback started at:", selectedNarrationClip.startTime);
+    } else {
+      console.log("▶️ Playback started");
+    }
     setIsPlaying(true);
-    console.log("▶️ Playback started");
-  }, []);
+  }, [isNarrationSegmentMode, selectedNarrationClip]);
 
   const handlePause = useCallback(() => {
     setIsPlaying(false);
@@ -68,6 +88,14 @@ export default function EditorTabs() {
     setCurrentTime(time);
     console.log("⏭️ Seeked to:", time.toFixed(1) + "s");
   }, []);
+
+  // Handle segment end (for looping)
+  const handleSegmentEnd = useCallback(() => {
+    if (selectedNarrationClip && isPlaying) {
+      console.log("🔄 Looping segment from:", selectedNarrationClip.startTime);
+      setCurrentTime(selectedNarrationClip.startTime);
+    }
+  }, [selectedNarrationClip, isPlaying]);
 
   const ensureTimeline = useCallback((value: Timeline | null | undefined): Timeline => {
     if (!value) {
@@ -144,6 +172,19 @@ export default function EditorTabs() {
 
   return (
     <div className="h-full flex flex-col bg-background text-foreground">
+      {/* Segment Audio Player - Hidden, controlled by timeline */}
+      {isNarrationSegmentMode && selectedNarrationClip && narrationAsset?.sourceUrl && (
+        <SegmentAudioPlayer
+          audioUrl={`/api/storage/${narrationAsset.sourceUrl}?v=${updatedAt.getTime()}`}
+          segmentStartTime={selectedNarrationClip.startTime}
+          segmentDuration={selectedNarrationClip.duration}
+          isPlaying={isPlaying}
+          currentTime={currentTime}
+          onTimeUpdate={setCurrentTime}
+          onSegmentEnd={handleSegmentEnd}
+        />
+      )}
+
       <Tabs
         value={activeTab}
         onValueChange={(value) => setActiveTab(value as AgentPanelTab)}
