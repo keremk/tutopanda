@@ -4,6 +4,17 @@ import type { KenBurnsClip, ImageAsset } from "@/types/types";
 import { imageModelValues } from "@/lib/models";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import EffectPreview from "./effect-preview";
 import { kenBurnsEffects } from "@/lib/timeline/ken-burns";
 import { regenerateImageAction } from "@/app/actions/regenerate-image";
@@ -162,9 +173,10 @@ export default function VisualsEditor({ selectedClipId }: VisualsEditorProps) {
 
               {/* Prompt Field */}
               <div className="space-y-2">
-                <label className="text-sm font-medium">Image Prompt</label>
-                <textarea
-                  className="w-full min-h-24 p-2 border rounded-md resize-none"
+                <Label htmlFor="image-prompt">Image Prompt</Label>
+                <Textarea
+                  id="image-prompt"
+                  className="min-h-24 resize-none"
                   value={localPrompt}
                   onChange={(e) => setLocalPrompt(e.target.value)}
                   placeholder="Describe the image..."
@@ -174,18 +186,23 @@ export default function VisualsEditor({ selectedClipId }: VisualsEditorProps) {
 
               {/* AI Model Select */}
               <div className="space-y-2">
-                <label className="text-sm font-medium">AI Model</label>
-                <select
-                  className="w-full p-2 border rounded-md"
+                <Label htmlFor="ai-model">AI Model</Label>
+                <Select
                   value={localModel}
-                  onChange={(e) => setLocalModel(e.target.value)}
+                  onValueChange={setLocalModel}
                   disabled={!imageAsset}
                 >
-                  <option value="" disabled>Select a model...</option>
-                  {imageModelValues.map((model) => (
-                    <option key={model} value={model}>{model}</option>
-                  ))}
-                </select>
+                  <SelectTrigger id="ai-model">
+                    <SelectValue placeholder="Select a model..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {imageModelValues.map((model) => (
+                      <SelectItem key={model} value={model}>
+                        {model}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
                 <p className="text-xs text-muted-foreground">
                   {imageAsset?.model ? "Override model" : content.config?.image?.model ? `Using config: ${content.config.image.model}` : "No model configured"}
                 </p>
@@ -218,41 +235,49 @@ export default function VisualsEditor({ selectedClipId }: VisualsEditorProps) {
 
               {/* Ken Burns Effect Select */}
               <div className="space-y-2">
-                <label className="text-sm font-medium">Ken Burns Effect</label>
-                <select
-                  className="w-full p-2 border rounded-md"
+                <Label htmlFor="ken-burns-effect">Ken Burns Effect</Label>
+                <Select
                   value={localEffectName}
-                  onChange={(e) => setLocalEffectName(e.target.value)}
+                  onValueChange={setLocalEffectName}
                 >
-                  <option value="" disabled>Select an effect...</option>
-                  <optgroup label="Portrait Effects">
-                    <option value="portraitZoomIn">Portrait Zoom In</option>
-                    <option value="portraitZoomOut">Portrait Zoom Out</option>
-                  </optgroup>
-                  <optgroup label="Landscape Effects">
-                    <option value="landscapePanLeft">Landscape Pan Left</option>
-                    <option value="landscapePanRight">Landscape Pan Right</option>
-                  </optgroup>
-                  <optgroup label="Architecture Effects">
-                    <option value="architectureRise">Architecture Rise</option>
-                    <option value="architectureDescend">Architecture Descend</option>
-                  </optgroup>
-                  <optgroup label="Dynamic Effects">
-                    <option value="dramaticZoomIn">Dramatic Zoom In</option>
-                    <option value="dramaticZoomOut">Dramatic Zoom Out</option>
-                    <option value="zoomInPanLeft">Zoom In + Pan Left</option>
-                    <option value="zoomInPanRight">Zoom In + Pan Right</option>
-                    <option value="zoomInPanUp">Zoom In + Pan Up</option>
-                    <option value="zoomInPanDown">Zoom In + Pan Down</option>
-                    <option value="diagonalZoomInUpRight">Diagonal Zoom Up-Right</option>
-                    <option value="diagonalZoomInDownLeft">Diagonal Zoom Down-Left</option>
-                    <option value="energeticReveal">Energetic Reveal</option>
-                  </optgroup>
-                  <optgroup label="Technical Effects">
-                    <option value="technicalSubtleZoom">Technical Subtle Zoom</option>
-                    <option value="technicalPanRight">Technical Pan Right</option>
-                  </optgroup>
-                </select>
+                  <SelectTrigger id="ken-burns-effect">
+                    <SelectValue placeholder="Select an effect..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectGroup>
+                      <SelectLabel>Portrait Effects</SelectLabel>
+                      <SelectItem value="portraitZoomIn">Portrait Zoom In</SelectItem>
+                      <SelectItem value="portraitZoomOut">Portrait Zoom Out</SelectItem>
+                    </SelectGroup>
+                    <SelectGroup>
+                      <SelectLabel>Landscape Effects</SelectLabel>
+                      <SelectItem value="landscapePanLeft">Landscape Pan Left</SelectItem>
+                      <SelectItem value="landscapePanRight">Landscape Pan Right</SelectItem>
+                    </SelectGroup>
+                    <SelectGroup>
+                      <SelectLabel>Architecture Effects</SelectLabel>
+                      <SelectItem value="architectureRise">Architecture Rise</SelectItem>
+                      <SelectItem value="architectureDescend">Architecture Descend</SelectItem>
+                    </SelectGroup>
+                    <SelectGroup>
+                      <SelectLabel>Dynamic Effects</SelectLabel>
+                      <SelectItem value="dramaticZoomIn">Dramatic Zoom In</SelectItem>
+                      <SelectItem value="dramaticZoomOut">Dramatic Zoom Out</SelectItem>
+                      <SelectItem value="zoomInPanLeft">Zoom In + Pan Left</SelectItem>
+                      <SelectItem value="zoomInPanRight">Zoom In + Pan Right</SelectItem>
+                      <SelectItem value="zoomInPanUp">Zoom In + Pan Up</SelectItem>
+                      <SelectItem value="zoomInPanDown">Zoom In + Pan Down</SelectItem>
+                      <SelectItem value="diagonalZoomInUpRight">Diagonal Zoom Up-Right</SelectItem>
+                      <SelectItem value="diagonalZoomInDownLeft">Diagonal Zoom Down-Left</SelectItem>
+                      <SelectItem value="energeticReveal">Energetic Reveal</SelectItem>
+                    </SelectGroup>
+                    <SelectGroup>
+                      <SelectLabel>Technical Effects</SelectLabel>
+                      <SelectItem value="technicalSubtleZoom">Technical Subtle Zoom</SelectItem>
+                      <SelectItem value="technicalPanRight">Technical Pan Right</SelectItem>
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
                 <p className="text-xs text-muted-foreground">
                   Changes preview in real-time on the left
                 </p>
