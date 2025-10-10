@@ -37,7 +37,12 @@ export default function ScoreTab({
       onRemoveClip={onRemoveClip}
       onUpdateClip={onUpdateClip}
     >
-      <BackgroundScoreEditor selectedClipId={selectedClipId} />
+      <BackgroundScoreEditor
+        selectedClipId={selectedClipId}
+        currentTime={currentTime}
+        isPlaying={isPlaying}
+        onSeek={onSeek}
+      />
     </EditorLayout>
   );
 }

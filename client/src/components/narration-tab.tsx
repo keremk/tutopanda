@@ -37,7 +37,12 @@ export default function NarrationTab({
       onRemoveClip={onRemoveClip}
       onUpdateClip={onUpdateClip}
     >
-      <NarrationEditor selectedClipId={selectedClipId} />
+      <NarrationEditor
+        selectedClipId={selectedClipId}
+        currentTime={currentTime}
+        isPlaying={isPlaying}
+        onSeek={onSeek}
+      />
     </EditorLayout>
   );
 }

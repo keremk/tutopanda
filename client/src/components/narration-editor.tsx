@@ -2,17 +2,25 @@
 
 import { useState, useEffect, useTransition } from "react";
 import { useLectureEditor } from "./lecture-editor-provider";
-import type { VoiceClip, NarrationSettings } from "@/types/types";
+import type { VoiceClip } from "@/types/types";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-// import AudioPlayer from "./audio-player"; // Now controlled via timeline
 import NarrationModelConfig from "./narration-model-config";
+import SegmentAudioPlayer from "./segment-audio-player";
 
 interface NarrationEditorProps {
   selectedClipId: string | null;
+  currentTime: number;
+  isPlaying: boolean;
+  onSeek: (time: number) => void;
 }
 
-export default function NarrationEditor({ selectedClipId }: NarrationEditorProps) {
+export default function NarrationEditor({
+  selectedClipId,
+  currentTime,
+  isPlaying,
+  onSeek
+}: NarrationEditorProps) {
   const { timeline, content, lectureId, updatedAt } = useLectureEditor();
   const [isGenerating, startTransition] = useTransition();
 
@@ -42,10 +50,24 @@ export default function NarrationEditor({ selectedClipId }: NarrationEditorProps
     }
   }, [selectedClipId, selectedClip, narrationAsset, content.config?.narration]);
 
-  // Get audio URL for player with cache-busting
-  const audioUrl = selectedClip?.audioUrl || (narrationAsset?.sourceUrl
-    ? `/api/storage/${narrationAsset.sourceUrl}?v=${updatedAt.getTime()}`
-    : "");
+  // Auto-seek to segment start when play button pressed
+  useEffect(() => {
+    if (isPlaying && selectedClip) {
+      // If playing and we're not within the segment, jump to start
+      const segmentEnd = selectedClip.startTime + selectedClip.duration;
+      if (currentTime < selectedClip.startTime || currentTime >= segmentEnd) {
+        onSeek(selectedClip.startTime);
+      }
+    }
+  }, [isPlaying, selectedClip, currentTime, onSeek]);
+
+  // Handle segment end (for looping)
+  const handleSegmentEnd = () => {
+    if (selectedClip) {
+      console.log("🔄 Looping narration segment from:", selectedClip.startTime);
+      onSeek(selectedClip.startTime);
+    }
+  };
 
   const handleGenerateNarration = () => {
     if (!narrationAsset || !localScript.trim()) {
@@ -82,6 +104,19 @@ export default function NarrationEditor({ selectedClipId }: NarrationEditorProps
 
   return (
     <div className="h-full flex flex-col bg-background">
+      {/* Hidden Segment Audio Player - controlled by timeline */}
+      {selectedClip && narrationAsset?.sourceUrl && (
+        <SegmentAudioPlayer
+          audioUrl={`/api/storage/${narrationAsset.sourceUrl}?v=${updatedAt.getTime()}`}
+          segmentStartTime={selectedClip.startTime}
+          segmentDuration={selectedClip.duration}
+          isPlaying={isPlaying}
+          currentTime={currentTime}
+          onTimeUpdate={onSeek}
+          onSegmentEnd={handleSegmentEnd}
+        />
+      )}
+
       {/* Scrollable content area */}
       <div className="flex-1 overflow-y-auto px-6 pb-6 space-y-6">
         {/* Script Section */}
