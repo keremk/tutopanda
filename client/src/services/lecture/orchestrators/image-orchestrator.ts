@@ -35,6 +35,7 @@ export type ImageOrchestratorDeps = {
   saveFile: (buffer: Buffer, path: string) => Promise<void>;
   logger?: Logger;
   onImageProgress?: (current: number, total: number) => void | Promise<void>;
+  onPromptProgress?: (current: number, total: number) => void | Promise<void>;
 };
 
 /**
@@ -59,6 +60,7 @@ export async function generateLectureImages(
     saveFile,
     logger,
     onImageProgress,
+    onPromptProgress,
   } = deps;
 
   const segments = script.segments || [];
@@ -93,6 +95,9 @@ export async function generateLectureImages(
         prompt,
       });
     });
+
+    // Report progress after generating prompts for this segment
+    await onPromptProgress?.(segmentIndex + 1, segments.length);
   }
 
   logger?.info("Prompts generated", {

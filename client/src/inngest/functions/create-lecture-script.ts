@@ -126,7 +126,6 @@ export const createLectureScript = inngest.createFunction(
 
     const rawModelOutput = await step.run("generate-script", async () => {
       await publishStatus("Prompt received", 1);
-      await publishStatus("Drafting lecture with OpenAI", 1);
 
       log.info("Starting OpenAI generation", { promptLength: prompt.length });
 
@@ -209,8 +208,6 @@ export const createLectureScript = inngest.createFunction(
       if (!finalText?.trim()) {
         throw new Error("Model returned empty script output");
       }
-
-      await publishStatus("OpenAI response received", 1, "complete");
 
       return finalText;
     });

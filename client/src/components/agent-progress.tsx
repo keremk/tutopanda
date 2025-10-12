@@ -5,7 +5,9 @@ import {
   AlertTriangleIcon,
   BrainIcon,
   ChevronDownIcon,
+  ImageIcon,
   Loader2Icon,
+  MicIcon,
   NotebookPenIcon,
   XIcon,
   RotateCcwIcon,
@@ -100,6 +102,14 @@ const isAnalyzingMessage = (message: LectureStatusMessage) => {
   return analyzingPatterns.some((pattern) => pattern.test(message.message));
 };
 
+const isImageProgressMessage = (message: LectureStatusMessage) => {
+  return /created prompt|generated image/i.test(message.message);
+};
+
+const isNarrationProgressMessage = (message: LectureStatusMessage) => {
+  return /generated narration/i.test(message.message);
+};
+
 export const AgentProgress = ({
   lectureId,
   className,
@@ -126,6 +136,7 @@ export const AgentProgress = ({
   const [rerunningRun, setRerunningRun] = useState<string | null>(null);
   const [expandedRuns, setExpandedRuns] = useState<Set<string>>(new Set());
   const [rotatingMessageIndex, setRotatingMessageIndex] = useState(0);
+  const [finalizedReasoningMessages, setFinalizedReasoningMessages] = useState<Map<string, string>>(new Map());
 
   // Load historical workflow data on mount
   useEffect(() => {
@@ -360,6 +371,19 @@ export const AgentProgress = ({
       return newExpanded;
     });
   }, [runs]);
+
+  // Store the final rotating message when reasoning finalizes
+  useEffect(() => {
+    for (const run of runs) {
+      if (run.reasoning?.isFinal && !finalizedReasoningMessages.has(run.runId)) {
+        setFinalizedReasoningMessages(prev => {
+          const next = new Map(prev);
+          next.set(run.runId, REASONING_MESSAGES[rotatingMessageIndex]);
+          return next;
+        });
+      }
+    }
+  }, [runs, rotatingMessageIndex, finalizedReasoningMessages]);
 
   // Rotate reasoning messages for active reasoning runs
   useEffect(() => {
@@ -640,40 +664,97 @@ export const AgentProgress = ({
                         </div>
                       </TaskTrigger>
                       <TaskContent>
-                        {run.status === "in-progress" && step.step === 1 && run.reasoning && !run.reasoning.isFinal ? (
+                        {step.step === 1 && run.reasoning && !run.reasoning.isFinal ? (
                           <TaskItem className="flex items-start gap-3">
                             <Loader2Icon className="size-4 animate-spin text-muted-foreground" />
                             <span className="flex-1">{REASONING_MESSAGES[rotatingMessageIndex]}</span>
                           </TaskItem>
+                        ) : step.step === 1 && run.reasoning?.isFinal && finalizedReasoningMessages.has(run.runId) ? (
+                          <TaskItem className="flex items-start gap-3">
+                            <span className="flex-1">{finalizedReasoningMessages.get(run.runId)}</span>
+                          </TaskItem>
                         ) : null}
 
-                        {step.messages.filter((msg) => !isAnalyzingMessage(msg)).map((message, index) => {
-                          const markerClass =
-                            message.status === "complete"
-                              ? "bg-primary"
-                              : message.status === "error"
-                              ? "bg-destructive"
-                              : "bg-muted-foreground";
+                        {(() => {
+                          // Filter messages based on type
+                          const isImageStep = step.step === 3;
+                          const isNarrationStep = step.step === 5;
+
+                          const progressMessages = step.messages.filter((msg) => {
+                            if (isImageStep) return isImageProgressMessage(msg);
+                            if (isNarrationStep) return isNarrationProgressMessage(msg);
+                            return false;
+                          });
+
+                          const regularMessages = step.messages.filter(
+                            (msg) => !isAnalyzingMessage(msg) &&
+                              !isImageProgressMessage(msg) &&
+                              !isNarrationProgressMessage(msg)
+                          );
 
                           return (
-                            <TaskItem
-                              key={`${run.runId}-${step.step}-${message.timestamp}-${index}`}
-                              className={cn(
-                                "flex items-start gap-3",
-                                message.status === "complete" && "text-foreground",
-                                message.status === "error" && "text-destructive"
-                              )}
-                            >
-                              <span
-                                className={cn(
-                                  "mt-1.5 block size-1.5 rounded-full",
-                                  markerClass
-                                )}
-                              />
-                              <span className="flex-1">{message.message}</span>
-                            </TaskItem>
+                            <>
+                              {regularMessages.map((message, index) => {
+                                const markerClass =
+                                  message.status === "complete"
+                                    ? "bg-primary"
+                                    : message.status === "error"
+                                    ? "bg-destructive"
+                                    : "bg-muted-foreground";
+
+                                return (
+                                  <TaskItem
+                                    key={`${run.runId}-${step.step}-${message.timestamp}-${index}`}
+                                    className={cn(
+                                      "flex items-start gap-3",
+                                      message.status === "complete" && "text-foreground",
+                                      message.status === "error" && "text-destructive"
+                                    )}
+                                  >
+                                    <span
+                                      className={cn(
+                                        "mt-1.5 block size-1.5 rounded-full",
+                                        markerClass
+                                      )}
+                                    />
+                                    <span className="flex-1">{message.message}</span>
+                                  </TaskItem>
+                                );
+                              })}
+
+                              {progressMessages.length > 0 ? (
+                                <div className="mt-3 rounded-md border border-border/60 bg-muted/40 p-3">
+                                  <div className="mb-2 flex items-center gap-2">
+                                    {isImageStep ? (
+                                      <ImageIcon className="size-4 text-muted-foreground" />
+                                    ) : (
+                                      <MicIcon className="size-4 text-muted-foreground" />
+                                    )}
+                                    <h4 className="text-sm font-medium text-foreground">
+                                      {isImageStep ? "Image Generation Progress" : "Narration Generation Progress"}
+                                    </h4>
+                                  </div>
+                                  <div
+                                    ref={(node) => {
+                                      if (node) {
+                                        node.scrollTop = node.scrollHeight;
+                                      }
+                                    }}
+                                    className="max-h-[200px] overflow-y-auto rounded border border-border/40 bg-card/50 p-3"
+                                  >
+                                    <div className="space-y-1 text-xs text-muted-foreground">
+                                      {progressMessages.map((msg, index) => (
+                                        <div key={`${run.runId}-${step.step}-progress-${index}`}>
+                                          {msg.message}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                </div>
+                              ) : null}
+                            </>
                           );
-                        })}
+                        })()}
 
                         {showReasoning && run.reasoning?.text ? (
                           <div className="mt-3 rounded-md border border-border/60 bg-muted/40 p-3">
@@ -696,23 +777,6 @@ export const AgentProgress = ({
                           </div>
                         ) : null}
 
-                        {showResult ? (
-                          <TaskItem className="flex items-center justify-between gap-3 text-foreground">
-                            <div>
-                              <p className="text-sm font-medium">Script drafted</p>
-                              <p className="text-xs text-muted-foreground">
-                                Open the Script tab to review the generated JSON.
-                              </p>
-                            </div>
-                            <Button
-                              size="sm"
-                              variant={isSelected ? "default" : "outline"}
-                              onClick={() => onViewScript?.(run.runId)}
-                            >
-                              View script
-                            </Button>
-                          </TaskItem>
-                        ) : null}
                       </TaskContent>
                     </Task>
                   );

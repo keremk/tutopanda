@@ -133,6 +133,12 @@ export const generateSegmentImages = inngest.createFunction(
             await storageHandler.saveFile(buffer, path);
           },
           logger: log,
+          onPromptProgress: async (current, total) => {
+            await publishStatus(
+              `Created prompt for segment ${current}/${total}`,
+              workflowStep
+            );
+          },
           onImageProgress: async (current, total) => {
             await publishStatus(
               `Generated image ${current}/${total}`,
