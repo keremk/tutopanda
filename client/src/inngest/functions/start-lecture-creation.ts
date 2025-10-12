@@ -9,6 +9,7 @@ import type { ImageGenerationDefaults, NarrationGenerationDefaults, NarrationSet
 import { DEFAULT_NARRATION_GENERATION_DEFAULTS } from "@/types/types";
 import { getLectureById } from "@/data/lecture/repository";
 import { getProjectSettings } from "@/data/project";
+import { updateWorkflowRun } from "@/data/workflow-runs";
 
 export type LectureCreationEventData = {
   prompt: string;
@@ -33,6 +34,11 @@ export const startLectureCreation = inngest.createFunction(
 
     log.info("Starting lecture workflow");
 
+    // Update workflow status to running
+    await step.run("update-workflow-status-running", async () => {
+      await updateWorkflowRun({ runId, status: "running" });
+    });
+
     // Send immediate progress update
     const { publishStatus } = createLectureProgressPublisher({
       publish,
@@ -41,7 +47,7 @@ export const startLectureCreation = inngest.createFunction(
       totalSteps: LECTURE_WORKFLOW_TOTAL_STEPS,
       log,
     });
-    await publishStatus("Starting lecture creation", 0);
+    await publishStatus("Processing lecture request", 0);
 
     // Get project settings (no longer confirming config from prompt)
     const projectSettings = await step.run("get-project-settings", async () => {
@@ -175,6 +181,11 @@ export const startLectureCreation = inngest.createFunction(
       generatedNarration: generatedNarration?.narration?.length ?? 0,
       hasMusic: Boolean(generatedMusic?.music),
       hasTimeline: Boolean(timeline?.timeline),
+    });
+
+    // Update workflow status to succeeded
+    await step.run("update-workflow-status-succeeded", async () => {
+      await updateWorkflowRun({ runId, status: "succeeded" });
     });
 
     return { runId };

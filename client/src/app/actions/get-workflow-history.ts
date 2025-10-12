@@ -6,7 +6,7 @@ import type { LectureProgressMessage, LectureRunStatus } from "@/inngest/functio
 import { LECTURE_WORKFLOW_TOTAL_STEPS } from "@/inngest/functions/workflow-utils";
 
 const STEP_NAMES = [
-  "Configuration ready for review",
+  "Starting lecture creation",
   "OpenAI response received",
   "Lecture script ready",
   "Images generated successfully",
@@ -27,6 +27,24 @@ export async function getWorkflowHistoryAction(lectureId: number, limit: number 
     const { lecture, ...workflowRun } = run;
     const completedSteps = (workflowRun.context?.completedSteps as number[]) || [];
     const totalSteps = workflowRun.totalSteps || LECTURE_WORKFLOW_TOTAL_STEPS;
+
+    // Add immediate feedback for queued runs
+    if (workflowRun.status === "queued") {
+      messages.push({
+        topic: "progress",
+        data: {
+          type: "status",
+          runId: workflowRun.runId,
+          step: 0,
+          totalSteps,
+          status: "in-progress",
+          message: "Queued for processing",
+          timestamp: workflowRun.createdAt.toISOString(),
+        },
+      });
+      // For queued runs, we only show the initial message
+      continue;
+    }
 
     // Add config message if lecture has config
     if (lecture.config) {
