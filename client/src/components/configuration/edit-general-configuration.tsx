@@ -40,16 +40,6 @@ export function EditGeneralConfiguration({ config, onChange }: EditGeneralConfig
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="scriptModel">Script Model</Label>
-          <Input
-            id="scriptModel"
-            value={config.scriptModel}
-            onChange={(e) => onChange({ ...config, scriptModel: e.target.value })}
-            placeholder="e.g., gpt-5"
-          />
-        </div>
-
-        <div className="space-y-2">
           <Label htmlFor="audience">Audience</Label>
           <Select
             value={config.audience}

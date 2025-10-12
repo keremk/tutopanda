@@ -82,6 +82,24 @@ const getTimestamp = (value?: string) => {
   return Number.isFinite(parsed) ? parsed : Date.now();
 };
 
+const REASONING_MESSAGES = [
+  "🤔 Pondering your request...",
+  "💡 Connecting the dots...",
+  "🧠 Deep in thought...",
+  "✨ Crafting something special...",
+  "🎯 Focusing on the details...",
+];
+
+const isAnalyzingMessage = (message: LectureStatusMessage) => {
+  const analyzingPatterns = [
+    /analyzing/i,
+    /pondering/i,
+    /thinking/i,
+    /drafting/i,
+  ];
+  return analyzingPatterns.some((pattern) => pattern.test(message.message));
+};
+
 export const AgentProgress = ({
   lectureId,
   className,
@@ -107,6 +125,7 @@ export const AgentProgress = ({
   const [cancelingRun, setCancelingRun] = useState<string | null>(null);
   const [rerunningRun, setRerunningRun] = useState<string | null>(null);
   const [expandedRuns, setExpandedRuns] = useState<Set<string>>(new Set());
+  const [rotatingMessageIndex, setRotatingMessageIndex] = useState(0);
 
   // Load historical workflow data on mount
   useEffect(() => {
@@ -340,6 +359,23 @@ export const AgentProgress = ({
       }
       return newExpanded;
     });
+  }, [runs]);
+
+  // Rotate reasoning messages for active reasoning runs
+  useEffect(() => {
+    const hasActiveReasoning = runs.some(
+      (run) => run.status === "in-progress" && run.reasoning && !run.reasoning.isFinal
+    );
+
+    if (!hasActiveReasoning) {
+      return;
+    }
+
+    const interval = setInterval(() => {
+      setRotatingMessageIndex((prev) => (prev + 1) % REASONING_MESSAGES.length);
+    }, 3000);
+
+    return () => clearInterval(interval);
   }, [runs]);
 
   const hasRuns = runs.length > 0;
@@ -604,7 +640,14 @@ export const AgentProgress = ({
                         </div>
                       </TaskTrigger>
                       <TaskContent>
-                        {step.messages.map((message, index) => {
+                        {run.status === "in-progress" && step.step === 1 && run.reasoning && !run.reasoning.isFinal ? (
+                          <TaskItem className="flex items-start gap-3">
+                            <Loader2Icon className="size-4 animate-spin text-muted-foreground" />
+                            <span className="flex-1">{REASONING_MESSAGES[rotatingMessageIndex]}</span>
+                          </TaskItem>
+                        ) : null}
+
+                        {step.messages.filter((msg) => !isAnalyzingMessage(msg)).map((message, index) => {
                           const markerClass =
                             message.status === "complete"
                               ? "bg-primary"
@@ -632,13 +675,25 @@ export const AgentProgress = ({
                           );
                         })}
 
-                        {showReasoning ? (
-                          <TaskItem className="flex items-start gap-3 whitespace-pre-wrap">
-                            <span className="mt-1.5 block size-1.5 rounded-full bg-muted-foreground" />
-                            <span className="flex-1 text-xs leading-relaxed text-muted-foreground">
-                              {run.reasoning?.text}
-                            </span>
-                          </TaskItem>
+                        {showReasoning && run.reasoning?.text ? (
+                          <div className="mt-3 rounded-md border border-border/60 bg-muted/40 p-3">
+                            <div className="mb-2 flex items-center gap-2">
+                              <BrainIcon className="size-4 text-muted-foreground" />
+                              <h4 className="text-sm font-medium text-foreground">AI Reasoning Process</h4>
+                            </div>
+                            <div
+                              ref={(node) => {
+                                if (node) {
+                                  node.scrollTop = node.scrollHeight;
+                                }
+                              }}
+                              className="max-h-[200px] overflow-y-auto rounded border border-border/40 bg-card/50 p-3"
+                            >
+                              <p className="whitespace-pre-wrap text-xs leading-relaxed text-muted-foreground">
+                                {run.reasoning.text}
+                              </p>
+                            </div>
+                          </div>
                         ) : null}
 
                         {showResult ? (

@@ -3,7 +3,7 @@
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { SoundEffectConfig } from "@/types/types";
-import { soundEffectModelValues } from "@/lib/models";
+import { soundEffectModelOptions } from "@/lib/models";
 
 interface EditSoundEffectsConfigurationProps {
   config: SoundEffectConfig;
@@ -22,15 +22,15 @@ export function EditSoundEffectsConfiguration({ config, onChange }: EditSoundEff
           <Label htmlFor="soundEffectModel">Model</Label>
           <Select
             value={config.model}
-            onValueChange={(value) => onChange({ ...config, model: value as typeof soundEffectModelValues[number] })}
+            onValueChange={(value) => onChange({ ...config, model: value })}
           >
             <SelectTrigger id="soundEffectModel">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {soundEffectModelValues.map((model) => (
-                <SelectItem key={model} value={model}>
-                  {model}
+              {soundEffectModelOptions.map((model) => (
+                <SelectItem key={model.id} value={model.id}>
+                  {model.name}
                 </SelectItem>
               ))}
             </SelectContent>

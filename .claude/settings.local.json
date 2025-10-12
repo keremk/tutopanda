@@ -4,7 +4,9 @@
       "Bash(pnpm type-check:*)",
       "Read(//Users/keremk/Desktop/**)",
       "WebSearch",
-      "WebFetch(domain:www.remotion.dev)"
+      "WebFetch(domain:www.remotion.dev)",
+      "WebFetch(domain:sdk.vercel.ai)",
+      "WebFetch(domain:ai-sdk.dev)"
     ],
     "deny": [],
     "ask": []

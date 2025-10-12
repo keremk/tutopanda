@@ -12,6 +12,7 @@ import type { Logger } from "./types";
 export type BatchOptions = {
   maxConcurrency?: number;
   onBatchComplete?: (batchIndex: number, totalBatches: number) => void;
+  onItemComplete?: (itemIndex: number, totalItems: number) => void | Promise<void>;
 };
 
 /**
@@ -28,7 +29,7 @@ export async function batchWithConcurrency<T, R>(
   operation: (item: T, index: number) => Promise<R>,
   options?: BatchOptions
 ): Promise<R[]> {
-  const { maxConcurrency = 5, onBatchComplete } = options || {};
+  const { maxConcurrency = 5, onBatchComplete, onItemComplete } = options || {};
 
   const results: R[] = [];
   const batches: T[][] = [];
@@ -44,9 +45,11 @@ export async function batchWithConcurrency<T, R>(
     const batchStartIndex = batchIndex * maxConcurrency;
 
     const batchResults = await Promise.all(
-      batch.map((item, indexInBatch) =>
-        operation(item, batchStartIndex + indexInBatch)
-      )
+      batch.map(async (item, indexInBatch) => {
+        const result = await operation(item, batchStartIndex + indexInBatch);
+        await onItemComplete?.(batchStartIndex + indexInBatch + 1, items.length);
+        return result;
+      })
     );
 
     results.push(...batchResults);

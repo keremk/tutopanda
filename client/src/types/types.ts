@@ -230,16 +230,23 @@ export const imageStyleValues = ["Ghibli", "Pixar", "Animated", "Realistic"] as 
 export const imageFormatValues = ["JPG", "PNG"] as const;
 export const videoDurationSegmentValues = ["5s", "10s"] as const;
 export const segmentLengthValues = ["5s", "10s", "15s"] as const;
+export const reasoningEffortValues = ["minimal", "low", "medium", "high"] as const;
+export const reasoningSummaryValues = ["auto", "concise", "detailed"] as const;
 
 export const generalConfigSchema = z.object({
   duration: z.enum(videoDurationValues),
-  scriptModel: z.string(),
   audience: z.enum(audienceValues),
   useSubtitles: z.boolean(),
   language: z.string(),
   subtitleLanguage: z.string().optional(),
   useVideo: z.boolean(),
   maxVideoSegments: z.number().int().min(0).optional(),
+});
+
+export const researchConfigSchema = z.object({
+  model: z.string(),
+  reasoningEffort: z.enum(reasoningEffortValues),
+  reasoningSummary: z.enum(reasoningSummaryValues),
 });
 
 export const imageConfigSchema = z.object({
@@ -273,6 +280,7 @@ export const soundEffectConfigSchema = z.object({
 
 export const lectureConfigSchema = z.object({
   general: generalConfigSchema,
+  research: researchConfigSchema,
   image: imageConfigSchema,
   video: videoConfigSchema,
   narration: narrationConfigSchema,
@@ -342,6 +350,7 @@ export const DEFAULT_NARRATION_GENERATION_DEFAULTS: NarrationGenerationDefaults 
 
 export type LectureConfig = z.infer<typeof lectureConfigSchema>;
 export type GeneralConfig = z.infer<typeof generalConfigSchema>;
+export type ResearchConfig = z.infer<typeof researchConfigSchema>;
 export type ImageConfig = z.infer<typeof imageConfigSchema>;
 export type VideoConfig = z.infer<typeof videoConfigSchema>;
 export type NarrationConfig = z.infer<typeof narrationConfigSchema>;
@@ -351,12 +360,16 @@ export type SoundEffectConfig = z.infer<typeof soundEffectConfigSchema>;
 export const DEFAULT_LECTURE_CONFIG: LectureConfig = {
   general: {
     duration: "3min",
-    scriptModel: DEFAULT_SCRIPT_MODEL,
     audience: "Adults",
     useSubtitles: false,
     language: "en",
     useVideo: false,
     maxVideoSegments: 0,
+  },
+  research: {
+    model: DEFAULT_SCRIPT_MODEL,
+    reasoningEffort: "medium",
+    reasoningSummary: "detailed",
   },
   image: {
     size: "1080",

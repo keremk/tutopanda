@@ -10,7 +10,7 @@ import {
   imageStyleValues,
   imageFormatValues,
 } from "@/types/types";
-import { imageModelValues } from "@/lib/models";
+import { imageModelOptions } from "@/lib/models";
 
 interface EditImageConfigurationProps {
   config: ImageConfig;
@@ -118,15 +118,15 @@ export function EditImageConfiguration({ config, onChange }: EditImageConfigurat
           <Label htmlFor="imageModel">Model</Label>
           <Select
             value={config.model}
-            onValueChange={(value) => onChange({ ...config, model: value as typeof imageModelValues[number] })}
+            onValueChange={(value) => onChange({ ...config, model: value })}
           >
             <SelectTrigger id="imageModel">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {imageModelValues.map((model) => (
-                <SelectItem key={model} value={model}>
-                  {model}
+              {imageModelOptions.map((model) => (
+                <SelectItem key={model.id} value={model.id}>
+                  {model.name}
                 </SelectItem>
               ))}
             </SelectContent>

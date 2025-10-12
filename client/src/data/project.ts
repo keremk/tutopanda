@@ -142,7 +142,12 @@ export async function getProjectSettings(
 
   // Return settings if they exist, otherwise return default config
   if (project.settings) {
-    return project.settings as LectureConfig;
+    const settings = project.settings as LectureConfig;
+    // Migrate old configs that don't have research section
+    return {
+      ...settings,
+      research: settings.research ?? DEFAULT_LECTURE_CONFIG.research,
+    };
   }
 
   return DEFAULT_LECTURE_CONFIG;

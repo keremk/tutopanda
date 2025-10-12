@@ -31,6 +31,7 @@ export type AudioOrchestratorDeps = {
   generateAudios?: typeof generateAudiosThrottled;
   saveFile: (buffer: Buffer, path: string) => Promise<void>;
   logger?: Logger;
+  onAudioProgress?: (current: number, total: number) => void | Promise<void>;
 };
 
 /**
@@ -49,7 +50,7 @@ export async function generateLectureAudio(
 ): Promise<NarrationSettings[]> {
   const { script, voice, model, runId } = request;
   const { userId, projectId, maxConcurrency = 5 } = context;
-  const { generateAudios = generateAudiosThrottled, saveFile, logger } = deps;
+  const { generateAudios = generateAudiosThrottled, saveFile, logger, onAudioProgress } = deps;
 
   const segments = script.segments || [];
 
@@ -74,6 +75,9 @@ export async function generateLectureAudio(
     logger,
     onBatchComplete: (batchIndex, totalBatches) => {
       logger?.info(`Completed audio batch ${batchIndex}/${totalBatches}`);
+    },
+    onItemComplete: async (current, total) => {
+      await onAudioProgress?.(current, total);
     },
   });
 

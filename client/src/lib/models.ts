@@ -21,6 +21,12 @@ export const imageModelValues = [
   IMAGE_MODELS.QWEN_IMAGE,
 ] as const;
 
+export const imageModelOptions = [
+  { id: IMAGE_MODELS.BYTEDANCE_SEEDREAM_4, name: "Bytedance Seedream 4" },
+  { id: IMAGE_MODELS.GOOGLE_NANO_BANANA, name: "Google Nano Banana" },
+  { id: IMAGE_MODELS.QWEN_IMAGE, name: "Qwen Image" },
+] as const;
+
 export const DEFAULT_IMAGE_MODEL = IMAGE_MODELS.BYTEDANCE_SEEDREAM_4;
 
 // ============================================================================
@@ -89,6 +95,11 @@ export const musicModelValues = [
   MUSIC_MODELS.ELEVENLABS,
 ] as const;
 
+export const musicModelOptions = [
+  { id: MUSIC_MODELS.STABILITY_STABLE_AUDIO_2_5, name: "Stable Audio 2.5" },
+  { id: MUSIC_MODELS.ELEVENLABS, name: "ElevenLabs" },
+] as const;
+
 export const DEFAULT_MUSIC_MODEL = MUSIC_MODELS.STABILITY_STABLE_AUDIO_2_5;
 
 /**
@@ -113,6 +124,11 @@ export const SOUND_EFFECT_MODELS = {
 export const soundEffectModelValues = [
   SOUND_EFFECT_MODELS.DECLARE_LAB_TANGO,
   SOUND_EFFECT_MODELS.ELEVENLABS,
+] as const;
+
+export const soundEffectModelOptions = [
+  { id: SOUND_EFFECT_MODELS.DECLARE_LAB_TANGO, name: "Declare Lab Tango" },
+  { id: SOUND_EFFECT_MODELS.ELEVENLABS, name: "ElevenLabs" },
 ] as const;
 
 export const DEFAULT_SOUND_EFFECT_MODEL = SOUND_EFFECT_MODELS.ELEVENLABS;
@@ -141,6 +157,13 @@ export const LLM_MODELS = {
   GPT_4O: "gpt-4o",
   GPT_4O_MINI: "gpt-4o-mini",
 } as const;
+
+export const llmModelOptions = [
+  { id: LLM_MODELS.GPT_5, name: "GPT-5" },
+  { id: LLM_MODELS.GPT_5_MINI, name: "GPT-5 Mini" },
+  { id: LLM_MODELS.GPT_4O, name: "GPT-4o" },
+  { id: LLM_MODELS.GPT_4O_MINI, name: "GPT-4o Mini" },
+] as const;
 
 export const DEFAULT_SCRIPT_MODEL = LLM_MODELS.GPT_5;
 

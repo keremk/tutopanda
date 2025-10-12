@@ -3,7 +3,7 @@
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { MusicConfig } from "@/types/types";
-import { musicModelValues } from "@/lib/models";
+import { musicModelOptions } from "@/lib/models";
 
 interface EditMusicConfigurationProps {
   config: MusicConfig;
@@ -22,15 +22,15 @@ export function EditMusicConfiguration({ config, onChange }: EditMusicConfigurat
           <Label htmlFor="musicModel">Model</Label>
           <Select
             value={config.model}
-            onValueChange={(value) => onChange({ ...config, model: value as typeof musicModelValues[number] })}
+            onValueChange={(value) => onChange({ ...config, model: value })}
           >
             <SelectTrigger id="musicModel">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {musicModelValues.map((model) => (
-                <SelectItem key={model} value={model}>
-                  {model}
+              {musicModelOptions.map((model) => (
+                <SelectItem key={model.id} value={model.id}>
+                  {model.name}
                 </SelectItem>
               ))}
             </SelectContent>

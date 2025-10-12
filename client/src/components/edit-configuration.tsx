@@ -7,12 +7,15 @@ import { cn } from "@/lib/utils";
 import type {
   LectureConfig,
   GeneralConfig,
+  ResearchConfig,
   ImageConfig,
   NarrationConfig,
   MusicConfig,
   SoundEffectConfig,
 } from "@/types/types";
+import { DEFAULT_LECTURE_CONFIG } from "@/types/types";
 import { EditGeneralConfiguration } from "./configuration/edit-general-configuration";
+import { EditResearchConfiguration } from "./configuration/edit-research-configuration";
 import { EditImageConfiguration } from "./configuration/edit-image-configuration";
 import { EditNarrationConfiguration } from "./configuration/edit-narration-configuration";
 import { EditMusicConfiguration } from "./configuration/edit-music-configuration";
@@ -26,10 +29,11 @@ interface EditConfigurationProps {
   onConfigEditComplete?: (runId: string, config: LectureConfig) => void;
 }
 
-type ConfigSection = "general" | "image" | "narration" | "music" | "effects";
+type ConfigSection = "general" | "research" | "image" | "narration" | "music" | "effects";
 
 const sections: { id: ConfigSection; label: string }[] = [
   { id: "general", label: "General" },
+  { id: "research", label: "Research" },
   { id: "image", label: "Image" },
   { id: "narration", label: "Narration" },
   { id: "music", label: "Music" },
@@ -44,11 +48,21 @@ export default function EditConfiguration({
   onConfigEditComplete,
 }: EditConfigurationProps) {
   const [activeSection, setActiveSection] = useState<ConfigSection>("general");
-  const [editedConfig, setEditedConfig] = useState<LectureConfig | null>(config);
+
+  // Ensure config has research section (for migration from older configs)
+  const normalizeConfig = (cfg: LectureConfig | null): LectureConfig | null => {
+    if (!cfg) return null;
+    return {
+      ...cfg,
+      research: cfg.research ?? DEFAULT_LECTURE_CONFIG.research,
+    };
+  };
+
+  const [editedConfig, setEditedConfig] = useState<LectureConfig | null>(normalizeConfig(config));
 
   // Sync editedConfig when config prop changes (e.g., when user clicks Edit in agent progress)
   useEffect(() => {
-    setEditedConfig(config);
+    setEditedConfig(normalizeConfig(config));
   }, [config]);
 
   const handleAction = () => {
@@ -116,6 +130,12 @@ export default function EditConfiguration({
                 <EditGeneralConfiguration
                   config={editedConfig.general}
                   onChange={(general: GeneralConfig) => setEditedConfig({ ...editedConfig, general })}
+                />
+              )}
+              {activeSection === "research" && (
+                <EditResearchConfiguration
+                  config={editedConfig.research}
+                  onChange={(research: ResearchConfig) => setEditedConfig({ ...editedConfig, research })}
                 />
               )}
               {activeSection === "image" && (

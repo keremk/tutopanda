@@ -6,7 +6,7 @@ import {
   createScriptSystemPrompt,
   generatedScriptSchema,
 } from "@/prompts/create-script";
-import type { LectureScript } from "@/types/types";
+import type { LectureScript, ResearchConfig } from "@/types/types";
 import { updateLectureContent } from "@/services/lecture/persist";
 import { getLectureById } from "@/data/lecture/repository";
 import { getInngestApp } from "@/inngest/client";
@@ -19,7 +19,7 @@ import { LLM_MODELS } from "@/lib/models";
 
 const inngest = getInngestApp();
 
-const REASONING_MIN_DELTA = 120;
+const REASONING_MIN_DELTA = 40;
 
 const safeSuggestedFormat = (value: unknown): "image" | "map" =>
   value === "map" || value === "image" ? value : "image";
@@ -72,6 +72,7 @@ export type CreateLectureScriptEvent = {
   runId: string;
   lectureId: number;
   totalWorkflowSteps?: number;
+  researchConfig?: ResearchConfig;
 };
 
 export type CreateLectureScriptResult = {
@@ -89,7 +90,13 @@ export const createLectureScript = inngest.createFunction(
       runId,
       lectureId,
       totalWorkflowSteps = LECTURE_WORKFLOW_TOTAL_STEPS,
+      researchConfig,
     } = event.data as CreateLectureScriptEvent;
+
+    // Use provided research config or fallback to defaults
+    const model = researchConfig?.model ?? LLM_MODELS.GPT_5;
+    const reasoningEffort = researchConfig?.reasoningEffort ?? "medium";
+    const reasoningSummary = researchConfig?.reasoningSummary ?? "detailed";
 
     const log = createLectureLogger(runId, logger);
     const { publishStatus, publishReasoning, publishResult } =
@@ -124,7 +131,7 @@ export const createLectureScript = inngest.createFunction(
       log.info("Starting OpenAI generation", { promptLength: prompt.length });
 
       const result = streamText({
-        model: openai(LLM_MODELS.GPT_5),
+        model: openai(model),
         system: createScriptSystemPrompt,
         prompt: buildCreateScriptPrompt(prompt),
         experimental_output: Output.object({
@@ -132,8 +139,8 @@ export const createLectureScript = inngest.createFunction(
         }),
         providerOptions: {
           openai: {
-            reasoningSummary: "detailed",
-            reasoningEffort: "medium",
+            reasoningSummary,
+            reasoningEffort,
             include: ["reasoning.encrypted_content"],
           },
         },
@@ -194,6 +201,8 @@ export const createLectureScript = inngest.createFunction(
       if (!reasoningFinalised && reasoningBuffer.trim()) {
         await publishReasoningIfNeeded(true);
       }
+
+      await publishStatus("Finalizing script...", 1);
 
       const finalText = await result.text;
 

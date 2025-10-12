@@ -34,6 +34,7 @@ export type ImageOrchestratorDeps = {
   generateImages?: typeof generateImagesThrottled;
   saveFile: (buffer: Buffer, path: string) => Promise<void>;
   logger?: Logger;
+  onImageProgress?: (current: number, total: number) => void | Promise<void>;
 };
 
 /**
@@ -57,6 +58,7 @@ export async function generateLectureImages(
     generateImages = generateImagesThrottled,
     saveFile,
     logger,
+    onImageProgress,
   } = deps;
 
   const segments = script.segments || [];
@@ -124,6 +126,9 @@ export async function generateLectureImages(
     logger,
     onBatchComplete: (batchIndex, totalBatches) => {
       logger?.info(`Completed batch ${batchIndex}/${totalBatches}`);
+    },
+    onItemComplete: async (current, total) => {
+      await onImageProgress?.(current, total);
     },
   });
 

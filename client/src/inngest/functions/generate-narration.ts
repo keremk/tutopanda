@@ -150,6 +150,12 @@ export const generateNarration = inngest.createFunction(
             await storageHandler.saveFile(buffer, path);
           },
           logger: log,
+          onAudioProgress: async (current, total) => {
+            await publishStatus(
+              `Generated narration ${current}/${total}`,
+              workflowStep
+            );
+          },
         }
       );
     });
