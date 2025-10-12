@@ -5,7 +5,7 @@ import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 
 import { db } from "@/db/db";
-import { createProject } from "@/data/project";
+import { getOrCreateDefaultProject } from "@/data/project";
 import { createVideoLecture } from "@/data/lecture/repository";
 import { createWorkflowRun } from "@/data/workflow-runs";
 import { getSession } from "@/lib/session";
@@ -20,32 +20,13 @@ import {
 
 const inngest = getInngestApp();
 
-const MAX_PROJECT_NAME_LENGTH = 80;
-
-const deriveProjectName = (prompt: string) => {
-  const firstLine = prompt
-    .split("\n")
-    .map((line) => line.trim())
-    .find((line) => line.length > 0);
-
-  if (!firstLine) {
-    return null;
-  }
-
-  if (firstLine.length <= MAX_PROJECT_NAME_LENGTH) {
-    return firstLine;
-  }
-
-  return `${firstLine.slice(0, MAX_PROJECT_NAME_LENGTH - 3)}...`;
-};
-
-type CreateProjectWithLectureInput = {
+type CreateLectureInput = {
   prompt: string;
 };
 
-export async function createProjectWithLectureAction({
+export async function createLectureAction({
   prompt,
-}: CreateProjectWithLectureInput) {
+}: CreateLectureInput) {
   const cleanedPrompt = prompt.trim();
 
   if (!cleanedPrompt) {
@@ -56,17 +37,15 @@ export async function createProjectWithLectureAction({
   const runId = randomUUID();
 
   const { project, lecture } = await db.transaction(async (tx) => {
-    const project = await createProject(
-      {
-        userId: user.id,
-        name: deriveProjectName(cleanedPrompt),
-      },
-      tx
-    );
+    // Get or create the user's default project
+    const project = await getOrCreateDefaultProject(user.id, tx);
+
+    // Use project settings if available, otherwise use default config
+    const config = (project.settings as any) ?? DEFAULT_LECTURE_CONFIG;
 
     const lecture = await createVideoLecture({
       projectId: project.id,
-      config: DEFAULT_LECTURE_CONFIG
+      config
     }, tx);
 
     await createWorkflowRun(

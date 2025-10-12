@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useRef, useState, useTransition } from "react";
 import type { ChatStatus } from "ai";
 
-import { createProjectWithLectureAction } from "@/app/actions/create-project";
+import { createLectureAction } from "@/app/actions/create-project";
 import {
   PromptInput,
   PromptInputAttachments,
@@ -64,7 +64,7 @@ export function CreatePageContent({ lectures }: CreatePageContentProps) {
     setSubmitStatus("submitted");
 
     startTransition(() => {
-      createProjectWithLectureAction({ prompt: text })
+      createLectureAction({ prompt: text })
         .then(({ lectureId }) => {
           formElement.reset();
           setPrompt("");
@@ -72,7 +72,7 @@ export function CreatePageContent({ lectures }: CreatePageContentProps) {
           router.push(`/edit/${lectureId}`);
         })
         .catch((error) => {
-          console.error("Failed to create project", error);
+          console.error("Failed to create lecture", error);
           setSubmitStatus("error");
           toast({
             title: "Something went wrong",

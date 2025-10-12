@@ -29,6 +29,20 @@
       "when": 1759318301697,
       "tag": "0003_public_baron_strucker",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1760279754304,
+      "tag": "0004_nappy_luckman",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1760282092436,
+      "tag": "0005_messy_scrambler",
+      "breakpoints": true
     }
   ]
 }

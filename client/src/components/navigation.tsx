@@ -18,7 +18,9 @@ import { useToast } from "@/hooks/use-toast";
 
 const navigationItems = [
   { name: "Create", href: "/create" },
+  { name: "Edit", href: "/edit" },
   { name: "Learn", href: "/learn" },
+  { name: "Settings", href: "/settings" },
 ];
 
 export function Navigation() {

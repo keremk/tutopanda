@@ -1,4 +1,5 @@
 import {
+  boolean,
   integer,
   jsonb,
   pgTable,
@@ -17,6 +18,8 @@ export const projectsTable = pgTable("projects", {
     .notNull()
     .references(() => user.id, { onDelete: "cascade" }),
   name: text("name"),
+  isDefault: boolean("is_default").notNull().default(false),
+  settings: jsonb("settings"),
 });
 
 export type InsertProject = typeof projectsTable.$inferInsert;
@@ -28,8 +31,8 @@ export const videoLecturesTable = pgTable("video_lectures", {
     .notNull()
     .references(() => projectsTable.id, { onDelete: "cascade" }), 
   title: text("title").notNull().default("Untitled Lecture"),
+  prompt: text("prompt"),
   summary: text("summary"),
-  config: jsonb("config"),
   script: jsonb("script"),
   images: jsonb("images"),
   narration: jsonb("narration"),

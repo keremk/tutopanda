@@ -5,6 +5,7 @@ import { and, desc, eq } from "drizzle-orm";
 import { db } from "@/db/db";
 import { projectsTable, type SelectProject } from "@/db/app-schema";
 import { getLatestVideoLectureForProject } from "@/data/lecture/repository";
+import { DEFAULT_LECTURE_CONFIG, type LectureConfig } from "@/types/types";
 
 type DbOrTx =
   | typeof db
@@ -73,6 +74,46 @@ export async function getProjectById(
   return project ?? null;
 }
 
+export async function getOrCreateDefaultProject(
+  userId: string,
+  database?: DbOrTx
+): Promise<SelectProject> {
+  const dbClient = resolveDb(database);
+
+  // Try to find existing default project
+  const [existingDefault] = await dbClient
+    .select()
+    .from(projectsTable)
+    .where(
+      and(
+        eq(projectsTable.createdBy, userId),
+        eq(projectsTable.isDefault, true)
+      )
+    )
+    .limit(1);
+
+  if (existingDefault) {
+    return existingDefault;
+  }
+
+  // Create default project if none exists
+  const [newDefault] = await dbClient
+    .insert(projectsTable)
+    .values({
+      createdBy: userId,
+      name: "My Lectures",
+      isDefault: true,
+      settings: DEFAULT_LECTURE_CONFIG,
+    })
+    .returning();
+
+  if (!newDefault) {
+    throw new Error("Failed to create default project");
+  }
+
+  return newDefault;
+}
+
 export async function listProjectsWithLatestLecture(
   userId: string,
   database?: DbOrTx
@@ -91,4 +132,42 @@ export async function listProjectsWithLatestLecture(
   );
 
   return results;
+}
+
+export async function getProjectSettings(
+  userId: string,
+  database?: DbOrTx
+): Promise<LectureConfig> {
+  const project = await getOrCreateDefaultProject(userId, database);
+
+  // Return settings if they exist, otherwise return default config
+  if (project.settings) {
+    return project.settings as LectureConfig;
+  }
+
+  return DEFAULT_LECTURE_CONFIG;
+}
+
+export async function updateProjectSettings(
+  userId: string,
+  settings: LectureConfig,
+  database?: DbOrTx
+): Promise<SelectProject> {
+  const dbClient = resolveDb(database);
+
+  // Get the default project
+  const project = await getOrCreateDefaultProject(userId, database);
+
+  // Update settings
+  const [updated] = await dbClient
+    .update(projectsTable)
+    .set({ settings })
+    .where(eq(projectsTable.id, project.id))
+    .returning();
+
+  if (!updated) {
+    throw new Error("Failed to update project settings");
+  }
+
+  return updated;
 }
