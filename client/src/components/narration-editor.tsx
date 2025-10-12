@@ -23,7 +23,7 @@ export default function NarrationEditor({
   isPlaying,
   onSeek
 }: NarrationEditorProps) {
-  const { timeline, content, lectureId, updatedAt } = useLectureEditor();
+  const { timeline, content, lectureId, updatedAt, projectSettings } = useLectureEditor();
   const [isGenerating, startTransition] = useTransition();
 
   // Find the selected clip
@@ -46,11 +46,11 @@ export default function NarrationEditor({
   useEffect(() => {
     if (selectedClip) {
       setLocalScript(narrationAsset?.finalScript || "");
-      setLocalModel(narrationAsset?.model || content.config?.narration?.model || DEFAULT_NARRATION_MODEL);
-      setLocalVoice(narrationAsset?.voice || content.config?.narration?.voice || "");
-      setLocalEmotion(content.config?.narration?.emotion || "");
+      setLocalModel(narrationAsset?.model || projectSettings.narration.model || DEFAULT_NARRATION_MODEL);
+      setLocalVoice(narrationAsset?.voice || projectSettings.narration.voice || "");
+      setLocalEmotion(projectSettings.narration.emotion || "");
     }
-  }, [selectedClipId, selectedClip, narrationAsset, content.config?.narration?.model, content.config?.narration?.voice, content.config?.narration?.emotion]);
+  }, [selectedClipId, selectedClip, narrationAsset, projectSettings.narration.model, projectSettings.narration.voice, projectSettings.narration.emotion]);
 
   // Auto-seek to segment start when play button pressed
   useEffect(() => {

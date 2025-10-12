@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { getInngestApp } from "@/inngest/client";
 import { LECTURE_WORKFLOW_TOTAL_STEPS } from "@/inngest/functions/workflow-utils";
 import { getLectureById } from "@/data/lecture/repository";
+import { getProjectSettings } from "@/data/project";
 import {
   createWorkflowRun,
   getWorkflowRun,
@@ -196,7 +197,9 @@ async function main() {
     throw new Error(`Lecture ${lectureId} not found`);
   }
 
-  const imageDefaults = deriveImageDefaults(lecture.config);
+  // Fetch project settings for image defaults
+  const projectSettings = await getProjectSettings(userId);
+  const imageDefaults = deriveImageDefaults(projectSettings);
   const narrationDefaults = { ...DEFAULT_NARRATION_GENERATION_DEFAULTS };
   const newRunId = randomUUID();
   const context = buildContext(

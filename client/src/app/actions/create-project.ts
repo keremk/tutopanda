@@ -40,12 +40,8 @@ export async function createLectureAction({
     // Get or create the user's default project
     const project = await getOrCreateDefaultProject(user.id, tx);
 
-    // Use project settings if available, otherwise use default config
-    const config = (project.settings as any) ?? DEFAULT_LECTURE_CONFIG;
-
     const lecture = await createVideoLecture({
       projectId: project.id,
-      config
     }, tx);
 
     await createWorkflowRun(

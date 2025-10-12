@@ -7,7 +7,6 @@ import { generateSegmentImages } from "@/inngest/functions/generate-segment-imag
 import { generateNarration } from "@/inngest/functions/generate-narration";
 import { generateMusic } from "@/inngest/functions/generate-music";
 import { generateTimeline } from "@/inngest/functions/generate-timeline";
-import { confirmConfiguration } from "@/inngest/functions/confirm-configuration";
 import { regenerateSingleImage } from "@/inngest/functions/regenerate-single-image";
 import { regenerateSingleNarration } from "@/inngest/functions/regenerate-single-narration";
 import { regenerateSingleMusic } from "@/inngest/functions/regenerate-single-music";
@@ -20,7 +19,6 @@ export const { GET, POST, PUT } = serve({
   functions: [
     helloWorld,
     startLectureCreation,
-    confirmConfiguration,
     createLectureScript,
     generateSegmentImages,
     generateNarration,

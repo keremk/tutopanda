@@ -1,14 +1,14 @@
 import { getInngestApp } from "@/inngest/client";
 import { createLectureLogger, createLectureProgressPublisher, LECTURE_WORKFLOW_TOTAL_STEPS } from "@/inngest/functions/workflow-utils";
-import { confirmConfiguration } from "@/inngest/functions/confirm-configuration";
 import { createLectureScript } from "@/inngest/functions/create-lecture-script";
 import { generateSegmentImages } from "@/inngest/functions/generate-segment-images";
 import { generateNarration } from "@/inngest/functions/generate-narration";
 import { generateMusic } from "@/inngest/functions/generate-music";
 import { generateTimeline } from "@/inngest/functions/generate-timeline";
 import type { ImageGenerationDefaults, NarrationGenerationDefaults, NarrationSettings } from "@/types/types";
-import { DEFAULT_NARRATION_GENERATION_DEFAULTS, DEFAULT_LECTURE_CONFIG } from "@/types/types";
+import { DEFAULT_NARRATION_GENERATION_DEFAULTS } from "@/types/types";
 import { getLectureById } from "@/data/lecture/repository";
+import { getProjectSettings } from "@/data/project";
 
 export type LectureCreationEventData = {
   prompt: string;
@@ -43,26 +43,12 @@ export const startLectureCreation = inngest.createFunction(
     });
     await publishStatus("Starting lecture creation", 0);
 
-    // Get existing lecture config before confirmation
-    const existingLecture = await step.run("get-existing-config", async () => {
-      return await getLectureById({ lectureId });
+    // Get project settings (no longer confirming config from prompt)
+    const projectSettings = await step.run("get-project-settings", async () => {
+      return await getProjectSettings(userId);
     });
 
-    // Step 0: Confirm configuration with user, preserving existing config as base
-    const { config } = await step.invoke("confirm-configuration", {
-      function: confirmConfiguration,
-      data: {
-        userId,
-        prompt,
-        runId,
-        lectureId,
-        defaultConfig: existingLecture?.config ?? DEFAULT_LECTURE_CONFIG,
-        totalWorkflowSteps: LECTURE_WORKFLOW_TOTAL_STEPS,
-        context,
-      },
-    });
-
-    log.info("Configuration confirmed", { config });
+    log.info("Using project settings for generation", { projectSettings });
 
     const { script } = await step.invoke("create-lecture-script", {
       function: createLectureScript,
@@ -84,14 +70,14 @@ export const startLectureCreation = inngest.createFunction(
       throw new Error(`Lecture ${lectureId} not found`);
     }
 
-    // Extract image settings from confirmed config
-    const confirmedImageSettings: ImageGenerationDefaults = {
+    // Extract image settings from project settings
+    const imageSettings: ImageGenerationDefaults = {
       width: 1024,
       height: 576,
-      aspectRatio: config.image.aspectRatio,
-      size: config.image.size,
-      style: config.image.style,
-      imagesPerSegment: config.image.imagesPerSegment,
+      aspectRatio: projectSettings.image.aspectRatio,
+      size: projectSettings.image.size,
+      style: projectSettings.image.style,
+      imagesPerSegment: projectSettings.image.imagesPerSegment,
     };
 
     const generatedImages = await step.invoke("generate-segment-images", {
@@ -102,7 +88,7 @@ export const startLectureCreation = inngest.createFunction(
         lectureId,
         projectId: lecture.projectId,
         script,
-        imageDefaults: confirmedImageSettings,
+        imageDefaults: imageSettings,
         workflowStep: 3,
         totalWorkflowSteps: LECTURE_WORKFLOW_TOTAL_STEPS,
         context,

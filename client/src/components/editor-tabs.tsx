@@ -7,7 +7,6 @@ import PreviewTab from "./preview-tab";
 import NarrationTab from "./narration-tab";
 import VisualsTab from "./visuals-tab";
 import ScoreTab from "./score-tab";
-import EditConfiguration from "./edit-configuration";
 import { useLectureEditor } from "./lecture-editor-provider";
 import type {
   Timeline,
@@ -16,18 +15,12 @@ import type {
 } from "@/types/types";
 
 export default function EditorTabs() {
-  const { activeTab, setActiveTab, configEditState, handleConfigEditComplete, timelineSelection, handleTimelineClipSelect } = useAgentPanelContext();
-  const { lectureId, timeline, updateTimeline, content } = useLectureEditor();
+  const { activeTab, setActiveTab, timelineSelection, handleTimelineClipSelect } = useAgentPanelContext();
+  const { lectureId, timeline, updateTimeline, content, projectSettings } = useLectureEditor();
 
   // Playback state - shared across all tabs
   const [currentTime, setCurrentTime] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
-
-  // Use config from edit state if available (user clicked Edit in agent progress)
-  // Otherwise use config from content (normal configuration tab)
-  const config = configEditState?.config ?? content.config;
-  const runId = configEditState?.runId ?? null;
-  const isEditMode = configEditState !== null;
 
   const createEmptyTimeline = useMemo(() => {
     return () => ({
@@ -150,26 +143,13 @@ export default function EditorTabs() {
         className="h-full flex flex-col"
       >
         <div className="shrink-0 px-6 pt-6">
-          <TabsList className="grid w-full grid-cols-5">
+          <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="video-preview">Video Preview</TabsTrigger>
-            <TabsTrigger value="configuration">Configuration</TabsTrigger>
             <TabsTrigger value="narration">Narration</TabsTrigger>
             <TabsTrigger value="visuals">Visuals</TabsTrigger>
             <TabsTrigger value="score">Score</TabsTrigger>
           </TabsList>
         </div>
-
-        <TabsContent
-          value="configuration"
-          className="flex-1 p-6 mt-0 overflow-hidden"
-        >
-          <EditConfiguration
-            config={config}
-            runId={runId}
-            isEditMode={isEditMode}
-            onConfigEditComplete={handleConfigEditComplete}
-          />
-        </TabsContent>
 
         <TabsContent
           value="video-preview"
@@ -183,7 +163,7 @@ export default function EditorTabs() {
             onSeek={handleSeek}
             onRemoveClip={handleRemoveClip}
             onUpdateClip={handleUpdateClip}
-            aspectRatio={content.config?.image?.aspectRatio}
+            aspectRatio={projectSettings.image.aspectRatio}
           />
         </TabsContent>
 

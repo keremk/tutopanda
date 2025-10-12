@@ -24,7 +24,7 @@ interface VisualsEditorProps {
 }
 
 export default function VisualsEditor({ selectedClipId }: VisualsEditorProps) {
-  const { timeline, content, updateTimeline, lectureId, updatedAt } = useLectureEditor();
+  const { timeline, content, updateTimeline, lectureId, updatedAt, projectSettings } = useLectureEditor();
   const [isGenerating, startTransition] = useTransition();
 
   // Find the selected clip
@@ -47,9 +47,9 @@ export default function VisualsEditor({ selectedClipId }: VisualsEditorProps) {
     if (selectedClip) {
       setLocalEffectName(selectedClip.effectName || "");
       setLocalPrompt(imageAsset?.prompt || "");
-      setLocalModel(imageAsset?.model || content.config?.image?.model || "");
+      setLocalModel(imageAsset?.model || projectSettings.image.model || "");
     }
-  }, [selectedClipId, selectedClip, imageAsset, content.config?.image?.model]);
+  }, [selectedClipId, selectedClip, imageAsset, projectSettings.image.model]);
 
   // Check if there are unsaved effect changes
   const hasEffectChanges = selectedClip && localEffectName !== (selectedClip.effectName || "");
@@ -204,7 +204,7 @@ export default function VisualsEditor({ selectedClipId }: VisualsEditorProps) {
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-muted-foreground">
-                  {imageAsset?.model ? "Override model" : content.config?.image?.model ? `Using config: ${content.config.image.model}` : "No model configured"}
+                  {imageAsset?.model ? "Override model" : projectSettings.image.model ? `Using project: ${projectSettings.image.model}` : "No model configured"}
                 </p>
               </div>
 

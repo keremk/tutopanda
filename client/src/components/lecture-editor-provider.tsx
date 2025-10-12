@@ -17,7 +17,7 @@ import {
 } from "@/app/actions/lecture/update-lecture-content";
 import { getLectureAction } from "@/app/actions/lecture/get-lecture";
 import type { SerializableLectureSnapshot } from "@/data/lecture/repository";
-import type { NormalisedLectureContent, Timeline } from "@/types/types";
+import type { NormalisedLectureContent, Timeline, LectureConfig } from "@/types/types";
 import { fetchLectureProgressSubscriptionToken } from "@/app/actions/get-subscribe-token";
 import type { LectureProgressMessage } from "@/inngest/functions/workflow-utils";
 
@@ -34,6 +34,7 @@ type LectureEditorContextValue = {
   lastError: string | null;
   clearError: () => void;
   content: NormalisedLectureContent;
+  projectSettings: LectureConfig;
   timeline: Timeline | null;
   setTimeline: (timeline: Timeline | null) => void;
   updateTimeline: (updater: (timeline: Timeline | null) => Timeline | null) => void;
@@ -55,10 +56,12 @@ export function useLectureEditor() {
 export function LectureEditorProvider({
   lectureId,
   initialSnapshot,
+  projectSettings,
   children,
 }: {
   lectureId: number;
   initialSnapshot: SerializableLectureSnapshot;
+  projectSettings: LectureConfig;
   children: ReactNode;
 }) {
   const [draft, setDraft] = useState<NormalisedLectureContent>(() =>
@@ -225,6 +228,7 @@ export function LectureEditorProvider({
     lastError,
     clearError: () => setLastError(null),
     content: draft,
+    projectSettings,
     timeline: draft.timeline,
     setTimeline: (timeline) => setField("timeline", timeline ?? null),
     updateTimeline,
@@ -239,6 +243,7 @@ export function LectureEditorProvider({
     status,
     lastError,
     draft,
+    projectSettings,
     setField,
     updateTimeline,
     flushDraft,
@@ -256,7 +261,6 @@ const snapshotToContent = (
 ): NormalisedLectureContent => ({
   title: snapshot.title,
   summary: snapshot.summary,
-  config: snapshot.config ?? null,
   script: snapshot.script ?? null,
   images: snapshot.images ?? [],
   narration: snapshot.narration ?? [],

@@ -5,6 +5,7 @@ import { randomUUID } from "node:crypto";
 import { getSession } from "@/lib/session";
 import { getWorkflowRun, updateWorkflowRun } from "@/data/workflow-runs";
 import { getLectureById } from "@/data/lecture/repository";
+import { getProjectSettings } from "@/data/project";
 import { getInngestApp } from "@/inngest/client";
 import type { LectureCreationEventData } from "@/inngest/functions/start-lecture-creation";
 import {
@@ -95,17 +96,18 @@ export async function rerunWorkflowAction(
     context.resumeMode = true;
   }
 
-  // Extract image settings from lecture config
-  const imageSettings = lecture.config?.image
-    ? {
-        width: 1024,
-        height: 576,
-        aspectRatio: lecture.config.image.aspectRatio,
-        size: lecture.config.image.size,
-        style: lecture.config.image.style,
-        imagesPerSegment: lecture.config.image.imagesPerSegment,
-      }
-    : DEFAULT_IMAGE_GENERATION_DEFAULTS;
+  // Fetch project settings for image and narration defaults
+  const projectSettings = await getProjectSettings(user.id);
+
+  // Extract image settings from project settings
+  const imageSettings = {
+    width: 1024,
+    height: 576,
+    aspectRatio: projectSettings.image.aspectRatio,
+    size: projectSettings.image.size,
+    style: projectSettings.image.style,
+    imagesPerSegment: projectSettings.image.imagesPerSegment,
+  };
 
   // Trigger new workflow run
   await inngest.send({

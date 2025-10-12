@@ -3,6 +3,7 @@
 import { randomUUID } from "node:crypto";
 
 import { getSession } from "@/lib/session";
+import { getProjectSettings } from "@/data/project";
 import { getInngestApp } from "@/inngest/client";
 import type { LectureCreationEventData } from "@/inngest/functions/start-lecture-creation";
 import {
@@ -11,7 +12,6 @@ import {
   type ImageGenerationDefaults,
   type NarrationGenerationDefaults,
 } from "@/types/types";
-import { getLectureAction } from "@/app/actions/lecture/get-lecture";
 
 const inngest = getInngestApp();
 
@@ -37,18 +37,18 @@ export async function sendPromptAction({
   const { user } = await getSession();
   const runId = randomUUID();
 
-  // Get current lecture to extract config
-  const lecture = await getLectureAction(lectureId);
+  // Get project settings for image and narration defaults
+  const projectSettings = await getProjectSettings(user.id);
 
-  // Extract image settings from lecture config if available
-  const imageSettings = imageDefaults ?? (lecture.config?.image ? {
+  // Extract image settings from project settings if available
+  const imageSettings = imageDefaults ?? {
     width: 1024, // Base width for calculations
     height: 576, // Base height
-    aspectRatio: lecture.config.image.aspectRatio,
-    size: lecture.config.image.size,
-    style: lecture.config.image.style,
-    imagesPerSegment: lecture.config.image.imagesPerSegment,
-  } : DEFAULT_IMAGE_GENERATION_DEFAULTS);
+    aspectRatio: projectSettings.image.aspectRatio,
+    size: projectSettings.image.size,
+    style: projectSettings.image.style,
+    imagesPerSegment: projectSettings.image.imagesPerSegment,
+  };
 
   const narrationSettings = narrationDefaults ?? DEFAULT_NARRATION_GENERATION_DEFAULTS;
 

@@ -22,7 +22,7 @@ export default function BackgroundScoreEditor({
   isPlaying,
   onSeek
 }: BackgroundScoreEditorProps) {
-  const { timeline, content, lectureId, updatedAt } = useLectureEditor();
+  const { timeline, content, lectureId, updatedAt, projectSettings } = useLectureEditor();
   const [isGenerating, startTransition] = useTransition();
 
   // Find the selected clip
@@ -45,18 +45,18 @@ export default function BackgroundScoreEditor({
       setLocalPrompt(musicAsset?.prompt || "");
 
       // Migrate old model names to new ones
-      const rawModel = musicAsset?.type || content.config?.music?.model || DEFAULT_MUSIC_MODEL;
+      const rawModel = musicAsset?.type || projectSettings.music.model || DEFAULT_MUSIC_MODEL;
       const modelValue = migrateMusicModel(rawModel);
 
       console.log("🎵 Background Score Editor - Setting model:", {
         musicAssetType: musicAsset?.type,
-        configModel: content.config?.music?.model,
+        projectModel: projectSettings.music.model,
         rawModel,
         finalValue: modelValue,
       });
       setLocalModel(modelValue);
     }
-  }, [selectedClipId, selectedClip, musicAsset, content.config?.music?.model]);
+  }, [selectedClipId, selectedClip, musicAsset, projectSettings.music.model]);
 
   // Auto-seek to segment start when play button pressed
   useEffect(() => {
@@ -160,7 +160,7 @@ export default function BackgroundScoreEditor({
               ))}
             </select>
             <p className="text-xs text-muted-foreground">
-              {musicAsset?.type ? "Override model" : content.config?.music?.model ? `Using config: ${content.config.music.model}` : "No model configured"}
+              {musicAsset?.type ? "Override model" : projectSettings.music.model ? `Using project: ${projectSettings.music.model}` : "No model configured"}
             </p>
           </div>
         </div>

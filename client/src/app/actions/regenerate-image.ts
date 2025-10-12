@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 
 import { getSession } from "@/lib/session";
 import { getLectureById } from "@/data/lecture/repository";
+import { getProjectSettings } from "@/data/project";
 import { getInngestApp } from "@/inngest/client";
 import type { RegenerateSingleImageEvent } from "@/inngest/functions/regenerate-single-image";
 import type { LectureConfig } from "@/types/types";
@@ -25,7 +26,7 @@ export async function regenerateImageAction({
 }: RegenerateImageInput) {
   const { user } = await getSession();
 
-  // Fetch lecture to validate access and get config
+  // Fetch lecture to validate access
   const lecture = await getLectureById({ lectureId });
 
   if (!lecture) {
@@ -35,15 +36,14 @@ export async function regenerateImageAction({
   // Note: lecture ownership is already validated when fetching
   // getLectureById already ensures the lecture belongs to the user
 
-  if (!lecture.config) {
-    throw new Error("Lecture configuration not found");
-  }
-
   // Verify image exists
   const imageExists = lecture.images?.some((img) => img.id === imageAssetId);
   if (!imageExists) {
     throw new Error("Image asset not found");
   }
+
+  // Fetch project settings
+  const projectSettings = await getProjectSettings(user.id);
 
   // Generate new run ID for the workflow
   const runId = randomUUID();
@@ -59,7 +59,7 @@ export async function regenerateImageAction({
       imageAssetId,
       prompt,
       model,
-      config: lecture.config,
+      config: projectSettings,
     } satisfies RegenerateSingleImageEvent,
   });
 

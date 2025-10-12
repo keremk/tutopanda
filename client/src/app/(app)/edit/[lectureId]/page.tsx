@@ -6,6 +6,7 @@ import { AppSidebarShell } from "@/components/app-sidebar-shell";
 import { LectureEditorProvider } from "@/components/lecture-editor-provider";
 import { getLectureForUser, listVideoLecturesForUser, toSerializableLectureSnapshot } from "@/data/lecture/repository";
 import { getSession } from "@/lib/session";
+import { getProjectSettings } from "@/data/project";
 
 type EditPageParams = {
   lectureId: string;
@@ -18,6 +19,7 @@ export default async function EditLecturePage({
 }) {
   const { user } = await getSession();
   const lectures = await listVideoLecturesForUser(user.id);
+  const projectSettings = await getProjectSettings(user.id);
 
   const { lectureId: rawLectureId } = await params;
   const lectureId = Number.parseInt(rawLectureId, 10);
@@ -46,6 +48,7 @@ export default async function EditLecturePage({
       <LectureEditorProvider
         lectureId={lectureId}
         initialSnapshot={serialisedLecture}
+        projectSettings={projectSettings}
       >
         <div className="flex h-full">
           <AgentPanel lectureId={lectureId}>

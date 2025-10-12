@@ -285,7 +285,6 @@ export const lectureContentSchema = z.object({
   summary: z
     .string()
     .nullable(),
-  config: lectureConfigSchema.nullable(),
   script: lectureScriptSchema.nullable(),
   images: z.array(imageAssetSchema).nullish(),
   narration: z.array(narrationAssetSchema).nullish(),

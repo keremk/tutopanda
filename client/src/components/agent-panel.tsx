@@ -34,7 +34,6 @@ import {
 import type { ChatStatus } from "ai";
 
 import { sendPromptAction } from "@/app/actions/send-prompt";
-import { acceptConfigAction, updateConfigAction } from "@/app/actions/confirm-config";
 import { acceptImageAction } from "@/app/actions/accept-image";
 import { acceptNarrationAction } from "@/app/actions/accept-narration";
 import { acceptMusicAction } from "@/app/actions/accept-music";
@@ -45,7 +44,7 @@ import {
   type TimelineTrackType,
 } from "@/hooks/use-agent-panel";
 import type { LectureScript } from "@/prompts/create-script";
-import type { LectureConfig, ImageAsset, NarrationSettings, MusicSettings } from "@/types/types";
+import type { ImageAsset, NarrationSettings, MusicSettings } from "@/types/types";
 import ImagePreviewModal from "@/components/image-preview-modal";
 import AudioPreviewModal from "@/components/audio-preview-modal";
 
@@ -62,10 +61,6 @@ export const AgentPanel = ({ lectureId, className, children }: AgentPanelProps) 
   const [activeTab, setActiveTab] = useState<AgentPanelTab>("video-preview");
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
   const [scriptsByRun, setScriptsByRun] = useState<Record<string, LectureScript>>({});
-  const [configEditState, setConfigEditState] = useState<{
-    runId: string;
-    config: LectureConfig;
-  } | null>(null);
   const [debugTaskCount, setDebugTaskCount] = useState(0);
   const [timelineSelection, setTimelineSelection] = useState<TimelineSelection | null>(null);
   const [imagePreviewState, setImagePreviewState] = useState<{
@@ -139,41 +134,6 @@ export const AgentPanel = ({ lectureId, className, children }: AgentPanelProps) 
       setActiveTab("narration");
     },
     [setActiveTab, setSelectedRunId]
-  );
-
-  const handleConfigAccepted = useCallback(
-    (runId: string, config: LectureConfig) => {
-      startTransition(() => {
-        acceptConfigAction({ runId, lectureId, config }).catch((error) => {
-          console.error("Failed to accept config", error);
-        });
-      });
-    },
-    [lectureId]
-  );
-
-  const handleConfigEdit = useCallback(
-    (runId: string, config: LectureConfig) => {
-      setConfigEditState({ runId, config });
-      setActiveTab("configuration");
-    },
-    [setActiveTab]
-  );
-
-  const handleConfigEditComplete = useCallback(
-    (runId: string, config: LectureConfig) => {
-      startTransition(() => {
-        updateConfigAction({ runId, lectureId, config })
-          .then(() => {
-            setConfigEditState(null);
-            setActiveTab("video-preview");
-          })
-          .catch((error) => {
-            console.error("Failed to update config", error);
-          });
-      });
-    },
-    [lectureId, setActiveTab]
   );
 
   const handleTimelineClipSelect = useCallback(
@@ -265,12 +225,10 @@ export const AgentPanel = ({ lectureId, className, children }: AgentPanelProps) 
       setSelectedRunId,
       scriptsByRun,
       setRunScript,
-      configEditState,
-      handleConfigEditComplete,
       timelineSelection,
       handleTimelineClipSelect,
     }),
-    [activeTab, selectedRunId, scriptsByRun, setRunScript, configEditState, handleConfigEditComplete, timelineSelection, handleTimelineClipSelect]
+    [activeTab, selectedRunId, scriptsByRun, setRunScript, timelineSelection, handleTimelineClipSelect]
   );
 
   return (
@@ -305,8 +263,6 @@ export const AgentPanel = ({ lectureId, className, children }: AgentPanelProps) 
                 lectureId={lectureId}
                 onRunResult={handleRunResult}
                 onViewScript={handleOpenScript}
-                onConfigAccepted={handleConfigAccepted}
-                onConfigEdit={handleConfigEdit}
                 onImagePreview={handleImagePreview}
                 onImageAccept={handleImageAccept}
                 onNarrationPreview={handleNarrationPreview}
