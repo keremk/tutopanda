@@ -18,8 +18,10 @@ interface AudioPreviewModalProps {
   title: string;
   description: string;
   acceptLabel: string;
+  rejectLabel?: string;
   onAccept: () => void;
-  onClose: () => void;
+  onReject: () => void;
+  isDecisionPending?: boolean;
 }
 
 function isNarration(asset: AudioAsset): asset is NarrationSettings {
@@ -32,8 +34,10 @@ export default function AudioPreviewModal({
   title,
   description,
   acceptLabel,
+  rejectLabel = "Reject",
   onAccept,
-  onClose,
+  onReject,
+  isDecisionPending = false,
 }: AudioPreviewModalProps) {
   if (!audioAsset) return null;
 
@@ -57,8 +61,12 @@ export default function AudioPreviewModal({
   const duration = audioAsset.duration !== undefined ? audioAsset.duration : null;
 
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-2xl">
+    <Dialog open={isOpen}>
+      <DialogContent
+        className="max-w-2xl"
+        onEscapeKeyDown={(event) => event.preventDefault()}
+        onPointerDownOutside={(event) => event.preventDefault()}
+      >
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>{description}</DialogDescription>
@@ -118,10 +126,19 @@ export default function AudioPreviewModal({
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>
-            Cancel
+          <Button
+            variant="outline"
+            onClick={onReject}
+            disabled={isDecisionPending}
+          >
+            {rejectLabel}
           </Button>
-          <Button onClick={onAccept}>{acceptLabel}</Button>
+          <Button
+            onClick={onAccept}
+            disabled={isDecisionPending}
+          >
+            {isDecisionPending ? "Saving..." : acceptLabel}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

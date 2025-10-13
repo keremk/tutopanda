@@ -13,14 +13,16 @@ interface ImagePreviewModalProps {
   isOpen: boolean;
   imageAsset: ImageAsset | null;
   onAccept: () => void;
-  onClose: () => void;
+  onReject: () => void;
+  isDecisionPending?: boolean;
 }
 
 export default function ImagePreviewModal({
   isOpen,
   imageAsset,
   onAccept,
-  onClose,
+  onReject,
+  isDecisionPending = false,
 }: ImagePreviewModalProps) {
   if (!imageAsset) return null;
 
@@ -30,8 +32,12 @@ export default function ImagePreviewModal({
     : "";
 
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-4xl">
+    <Dialog open={isOpen}>
+      <DialogContent
+        className="max-w-4xl"
+        onEscapeKeyDown={(event) => event.preventDefault()}
+        onPointerDownOutside={(event) => event.preventDefault()}
+      >
         <DialogHeader>
           <DialogTitle>Preview Generated Image</DialogTitle>
           <DialogDescription>
@@ -61,11 +67,18 @@ export default function ImagePreviewModal({
         )}
 
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>
-            Cancel
+          <Button
+            variant="outline"
+            onClick={onReject}
+            disabled={isDecisionPending}
+          >
+            Reject
           </Button>
-          <Button onClick={onAccept}>
-            Accept & Replace Image
+          <Button
+            onClick={onAccept}
+            disabled={isDecisionPending}
+          >
+            {isDecisionPending ? "Saving..." : "Accept & Replace Image"}
           </Button>
         </DialogFooter>
       </DialogContent>

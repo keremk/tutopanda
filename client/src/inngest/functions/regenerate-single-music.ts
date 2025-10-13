@@ -3,7 +3,7 @@ import {
   createLectureLogger,
   createLectureProgressPublisher,
 } from "@/inngest/functions/workflow-utils";
-import type { MusicSettings, LectureConfig } from "@/types/types";
+import type { LectureConfig } from "@/types/types";
 import { updateLectureContent } from "@/services/lecture/persist";
 import { getProjectById } from "@/data/project";
 import { getLectureById } from "@/data/lecture/repository";
@@ -115,15 +115,47 @@ export const regenerateSingleMusic = inngest.createFunction(
       log.info("Music preview published - waiting for user acceptance");
     });
 
-    // Step 5: Wait for user acceptance
-    const acceptanceEvent = await step.waitForEvent("wait-for-music-acceptance", {
-      event: "app/music.accepted",
-      timeout: "30m",
-      match: "data.runId",
-    });
+    // Step 5: Wait for user decision
+    const acceptancePromise = step
+      .waitForEvent("wait-for-music-acceptance", {
+        event: "app/music.accepted",
+        timeout: "30m",
+        match: "data.runId",
+      })
+      .then((event) =>
+        event ? { type: "accepted" as const, event } : { type: "timeout" as const, event: null }
+      );
 
-    if (!acceptanceEvent) {
-      throw new Error("Music acceptance timeout");
+    const rejectionPromise = step
+      .waitForEvent("wait-for-music-rejection", {
+        event: "app/music.rejected",
+        timeout: "30m",
+        match: "data.runId",
+      })
+      .then((event) =>
+        event ? { type: "rejected" as const, event } : { type: "timeout" as const, event: null }
+      );
+
+    const reviewOutcome = await Promise.race([acceptancePromise, rejectionPromise]);
+
+    if (reviewOutcome.type === "timeout") {
+      throw new Error("Music review timeout");
+    }
+
+    if (reviewOutcome.type === "rejected") {
+      log.info("Music rejected by user");
+      await publishStatus("Music rejected by user. Discarding preview.", 0, "complete");
+
+      await step.run("mark-workflow-rejected", async () => {
+        await updateWorkflowRun({
+          runId,
+          status: "succeeded",
+          currentStep: 1,
+          context: { reviewOutcome: "rejected" },
+        });
+      });
+
+      return { runId, musicAssetId, musicAsset: generatedMusic, rejected: true };
     }
 
     log.info("Music accepted by user");

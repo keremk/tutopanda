@@ -125,15 +125,51 @@ export const regenerateSingleImage = inngest.createFunction(
       log.info("Image preview published - waiting for user acceptance");
     });
 
-    // Step 5: Wait for user acceptance
-    const acceptanceEvent = await step.waitForEvent("wait-for-image-acceptance", {
-      event: "app/image.accepted",
-      timeout: "30m",
-      match: "data.runId",
-    });
+    // Step 5: Wait for user decision
+    const acceptancePromise = step
+      .waitForEvent("wait-for-image-acceptance", {
+        event: "app/image.accepted",
+        timeout: "30m",
+        match: "data.runId",
+      })
+      .then((event) =>
+        event
+          ? { type: "accepted" as const, event }
+          : { type: "timeout" as const, event: null }
+      );
 
-    if (!acceptanceEvent) {
-      throw new Error("Image acceptance timeout");
+    const rejectionPromise = step
+      .waitForEvent("wait-for-image-rejection", {
+        event: "app/image.rejected",
+        timeout: "30m",
+        match: "data.runId",
+      })
+      .then((event) =>
+        event
+          ? { type: "rejected" as const, event }
+          : { type: "timeout" as const, event: null }
+      );
+
+    const reviewOutcome = await Promise.race([acceptancePromise, rejectionPromise]);
+
+    if (reviewOutcome.type === "timeout") {
+      throw new Error("Image review timeout");
+    }
+
+    if (reviewOutcome.type === "rejected") {
+      log.info("Image rejected by user");
+      await publishStatus("Image rejected by user. Discarding preview.", 0, "complete");
+
+      await step.run("mark-workflow-rejected", async () => {
+        await updateWorkflowRun({
+          runId,
+          status: "succeeded",
+          currentStep: 1,
+          context: { reviewOutcome: "rejected" },
+        });
+      });
+
+      return { runId, imageAssetId, imageAsset: generatedImage, rejected: true };
     }
 
     log.info("Image accepted by user");

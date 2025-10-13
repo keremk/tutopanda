@@ -5,38 +5,15 @@ import {
   ResizablePanel,
   ResizableHandle,
 } from "@/components/ui/resizable";
-import {
-  PromptInput,
-  PromptInputBody,
-  PromptInputTextarea,
-  PromptInputToolbar,
-  PromptInputTools,
-  PromptInputSubmit,
-  PromptInputActionMenu,
-  PromptInputActionMenuTrigger,
-  PromptInputActionMenuContent,
-  PromptInputActionAddAttachments,
-  PromptInputAttachments,
-  PromptInputAttachment,
-  type PromptInputMessage,
-} from "@/components/ai-elements/prompt-input";
 import { AgentProgress } from "@/components/agent-progress";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import {
   useCallback,
-  useEffect,
   useMemo,
   useRef,
   useState,
-  useTransition,
-  type FormEvent,
 } from "react";
-import type { ChatStatus } from "ai";
-
-import { sendPromptAction } from "@/app/actions/send-prompt";
-import { acceptImageAction } from "@/app/actions/accept-image";
-import { acceptNarrationAction } from "@/app/actions/accept-narration";
-import { acceptMusicAction } from "@/app/actions/accept-music";
 import {
   AgentPanelProvider,
   type AgentPanelTab,
@@ -44,9 +21,8 @@ import {
   type TimelineTrackType,
 } from "@/hooks/use-agent-panel";
 import type { LectureScript } from "@/prompts/create-script";
-import type { ImageAsset, NarrationSettings, MusicSettings } from "@/types/types";
-import ImagePreviewModal from "@/components/image-preview-modal";
-import AudioPreviewModal from "@/components/audio-preview-modal";
+import { PanelLeftOpen, PanelRightOpen } from "lucide-react";
+import type { ImperativePanelHandle } from "react-resizable-panels";
 
 interface AgentPanelProps {
   lectureId: number;
@@ -55,67 +31,13 @@ interface AgentPanelProps {
 }
 
 export const AgentPanel = ({ lectureId, className, children }: AgentPanelProps) => {
-  const [submitStatus, setSubmitStatus] = useState<ChatStatus | undefined>();
-  const [isPending, startTransition] = useTransition();
-  const errorResetTimeout = useRef<number | null>(null);
   const [activeTab, setActiveTab] = useState<AgentPanelTab>("video-preview");
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
   const [scriptsByRun, setScriptsByRun] = useState<Record<string, LectureScript>>({});
-  const [debugTaskCount, setDebugTaskCount] = useState(0);
   const [timelineSelection, setTimelineSelection] = useState<TimelineSelection | null>(null);
-  const [imagePreviewState, setImagePreviewState] = useState<{
-    runId: string;
-    imageAsset: ImageAsset;
-    imageAssetId: string;
-  } | null>(null);
-  const [narrationPreviewState, setNarrationPreviewState] = useState<{
-    runId: string;
-    narrationAsset: NarrationSettings;
-    narrationAssetId: string;
-  } | null>(null);
-  const [musicPreviewState, setMusicPreviewState] = useState<{
-    runId: string;
-    musicAsset: MusicSettings;
-    musicAssetId: string;
-  } | null>(null);
-
-  useEffect(() => {
-    return () => {
-      if (errorResetTimeout.current) {
-        window.clearTimeout(errorResetTimeout.current);
-      }
-    };
-  }, []);
-
-  const handlePromptSubmit = (message: PromptInputMessage, event: FormEvent<HTMLFormElement>) => {
-    const prompt = message.text?.trim();
-
-    if (!prompt || isPending) {
-      return;
-    }
-
-    const formElement = event.currentTarget;
-    setSubmitStatus("submitted");
-
-    startTransition(() => {
-      sendPromptAction({ prompt, lectureId })
-        .then(() => {
-          formElement.reset();
-          setSubmitStatus(undefined);
-        })
-        .catch((error) => {
-          console.error("Failed to send prompt", error);
-          setSubmitStatus("error");
-          if (errorResetTimeout.current) {
-            window.clearTimeout(errorResetTimeout.current);
-          }
-          errorResetTimeout.current = window.setTimeout(() => {
-            setSubmitStatus(undefined);
-            errorResetTimeout.current = null;
-          }, 2000);
-        });
-    });
-  };
+  const progressPanelRef = useRef<ImperativePanelHandle | null>(null);
+  const [isProgressPanelCollapsed, setIsProgressPanelCollapsed] = useState(false);
+  const [lastExpandedSize, setLastExpandedSize] = useState<number | null>(null);
 
   const setRunScript = useCallback((runId: string, script: LectureScript) => {
     setScriptsByRun((previous) => ({ ...previous, [runId]: script }));
@@ -151,71 +73,20 @@ export const AgentPanel = ({ lectureId, className, children }: AgentPanelProps) 
     [setActiveTab]
   );
 
-  const handleImagePreview = useCallback(
-    (runId: string, imageAsset: ImageAsset, imageAssetId: string) => {
-      setImagePreviewState({ runId, imageAsset, imageAssetId });
-    },
-    []
-  );
+  const toggleProgressPanel = useCallback(() => {
+    const panel = progressPanelRef.current;
+    if (!panel) {
+      return;
+    }
 
-  const handleImageAccept = useCallback(
-    (runId: string, imageAssetId: string) => {
-      startTransition(() => {
-        acceptImageAction({ runId, imageAssetId })
-          .then(() => {
-            setImagePreviewState(null);
-          })
-          .catch((error) => {
-            console.error("Failed to accept image", error);
-          });
-      });
-    },
-    []
-  );
-
-  const handleNarrationPreview = useCallback(
-    (runId: string, narrationAsset: NarrationSettings, narrationAssetId: string) => {
-      setNarrationPreviewState({ runId, narrationAsset, narrationAssetId });
-    },
-    []
-  );
-
-  const handleNarrationAccept = useCallback(
-    (runId: string, narrationAssetId: string) => {
-      startTransition(() => {
-        acceptNarrationAction({ runId, narrationAssetId })
-          .then(() => {
-            setNarrationPreviewState(null);
-          })
-          .catch((error) => {
-            console.error("Failed to accept narration", error);
-          });
-      });
-    },
-    []
-  );
-
-  const handleMusicPreview = useCallback(
-    (runId: string, musicAsset: MusicSettings, musicAssetId: string) => {
-      setMusicPreviewState({ runId, musicAsset, musicAssetId });
-    },
-    []
-  );
-
-  const handleMusicAccept = useCallback(
-    (runId: string, musicAssetId: string) => {
-      startTransition(() => {
-        acceptMusicAction({ runId, musicAssetId })
-          .then(() => {
-            setMusicPreviewState(null);
-          })
-          .catch((error) => {
-            console.error("Failed to accept music", error);
-          });
-      });
-    },
-    []
-  );
+    if (panel.isCollapsed()) {
+      const targetSize = lastExpandedSize ?? 30;
+      panel.expand(targetSize);
+    } else {
+      setLastExpandedSize(panel.getSize());
+      panel.collapse();
+    }
+  }, [lastExpandedSize]);
 
   const contextValue = useMemo(
     () => ({
@@ -242,113 +113,69 @@ export const AgentPanel = ({ lectureId, className, children }: AgentPanelProps) 
 
         <ResizableHandle withHandle />
 
-        <ResizablePanel defaultSize={30} minSize={25} maxSize={45}>
-          <div className="h-full flex flex-col bg-[color:var(--surface-elevated)] border-l border-[color:var(--surface-border)]">
+        <ResizablePanel
+          ref={progressPanelRef}
+          defaultSize={30}
+          minSize={25}
+          maxSize={45}
+          collapsible
+          collapsedSize={4}
+          onCollapse={() => setIsProgressPanelCollapsed(true)}
+          onExpand={() => setIsProgressPanelCollapsed(false)}
+          onResize={(size) => {
+            if (!isProgressPanelCollapsed) {
+              setLastExpandedSize(size);
+            }
+          }}
+        >
+          <div
+            className={cn(
+              "h-full flex flex-col bg-[color:var(--surface-elevated)] border-l border-[color:var(--surface-border)] transition-colors"
+            )}
+          >
             {/* Header */}
-            <div className="shrink-0 p-4 border-b border-[color:var(--surface-border)] flex items-center justify-between">
-              <h2 className="text-sm font-medium text-foreground">Agent Progress</h2>
-              {process.env.NODE_ENV === "development" && (
-                <button
-                  onClick={() => setDebugTaskCount((c) => c + 1)}
-                  className="text-xs px-2 py-1 rounded bg-muted hover:bg-muted/80 text-muted-foreground"
-                >
-                  Add Task ({debugTaskCount})
-                </button>
+            <div
+              className={cn(
+                "shrink-0 border-b border-[color:var(--surface-border)] flex items-center gap-2 transition-[padding] duration-200",
+                isProgressPanelCollapsed ? "p-3 justify-end" : "p-4 justify-between"
               )}
+            >
+              {!isProgressPanelCollapsed && (
+                <h2 className="text-sm font-medium text-foreground">Agent Progress</h2>
+              )}
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={toggleProgressPanel}
+                className="text-muted-foreground hover:text-foreground"
+                aria-label={isProgressPanelCollapsed ? "Expand agent progress" : "Collapse agent progress"}
+              >
+                {isProgressPanelCollapsed ? (
+                  <PanelRightOpen className="size-4" />
+                ) : (
+                  <PanelLeftOpen className="size-4" />
+                )}
+              </Button>
             </div>
 
             {/* Scrollable Content Area - Takes remaining space */}
-            <div className="flex-1 min-h-0 overflow-hidden">
+            <div
+              className={cn(
+                "flex-1 min-h-0 overflow-hidden transition-all duration-200 ease-in-out",
+                isProgressPanelCollapsed ? "pointer-events-none opacity-0" : "opacity-100"
+              )}
+            >
               <AgentProgress
                 lectureId={lectureId}
                 onRunResult={handleRunResult}
                 onViewScript={handleOpenScript}
-                onImagePreview={handleImagePreview}
-                onImageAccept={handleImageAccept}
-                onNarrationPreview={handleNarrationPreview}
-                onNarrationAccept={handleNarrationAccept}
-                onMusicPreview={handleMusicPreview}
-                onMusicAccept={handleMusicAccept}
                 selectedRunId={selectedRunId}
-                debugTaskCount={debugTaskCount}
               />
-            </div>
-
-            {/* AI Prompt Input - Fixed at Bottom */}
-            <div className="shrink-0 border-t border-[color:var(--surface-border)] bg-[color:var(--surface-elevated)]/95">
-              <div className="p-4">
-                <PromptInput
-                  onSubmit={handlePromptSubmit}
-                  className="w-full border border-[color:var(--surface-border)] bg-[color:var(--surface-elevated)] shadow-sm"
-                  maxFiles={5}
-                  maxFileSize={10 * 1024 * 1024} // 10MB
-                >
-                  <PromptInputAttachments>
-                    {(attachment) => <PromptInputAttachment data={attachment} />}
-                  </PromptInputAttachments>
-
-                  <PromptInputBody>
-                    <PromptInputTextarea
-                      placeholder="Ask the AI assistant..."
-                      className="min-h-12"
-                    />
-                    <PromptInputToolbar>
-                      <PromptInputTools>
-                        <PromptInputActionMenu>
-                          <PromptInputActionMenuTrigger />
-                          <PromptInputActionMenuContent>
-                            <PromptInputActionAddAttachments />
-                          </PromptInputActionMenuContent>
-                        </PromptInputActionMenu>
-                      </PromptInputTools>
-                      <PromptInputSubmit status={submitStatus} disabled={isPending} variant="secondary" />
-                    </PromptInputToolbar>
-                  </PromptInputBody>
-                </PromptInput>
-              </div>
             </div>
           </div>
         </ResizablePanel>
       </ResizablePanelGroup>
-
-      <ImagePreviewModal
-        isOpen={imagePreviewState !== null}
-        imageAsset={imagePreviewState?.imageAsset || null}
-        onAccept={() => {
-          if (imagePreviewState) {
-            handleImageAccept(imagePreviewState.runId, imagePreviewState.imageAssetId);
-          }
-        }}
-        onClose={() => setImagePreviewState(null)}
-      />
-
-      <AudioPreviewModal
-        isOpen={narrationPreviewState !== null}
-        audioAsset={narrationPreviewState?.narrationAsset || null}
-        title="Preview Generated Narration"
-        description="Review the generated narration before accepting it. This will replace the existing narration."
-        acceptLabel="Accept & Replace Narration"
-        onAccept={() => {
-          if (narrationPreviewState) {
-            handleNarrationAccept(narrationPreviewState.runId, narrationPreviewState.narrationAssetId);
-          }
-        }}
-        onClose={() => setNarrationPreviewState(null)}
-      />
-
-      <AudioPreviewModal
-        isOpen={musicPreviewState !== null}
-        audioAsset={musicPreviewState?.musicAsset || null}
-        title="Preview Generated Music"
-        description="Review the generated background music before accepting it. This will replace the existing music."
-        acceptLabel="Accept & Replace Music"
-        onAccept={() => {
-          if (musicPreviewState) {
-            handleMusicAccept(musicPreviewState.runId, musicPreviewState.musicAssetId);
-          }
-        }}
-        onClose={() => setMusicPreviewState(null)}
-      />
     </AgentPanelProvider>
   );
 };
