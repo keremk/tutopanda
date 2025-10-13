@@ -197,6 +197,55 @@ describe("generateLectureImages", () => {
     expect(mockGenerateImages).toHaveBeenCalled();
   });
 
+  it("runs prompt generation with concurrency and reports progress", async () => {
+    const request: GenerateLectureImagesRequest = {
+      script: createMockLectureScript(3),
+      config: createMockImageConfig(),
+      runId: "test-run-prompt-concurrency",
+    };
+
+    const context: ImageGenerationContext = {
+      userId: "user-1",
+      projectId: 42,
+      maxPromptConcurrency: 3,
+    };
+
+    const mockStorage = new MockStorageHandler();
+    const onPromptProgress = vi.fn();
+    let activePrompts = 0;
+    let peakConcurrency = 0;
+
+    const mockGeneratePrompts = vi.fn(async ({ segmentIndex }) => {
+      activePrompts += 1;
+      peakConcurrency = Math.max(peakConcurrency, activePrompts);
+
+      await new Promise((resolve) => setTimeout(resolve, 5 * (segmentIndex + 1)));
+
+      activePrompts -= 1;
+      return [`Prompt ${segmentIndex + 1}`];
+    });
+
+    const mockGenerateImages = vi.fn(async (requests) => {
+      expect(requests).toHaveLength(3);
+      return [Buffer.from("img-1"), Buffer.from("img-2"), Buffer.from("img-3")];
+    });
+
+    const deps: ImageOrchestratorDeps = {
+      generatePrompts: mockGeneratePrompts,
+      generateImages: mockGenerateImages,
+      saveFile: mockStorage.saveFile.bind(mockStorage),
+      onPromptProgress,
+    };
+
+    await generateLectureImages(request, context, deps);
+
+    expect(peakConcurrency).toBeGreaterThan(1);
+    expect(onPromptProgress).toHaveBeenCalledTimes(3);
+    expect(onPromptProgress).toHaveBeenNthCalledWith(1, 1, 3);
+    expect(onPromptProgress).toHaveBeenNthCalledWith(2, 2, 3);
+    expect(onPromptProgress).toHaveBeenNthCalledWith(3, 3, 3);
+  });
+
   it("handles empty segments gracefully", async () => {
     const request: GenerateLectureImagesRequest = {
       script: createMockLectureScript(0), // 0 segments

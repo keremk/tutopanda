@@ -107,6 +107,10 @@ export const generateSegmentImages = inngest.createFunction(
 
     const imagesPerSegment = imageDefaults.imagesPerSegment ?? 1;
     const totalImages = limitedScript.segments.length * imagesPerSegment;
+    const promptConcurrency = Math.max(
+      1,
+      Math.min(limit, limitedScript.segments.length)
+    );
 
     await publishStatus(
       `Generating ${totalImages} image${totalImages > 1 ? "s" : ""} for ${limitedScript.segments.length} segment${limitedScript.segments.length === 1 ? "" : "s"}`,
@@ -127,6 +131,7 @@ export const generateSegmentImages = inngest.createFunction(
           userId,
           projectId,
           maxConcurrency: 5,
+          maxPromptConcurrency: promptConcurrency,
         },
         {
           saveFile: async (buffer, path) => {

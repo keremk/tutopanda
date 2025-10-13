@@ -15,7 +15,7 @@ const STEP_NAMES = [
   "Timeline created successfully",
 ];
 
-export async function getWorkflowHistoryAction(lectureId: number, limit: number = 10) {
+export async function getWorkflowHistoryAction(lectureId: number, limit: number = 1) {
   const { user } = await getSession();
 
   const runs = await getRecentWorkflowRuns(user.id, lectureId, limit);

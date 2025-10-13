@@ -1,9 +1,9 @@
 import type { LectureScript, ImageAsset, ImageGenerationDefaults } from "@/types/types";
 import { generatePromptsForSegment } from "@/services/media-generation/image/prompt-generator";
 import {
+  batchWithConcurrency,
   generateImagesThrottled,
   type ImageGenerationRequest,
-  type BatchOptions,
 } from "@/services/media-generation/core";
 import type { Logger } from "@/services/media-generation/core";
 import { DEFAULT_IMAGE_MODEL } from "@/lib/models";
@@ -24,6 +24,7 @@ export type ImageGenerationContext = {
   userId: string;
   projectId: number;
   maxConcurrency?: number;
+  maxPromptConcurrency?: number;
 };
 
 /**
@@ -53,7 +54,12 @@ export async function generateLectureImages(
   deps: ImageOrchestratorDeps
 ): Promise<ImageAsset[]> {
   const { script, config, runId } = request;
-  const { userId, projectId, maxConcurrency = 5 } = context;
+  const {
+    userId,
+    projectId,
+    maxConcurrency = 5,
+    maxPromptConcurrency,
+  } = context;
   const {
     generatePrompts = generatePromptsForSegment,
     generateImages = generateImagesThrottled,
@@ -73,35 +79,52 @@ export async function generateLectureImages(
   });
 
   // Step 1: Generate prompts for all segments
-  const allPrompts: Array<{
-    segmentIndex: number;
-    imageIndex: number;
-    prompt: string;
-  }> = [];
+  const promptConcurrency = Math.max(
+    1,
+    maxPromptConcurrency ?? maxConcurrency
+  );
 
-  for (let segmentIndex = 0; segmentIndex < segments.length; segmentIndex++) {
-    const segment = segments[segmentIndex];
-    const prompts = await generatePrompts({
-      segment,
-      segmentIndex,
-      imagesPerSegment,
-      style: config.style,
-    });
+  const segmentPromptInputs = segments.map((segment, segmentIndex) => ({
+    segment,
+    segmentIndex,
+  }));
 
-    prompts.forEach((prompt, imageIndex) => {
-      allPrompts.push({
+  let completedPromptSegments = 0;
+
+  const promptResults = await batchWithConcurrency(
+    segmentPromptInputs,
+    async ({ segment, segmentIndex }) => {
+      const prompts = await generatePrompts({
+        segment,
         segmentIndex,
-        imageIndex,
-        prompt,
+        imagesPerSegment,
+        style: config.style,
       });
-    });
 
-    // Report progress after generating prompts for this segment
-    await onPromptProgress?.(segmentIndex + 1, segments.length);
-  }
+      completedPromptSegments += 1;
+      await onPromptProgress?.(completedPromptSegments, segments.length);
+
+      return {
+        segmentIndex,
+        prompts,
+      };
+    },
+    {
+      maxConcurrency: promptConcurrency,
+    }
+  );
+
+  const allPrompts = promptResults.flatMap(({ segmentIndex, prompts }) =>
+    prompts.map((prompt, imageIndex) => ({
+      segmentIndex,
+      imageIndex,
+      prompt,
+    }))
+  );
 
   logger?.info("Prompts generated", {
     totalPrompts: allPrompts.length,
+    promptConcurrency,
   });
 
   // Step 2: Build image generation requests
