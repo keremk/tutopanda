@@ -7,6 +7,7 @@ import {
   useEffect,
   useMemo,
   useState,
+  useRef,
   type ReactNode,
 } from "react";
 import { useInngestSubscription } from "@inngest/realtime/hooks";
@@ -17,7 +18,14 @@ import {
 } from "@/app/actions/lecture/update-lecture-content";
 import { getLectureAction } from "@/app/actions/lecture/get-lecture";
 import type { SerializableLectureSnapshot } from "@/data/lecture/repository";
-import type { NormalisedLectureContent, Timeline, LectureConfig } from "@/types/types";
+import type {
+  NormalisedLectureContent,
+  Timeline,
+  LectureConfig,
+  ImageAsset,
+  NarrationSettings,
+  MusicSettings,
+} from "@/types/types";
 import { fetchLectureProgressSubscriptionToken } from "@/app/actions/get-subscribe-token";
 import type { LectureProgressMessage } from "@/inngest/functions/workflow-utils";
 
@@ -39,6 +47,12 @@ type LectureEditorContextValue = {
   setTimeline: (timeline: Timeline | null) => void;
   updateTimeline: (updater: (timeline: Timeline | null) => Timeline | null) => void;
   saveNow: () => Promise<void>;
+  applyAssetUpdate: (
+    type: "image" | "narration" | "music",
+    assetId: string,
+    payload: Partial<ImageAsset> | Partial<NarrationSettings> | Partial<MusicSettings>
+  ) => void;
+  refreshLecture: (options?: { debounce?: boolean }) => Promise<void> | void;
 };
 
 const LectureEditorContext = createContext<LectureEditorContextValue | null>(null);
@@ -75,13 +89,53 @@ export function LectureEditorProvider({
   const [revision, setRevision] = useState(initialSnapshot.revision);
   const [updatedAt, setUpdatedAt] = useState(new Date(initialSnapshot.updatedAt));
   const [projectId] = useState(initialSnapshot.projectId);
+  const refreshTimeoutRef = useRef<number | null>(null);
+
+  const fetchLatestLecture = useCallback(async () => {
+    try {
+      const snapshot = await getLectureAction(lectureId);
+      setDraft(snapshotToContent(snapshot));
+      setRevision(snapshot.revision);
+      setUpdatedAt(new Date(snapshot.updatedAt));
+      setDirtyFields(new Set());
+      setLastError(null);
+    } catch (error) {
+      console.error("Failed to refresh lecture data", error);
+    }
+  }, [lectureId]);
+
+  const refreshLecture = useCallback(
+    (options?: { debounce?: boolean }) => {
+      const debounce = options?.debounce ?? true;
+
+      if (!debounce) {
+        if (refreshTimeoutRef.current) {
+          window.clearTimeout(refreshTimeoutRef.current);
+          refreshTimeoutRef.current = null;
+        }
+        return fetchLatestLecture();
+      }
+
+      if (refreshTimeoutRef.current) {
+        return;
+      }
+
+      refreshTimeoutRef.current = window.setTimeout(() => {
+        refreshTimeoutRef.current = null;
+        void fetchLatestLecture();
+      }, 150);
+    },
+    [fetchLatestLecture]
+  );
 
   // Subscribe to timeline completion events
   const { data: subscriptionData = [] } = useInngestSubscription({
     refreshToken: fetchLectureProgressSubscriptionToken,
   });
 
-  // Handle timeline completion and image completion
+  const processedEventsRef = useRef<Set<string>>(new Set());
+
+  // Handle completion events that require lecture refresh
   useEffect(() => {
     for (const message of subscriptionData) {
       if (message.topic !== "progress") {
@@ -89,50 +143,41 @@ export function LectureEditorProvider({
       }
 
       const payload = message.data as LectureProgressMessage | undefined;
-
-      if (payload?.type === "timeline-complete" && payload.lectureId === lectureId) {
-        console.log("Timeline completed, refreshing lecture data...");
-
-        // Refetch the lecture snapshot
-        const refreshLecture = async () => {
-          try {
-            const snapshot = await getLectureAction(lectureId);
-            setDraft(snapshotToContent(snapshot));
-            setRevision(snapshot.revision);
-            setUpdatedAt(new Date(snapshot.updatedAt));
-            setDirtyFields(new Set());
-            console.log("Timeline loaded successfully");
-          } catch (error) {
-            console.error("Failed to refresh lecture after timeline completion", error);
-          }
-        };
-
-        void refreshLecture();
-        break; // Only process once
+      if (!payload) {
+        continue;
       }
 
-      if (payload?.type === "image-complete" && payload.lectureId === lectureId) {
-        console.log("Image regeneration completed, refreshing lecture data...");
+      const isLectureMatch =
+        "lectureId" in payload ? payload.lectureId === lectureId : true;
 
-        // Refetch the lecture snapshot
-        const refreshLecture = async () => {
-          try {
-            const snapshot = await getLectureAction(lectureId);
-            setDraft(snapshotToContent(snapshot));
-            setRevision(snapshot.revision);
-            setUpdatedAt(new Date(snapshot.updatedAt));
-            setDirtyFields(new Set());
-            console.log("Lecture refreshed with new image");
-          } catch (error) {
-            console.error("Failed to refresh lecture after image completion", error);
-          }
-        };
+      if (!isLectureMatch) {
+        continue;
+      }
 
-        void refreshLecture();
-        break; // Only process once
+      const timestamp = "timestamp" in payload ? payload.timestamp : undefined;
+      const eventKey = `${payload.type}:${"runId" in payload ? payload.runId : lectureId}:${timestamp ?? ""}`;
+
+      if (processedEventsRef.current.has(eventKey)) {
+        continue;
+      }
+
+      if (payload.type === "timeline-complete") {
+        processedEventsRef.current.add(eventKey);
+        void refreshLecture({ debounce: false });
+        break;
+      }
+
+      if (
+        payload.type === "image-complete" ||
+        payload.type === "narration-complete" ||
+        payload.type === "music-complete"
+      ) {
+        processedEventsRef.current.add(eventKey);
+        refreshLecture();
+        break;
       }
     }
-  }, [subscriptionData, lectureId]);
+  }, [subscriptionData, lectureId, refreshLecture]);
 
   const markDirty = useCallback((key: LectureContentKey) => {
     setDirtyFields((prev) => {
@@ -171,6 +216,50 @@ export function LectureEditorProvider({
     },
     [markDirty]
   );
+
+  const applyAssetUpdate = useCallback<
+    LectureEditorContextValue["applyAssetUpdate"]
+  >((type, assetId, payload) => {
+    setDraft((prev) => {
+      const key =
+        type === "image"
+          ? "images"
+          : type === "narration"
+            ? "narration"
+            : "music";
+
+      const items = prev[key];
+      if (!items) {
+        return prev;
+      }
+
+      const index = items.findIndex((item) => item.id === assetId);
+      if (index === -1) {
+        return prev;
+      }
+
+      const currentItem = items[index];
+      const nextItem = { ...currentItem, ...(payload as object) };
+
+      const isUnchanged = Object.keys(payload).every(
+        (key) => (currentItem as any)[key] === (nextItem as any)[key]
+      );
+
+      if (isUnchanged) {
+        return prev;
+      }
+
+      const nextItems = [...items];
+      nextItems[index] = nextItem as (typeof items)[number];
+
+      return {
+        ...prev,
+        [key]: nextItems,
+      } as NormalisedLectureContent;
+    });
+
+    setUpdatedAt(new Date());
+  }, []);
 
   const flushDraft = useCallback(async () => {
     if (dirtyFields.size === 0) {
@@ -219,6 +308,15 @@ export function LectureEditorProvider({
     };
   }, [dirtyFields, draft, status, flushDraft]);
 
+  useEffect(() => {
+    return () => {
+      if (refreshTimeoutRef.current) {
+        window.clearTimeout(refreshTimeoutRef.current);
+        refreshTimeoutRef.current = null;
+      }
+    };
+  }, []);
+
   const contextValue = useMemo<LectureEditorContextValue>(() => ({
     lectureId,
     projectId,
@@ -235,6 +333,8 @@ export function LectureEditorProvider({
     saveNow: async () => {
       await flushDraft();
     },
+    applyAssetUpdate,
+    refreshLecture,
   }), [
     lectureId,
     projectId,
@@ -247,6 +347,8 @@ export function LectureEditorProvider({
     setField,
     updateTimeline,
     flushDraft,
+    applyAssetUpdate,
+    refreshLecture,
   ]);
 
   return (

@@ -12,32 +12,27 @@ import type { ImageAsset } from "@/types/types";
 interface ImagePreviewModalProps {
   isOpen: boolean;
   imageAsset: ImageAsset | null;
+  imageUrl: string;
   onAccept: () => void;
   onReject: () => void;
+  onClose: () => void;
   isDecisionPending?: boolean;
 }
 
 export default function ImagePreviewModal({
   isOpen,
   imageAsset,
+  imageUrl,
   onAccept,
   onReject,
+  onClose,
   isDecisionPending = false,
 }: ImagePreviewModalProps) {
   if (!imageAsset) return null;
 
-  // Add cache-busting to prevent showing old cached image
-  const imageUrl = imageAsset.sourceUrl
-    ? `/api/storage/${imageAsset.sourceUrl}?v=${Date.now()}`
-    : "";
-
   return (
-    <Dialog open={isOpen}>
-      <DialogContent
-        className="max-w-4xl"
-        onEscapeKeyDown={(event) => event.preventDefault()}
-        onPointerDownOutside={(event) => event.preventDefault()}
-      >
+    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-w-4xl">
         <DialogHeader>
           <DialogTitle>Preview Generated Image</DialogTitle>
           <DialogDescription>

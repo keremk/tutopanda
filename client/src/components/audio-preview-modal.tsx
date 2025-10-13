@@ -15,12 +15,14 @@ type AudioAsset = NarrationSettings | MusicSettings;
 interface AudioPreviewModalProps {
   isOpen: boolean;
   audioAsset: AudioAsset | null;
+  audioUrl: string;
   title: string;
   description: string;
   acceptLabel: string;
   rejectLabel?: string;
   onAccept: () => void;
   onReject: () => void;
+  onClose: () => void;
   isDecisionPending?: boolean;
 }
 
@@ -31,24 +33,19 @@ function isNarration(asset: AudioAsset): asset is NarrationSettings {
 export default function AudioPreviewModal({
   isOpen,
   audioAsset,
+  audioUrl,
   title,
   description,
   acceptLabel,
   rejectLabel = "Reject",
   onAccept,
   onReject,
+  onClose,
   isDecisionPending = false,
 }: AudioPreviewModalProps) {
   if (!audioAsset) return null;
 
   const isNarrationAsset = isNarration(audioAsset);
-
-  // Determine the audio URL based on asset type
-  const audioUrl = isNarrationAsset && audioAsset.sourceUrl
-    ? `/api/storage/${audioAsset.sourceUrl}?v=${Date.now()}`
-    : !isNarrationAsset && audioAsset.audioUrl
-    ? `/api/storage/${audioAsset.audioUrl}?v=${Date.now()}`
-    : "";
 
   // Determine the prompt/script text
   const promptText = isNarrationAsset && audioAsset.finalScript
@@ -61,12 +58,8 @@ export default function AudioPreviewModal({
   const duration = audioAsset.duration !== undefined ? audioAsset.duration : null;
 
   return (
-    <Dialog open={isOpen}>
-      <DialogContent
-        className="max-w-2xl"
-        onEscapeKeyDown={(event) => event.preventDefault()}
-        onPointerDownOutside={(event) => event.preventDefault()}
-      >
+    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>{description}</DialogDescription>

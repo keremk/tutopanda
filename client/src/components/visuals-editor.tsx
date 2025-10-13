@@ -1,6 +1,8 @@
-import { useState, useEffect, useTransition, useCallback } from "react";
+"use client";
+
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLectureEditor } from "./lecture-editor-provider";
-import type { KenBurnsClip, ImageAsset } from "@/types/types";
+import type { KenBurnsClip } from "@/types/types";
 import { imageModelValues } from "@/lib/models";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -19,127 +21,223 @@ import EffectPreview from "./effect-preview";
 import { kenBurnsEffects } from "@/lib/timeline/ken-burns";
 import { regenerateImageAction } from "@/app/actions/regenerate-image";
 import ImagePreviewModal from "@/components/image-preview-modal";
-import { useInngestSubscription } from "@inngest/realtime/hooks";
-import { fetchLectureProgressSubscriptionToken } from "@/app/actions/get-subscribe-token";
-import type { LectureProgressMessage } from "@/inngest/functions/workflow-utils";
 import { acceptImageAction } from "@/app/actions/accept-image";
 import { rejectImageAction } from "@/app/actions/reject-image";
+import { useAssetGenerationFlow } from "@/hooks/use-asset-generation-flow";
+import { useAssetDraft } from "@/hooks/use-asset-draft";
+import { buildAssetUrl } from "@/lib/asset-url";
+import type { LectureImagePreviewMessage } from "@/inngest/functions/workflow-utils";
 
 interface VisualsEditorProps {
   selectedClipId: string | null;
 }
 
+type ImageDraftState = {
+  prompt: string;
+  model: string;
+};
+
+const toStorageUrl = (sourceUrl?: string | null) =>
+  sourceUrl ? `/api/storage/${sourceUrl}` : "";
+
 export default function VisualsEditor({ selectedClipId }: VisualsEditorProps) {
-  const { timeline, content, updateTimeline, lectureId, updatedAt, projectSettings } = useLectureEditor();
-  const [, startTransition] = useTransition();
+  const {
+    timeline,
+    content,
+    updateTimeline,
+    lectureId,
+    updatedAt,
+    projectSettings,
+  } = useLectureEditor();
 
-  // Find the selected clip
-  const selectedClip = timeline?.tracks.visual.find(
-    (clip) => clip.id === selectedClipId
-  ) as KenBurnsClip | undefined;
-
-  // Find the corresponding image asset
-  const imageAsset = selectedClip?.imageAssetId
-    ? content.images?.find((img) => img.id === selectedClip.imageAssetId)
-    : undefined;
-
-  // Local state for pending changes
-  const [localEffectName, setLocalEffectName] = useState<string>("");
-  const [localPrompt, setLocalPrompt] = useState<string>("");
-  const [localModel, setLocalModel] = useState<string>("");
-
-  type PendingImagePreview = {
-    runId: string;
-    imageAssetId: string;
-    imageAsset: ImageAsset;
-  };
-
-  const [generationRunId, setGenerationRunId] = useState<string | null>(null);
-  const [pendingImagePreview, setPendingImagePreview] = useState<PendingImagePreview | null>(null);
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
-  const [isDecisionPending, setIsDecisionPending] = useState(false);
-  const [generationError, setGenerationError] = useState<string | null>(null);
-
-  const { data: subscriptionData = [] } = useInngestSubscription({
-    refreshToken: fetchLectureProgressSubscriptionToken,
-  });
-
-  const resetGeneration = useCallback(
-    (options?: { keepError?: boolean }) => {
-      setGenerationRunId(null);
-      setPendingImagePreview(null);
-      setIsGenerating(false);
-      setIsReviewModalOpen(false);
-      setIsDecisionPending(false);
-      if (!options?.keepError) {
-        setGenerationError(null);
-      }
-    },
-    []
+  const selectedClip = useMemo(
+    () =>
+      (timeline?.tracks.visual.find((clip) => clip.id === selectedClipId) ?? null) as
+        | KenBurnsClip
+        | null,
+    [timeline, selectedClipId]
   );
 
-  // Reset local state when clip changes
-  useEffect(() => {
-    if (selectedClip) {
-      setLocalEffectName(selectedClip.effectName || "");
-      setLocalPrompt(imageAsset?.prompt || "");
-      setLocalModel(imageAsset?.model || projectSettings.image.model || "");
+  const imageAsset = useMemo(
+    () =>
+      selectedClip?.imageAssetId
+        ? content.images?.find((img) => img.id === selectedClip.imageAssetId)
+        : undefined,
+    [content.images, selectedClip]
+  );
+
+  const [localEffectName, setLocalEffectName] = useState<string>(
+    selectedClip?.effectName || ""
+  );
+
+  const defaultImageModel = projectSettings.image.model || "";
+
+  const baseImageDraft = useMemo<ImageDraftState>(
+    () => ({
+      prompt: imageAsset?.prompt || "",
+      model: imageAsset?.model || defaultImageModel,
+    }),
+    [imageAsset?.prompt, imageAsset?.model, defaultImageModel]
+  );
+
+  const {
+    draft: imageDraft,
+    setDraft: setImageDraft,
+    applyPreview: applyImageDraftPreview,
+  } = useAssetDraft<ImageDraftState>({
+    assetId: imageAsset?.id ?? null,
+    baseDraft: baseImageDraft,
+  });
+
+  const handlePromptChange = useCallback(
+    (value: string) => {
+      setImageDraft((prev) => ({ ...prev, prompt: value }));
+    },
+    [setImageDraft]
+  );
+
+  const handleModelChange = useCallback(
+    (value: string) => {
+      setImageDraft((prev) => ({ ...prev, model: value }));
+    },
+    [setImageDraft]
+  );
+
+  const hasEffectChanges = useMemo(() => {
+    if (!selectedClip) {
+      return false;
     }
-  }, [selectedClipId, selectedClip, imageAsset, projectSettings.image.model]);
-  useEffect(() => {
-    resetGeneration();
-  }, [selectedClipId, resetGeneration]);
+    return localEffectName !== (selectedClip.effectName || "");
+  }, [selectedClip, localEffectName]);
 
-  // Check if there are unsaved effect changes
-  const hasEffectChanges = selectedClip && localEffectName !== (selectedClip.effectName || "");
+  const {
+    isGenerating,
+    isReviewOpen,
+    isDecisionPending,
+    error: generationError,
+    preview,
+    previewVersion,
+    startGeneration,
+    openReview,
+    closeReview,
+    acceptPreview,
+    rejectPreview,
+  } = useAssetGenerationFlow<LectureImagePreviewMessage>({
+    assetType: "image",
+    lectureId,
+    assetId: imageAsset?.id ?? null,
+    onRegenerate: async () =>
+      regenerateImageAction({
+        lectureId,
+        imageAssetId: imageAsset!.id,
+        prompt: imageDraft.prompt,
+        model: imageDraft.model || undefined,
+      }),
+    onAccept: (runId, assetId) =>
+      acceptImageAction({
+        runId,
+        imageAssetId: assetId,
+      }).then(() => undefined),
+    onReject: (runId, assetId) =>
+      rejectImageAction({
+        runId,
+        imageAssetId: assetId,
+      }).then(() => undefined),
+    previewMessageType: "image-preview",
+    completeMessageType: "image-complete",
+    extractPreview: (message) =>
+      message.type === "image-preview"
+        ? { preview: message, assetId: message.imageAssetId }
+        : null,
+    mapPreviewToAssetUpdate: (message) => message.imageAsset,
+    onPreviewAccepted: (message) => {
+      applyImageDraftPreview({
+        prompt: message.imageAsset.prompt || "",
+        model: message.imageAsset.model || defaultImageModel,
+      });
+    },
+  });
 
-  // Get image URL for preview with cache-busting
-  const imageUrl = selectedClip?.imageUrl || (imageAsset?.sourceUrl
-    ? `/api/storage/${imageAsset.sourceUrl}?v=${updatedAt.getTime()}`
-    : "");
+  const committedImageUrl = useMemo(() => {
+    if (preview) {
+      const previewUrl = toStorageUrl(preview.imageAsset.sourceUrl);
+      return buildAssetUrl({ url: previewUrl, previewToken: previewVersion });
+    }
 
-  useEffect(() => {
-    if (!generationRunId) {
+    if (selectedClip?.imageUrl) {
+      return selectedClip.imageUrl;
+    }
+
+    const assetUrl = toStorageUrl(imageAsset?.sourceUrl);
+    return buildAssetUrl({ url: assetUrl, updatedAt });
+  }, [preview, previewVersion, selectedClip, updatedAt, imageAsset]);
+
+  const previewImageUrl = useMemo(() => {
+    if (!preview) {
+      return "";
+    }
+    return buildAssetUrl({
+      url: toStorageUrl(preview.imageAsset.sourceUrl),
+      previewToken: previewVersion,
+    });
+  }, [preview, previewVersion]);
+
+  const buttonLabel = useMemo(() => {
+    if (isGenerating) {
+      return "Generating...";
+    }
+    if (preview) {
+      return "Review Image";
+    }
+    return "Generate Image";
+  }, [isGenerating, preview]);
+
+  const buttonDisabled = useMemo(() => {
+    if (isGenerating || isDecisionPending) {
+      return true;
+    }
+    if (preview) {
+      return false;
+    }
+    return !imageAsset || imageDraft.prompt.trim().length === 0;
+  }, [isGenerating, isDecisionPending, preview, imageAsset, imageDraft.prompt]);
+
+  const helperText = useMemo(() => {
+    if (generationError) {
+      return generationError;
+    }
+    if (isDecisionPending) {
+      return "Finalizing your choice...";
+    }
+    if (isGenerating) {
+      return "Generating new image with AI...";
+    }
+    if (preview) {
+      return "Review the generated image before accepting it.";
+    }
+    return "Generate a new image to replace the current one.";
+  }, [generationError, isDecisionPending, isGenerating, preview]);
+
+  const helperTextClassName = useMemo(
+    () =>
+      generationError
+        ? "text-xs text-destructive mt-2"
+        : "text-xs text-muted-foreground mt-2",
+    [generationError]
+  );
+
+  const handlePrimaryAction = useCallback(() => {
+    if (preview) {
+      openReview();
+    } else {
+      void startGeneration();
+    }
+  }, [preview, openReview, startGeneration]);
+
+  const handleSaveEffect = useCallback(() => {
+    if (!selectedClip || !timeline) {
       return;
     }
-
-    for (const message of subscriptionData) {
-      if (message.topic !== "progress") {
-        continue;
-      }
-
-      const payload = message.data as LectureProgressMessage | undefined;
-      if (!payload || payload.runId !== generationRunId) {
-        continue;
-      }
-
-      if (payload.type === "image-preview") {
-        setPendingImagePreview({
-          runId: payload.runId,
-          imageAssetId: payload.imageAssetId,
-          imageAsset: payload.imageAsset,
-        });
-        setIsGenerating(false);
-        setGenerationError(null);
-        break;
-      }
-
-      if (payload.type === "image-complete") {
-        resetGeneration();
-        break;
-      }
-
-      if (payload.type === "status" && payload.status === "error") {
-        setGenerationError(payload.message);
-        resetGeneration({ keepError: true });
-        break;
-      }
-    }
-  }, [generationRunId, subscriptionData, resetGeneration]);
-
-  const handleSaveEffect = () => {
-    if (!selectedClip || !timeline) return;
 
     updateTimeline((prevTimeline) => {
       if (!prevTimeline) return null;
@@ -171,117 +269,19 @@ export default function VisualsEditor({ selectedClipId }: VisualsEditorProps) {
         },
       };
     });
-  };
+  }, [selectedClip, timeline, updateTimeline, localEffectName]);
 
-  const handleResetEffect = () => {
+  const handleResetEffect = useCallback(() => {
     if (selectedClip) {
       setLocalEffectName(selectedClip.effectName || "");
     }
-  };
+  }, [selectedClip]);
 
-  const handleGenerateImage = useCallback(() => {
-    if (!imageAsset || !localPrompt.trim() || isGenerating) {
-      return;
+  useEffect(() => {
+    if (selectedClip) {
+      setLocalEffectName(selectedClip.effectName || "");
     }
-
-    setGenerationError(null);
-    setPendingImagePreview(null);
-    setIsReviewModalOpen(false);
-    setIsGenerating(true);
-    setGenerationRunId(null);
-
-    startTransition(async () => {
-      try {
-        const { runId } = await regenerateImageAction({
-          lectureId,
-          imageAssetId: imageAsset.id,
-          prompt: localPrompt,
-          model: localModel || undefined,
-        });
-        setGenerationRunId(runId);
-      } catch (error) {
-        console.error("Failed to generate image:", error);
-        setGenerationError("Failed to start image generation. Please try again.");
-        setIsGenerating(false);
-      }
-    });
-  }, [imageAsset, localPrompt, localModel, lectureId, isGenerating, startTransition]);
-
-  const handleOpenReview = useCallback(() => {
-    if (!pendingImagePreview) {
-      return;
-    }
-    setIsReviewModalOpen(true);
-  }, [pendingImagePreview]);
-
-  const handlePreviewAccept = useCallback(async () => {
-    if (!pendingImagePreview) {
-      return;
-    }
-
-    setGenerationError(null);
-    setIsDecisionPending(true);
-
-    try {
-      await acceptImageAction({
-        runId: pendingImagePreview.runId,
-        imageAssetId: pendingImagePreview.imageAssetId,
-      });
-      resetGeneration();
-    } catch (error) {
-      console.error("Failed to accept image:", error);
-      setGenerationError("Failed to accept image. Please try again.");
-    } finally {
-      setIsDecisionPending(false);
-    }
-  }, [pendingImagePreview, resetGeneration]);
-
-  const handlePreviewReject = useCallback(async () => {
-    if (!pendingImagePreview) {
-      return;
-    }
-
-    setGenerationError(null);
-    setIsDecisionPending(true);
-
-    try {
-      await rejectImageAction({
-        runId: pendingImagePreview.runId,
-        imageAssetId: pendingImagePreview.imageAssetId,
-      });
-      resetGeneration();
-    } catch (error) {
-      console.error("Failed to reject image:", error);
-      setGenerationError("Failed to reject image. Please try again.");
-    } finally {
-      setIsDecisionPending(false);
-    }
-  }, [pendingImagePreview, resetGeneration]);
-
-  const hasReviewPending = Boolean(pendingImagePreview);
-  const buttonLabel = isGenerating
-    ? "Generating..."
-    : hasReviewPending
-      ? "Review"
-      : "Generate";
-  const buttonDisabled = isGenerating
-    ? true
-    : isDecisionPending
-      ? true
-      : hasReviewPending
-        ? false
-        : !imageAsset || !localPrompt.trim();
-  const handlePrimaryButtonClick = hasReviewPending ? handleOpenReview : handleGenerateImage;
-  const helperText = generationError
-    ? generationError
-    : isDecisionPending
-      ? "Finalizing your choice..."
-      : isGenerating
-        ? "Generating new image with AI..."
-        : hasReviewPending
-          ? "Review the generated image before accepting it."
-          : "Generate a new image to replace the current one";
-  const helperTextClassName = generationError ? "text-xs text-destructive mt-2" : "text-xs text-muted-foreground mt-2";
+  }, [selectedClip]);
 
   if (!selectedClipId || !selectedClip) {
     return (
@@ -297,24 +297,21 @@ export default function VisualsEditor({ selectedClipId }: VisualsEditorProps) {
   return (
     <>
       <div className="h-full flex gap-6 bg-background">
-        {/* Left: Effect Preview */}
         <div className="flex-1 flex items-center justify-center bg-muted/30 rounded-lg border border-border overflow-hidden">
-          {imageUrl && imageUrl.trim() !== "" ? (
+          {committedImageUrl ? (
             <EffectPreview
               clip={selectedClip}
-              imageUrl={imageUrl}
+              imageUrl={committedImageUrl}
               effectName={localEffectName}
             />
           ) : (
             <div className="text-center text-muted-foreground">
               <p>No image available</p>
               <p className="text-xs mt-2">Selected clip: {selectedClip.name}</p>
-              <p className="text-xs">Image URL: {imageUrl || "none"}</p>
             </div>
           )}
         </div>
 
-        {/* Right: Tabs Panel */}
         <div className="w-96 h-full flex-shrink-0">
           <Tabs defaultValue="image" className="h-full flex flex-col">
             <TabsList className="grid w-full grid-cols-2">
@@ -322,32 +319,29 @@ export default function VisualsEditor({ selectedClipId }: VisualsEditorProps) {
               <TabsTrigger value="effects">Effects</TabsTrigger>
             </TabsList>
 
-            {/* Image Tab */}
             <TabsContent value="image" className="flex-1 overflow-y-auto">
               <div className="space-y-6 p-4">
                 <div>
                   <h3 className="text-lg font-semibold mb-4">Image Settings</h3>
                 </div>
 
-                {/* Prompt Field */}
                 <div className="space-y-2">
                   <Label htmlFor="image-prompt">Image Prompt</Label>
                   <Textarea
                     id="image-prompt"
                     className="min-h-24 resize-none"
-                    value={localPrompt}
-                    onChange={(e) => setLocalPrompt(e.target.value)}
+                    value={imageDraft.prompt}
+                    onChange={(e) => handlePromptChange(e.target.value)}
                     placeholder="Describe the image..."
                     disabled={!imageAsset}
                   />
                 </div>
 
-                {/* AI Model Select */}
                 <div className="space-y-2">
                   <Label htmlFor="ai-model">AI Model</Label>
                   <Select
-                    value={localModel}
-                    onValueChange={setLocalModel}
+                    value={imageDraft.model}
+                    onValueChange={handleModelChange}
                     disabled={!imageAsset}
                   >
                     <SelectTrigger id="ai-model">
@@ -362,34 +356,33 @@ export default function VisualsEditor({ selectedClipId }: VisualsEditorProps) {
                     </SelectContent>
                   </Select>
                   <p className="text-xs text-muted-foreground">
-                    {imageAsset?.model ? "Override model" : projectSettings.image.model ? `Using project: ${projectSettings.image.model}` : "No model configured"}
+                    {imageAsset?.model
+                      ? "Override model"
+                      : projectSettings.image.model
+                      ? `Using project: ${projectSettings.image.model}`
+                      : "No model configured"}
                   </p>
                 </div>
 
-                {/* Generate Button */}
                 <div className="pt-4">
                   <Button
                     className="w-full"
                     disabled={buttonDisabled}
-                    onClick={handlePrimaryButtonClick}
+                    onClick={handlePrimaryAction}
                   >
                     {buttonLabel}
                   </Button>
-                  <p className={helperTextClassName}>
-                    {helperText}
-                  </p>
+                  <p className={helperTextClassName}>{helperText}</p>
                 </div>
               </div>
             </TabsContent>
 
-            {/* Effects Tab */}
             <TabsContent value="effects" className="flex-1 overflow-y-auto">
               <div className="space-y-6 p-4">
                 <div>
                   <h3 className="text-lg font-semibold mb-4">Effect Settings</h3>
                 </div>
 
-                {/* Ken Burns Effect Select */}
                 <div className="space-y-2">
                   <Label htmlFor="ken-burns-effect">Ken Burns Effect</Label>
                   <Select
@@ -439,13 +432,8 @@ export default function VisualsEditor({ selectedClipId }: VisualsEditorProps) {
                   </p>
                 </div>
 
-                {/* Action Buttons */}
                 <div className="flex gap-2 pt-4">
-                  <Button
-                    className="flex-1"
-                    onClick={handleSaveEffect}
-                    disabled={!hasEffectChanges}
-                  >
+                  <Button className="flex-1" onClick={handleSaveEffect} disabled={!hasEffectChanges}>
                     Save Changes
                   </Button>
                   <Button
@@ -464,10 +452,12 @@ export default function VisualsEditor({ selectedClipId }: VisualsEditorProps) {
       </div>
 
       <ImagePreviewModal
-        isOpen={isReviewModalOpen && !!pendingImagePreview}
-        imageAsset={pendingImagePreview?.imageAsset ?? null}
-        onAccept={handlePreviewAccept}
-        onReject={handlePreviewReject}
+        isOpen={isReviewOpen && !!preview}
+        imageAsset={preview?.imageAsset ?? null}
+        imageUrl={previewImageUrl}
+        onAccept={acceptPreview}
+        onReject={rejectPreview}
+        onClose={closeReview}
         isDecisionPending={isDecisionPending}
       />
     </>
