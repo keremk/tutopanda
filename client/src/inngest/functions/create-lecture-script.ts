@@ -6,7 +6,13 @@ import {
   createScriptSystemPrompt,
   generatedScriptSchema,
 } from "@/prompts/create-script";
-import type { LectureScript, ResearchConfig } from "@/types/types";
+import type {
+  GeneralConfig,
+  LectureScript,
+  NarrationConfig,
+  ResearchConfig,
+} from "@/types/types";
+import { DEFAULT_LECTURE_CONFIG } from "@/types/types";
 import { updateLectureContent } from "@/services/lecture/persist";
 import { getLectureById } from "@/data/lecture/repository";
 import { getInngestApp } from "@/inngest/client";
@@ -73,6 +79,8 @@ export type CreateLectureScriptEvent = {
   lectureId: number;
   totalWorkflowSteps?: number;
   researchConfig?: ResearchConfig;
+  generalConfig?: GeneralConfig;
+  narrationConfig?: NarrationConfig;
 };
 
 export type CreateLectureScriptResult = {
@@ -91,12 +99,17 @@ export const createLectureScript = inngest.createFunction(
       lectureId,
       totalWorkflowSteps = LECTURE_WORKFLOW_TOTAL_STEPS,
       researchConfig,
+      generalConfig,
+      narrationConfig,
     } = event.data as CreateLectureScriptEvent;
 
     // Use provided research config or fallback to defaults
     const model = researchConfig?.model ?? LLM_MODELS.GPT_5;
     const reasoningEffort = researchConfig?.reasoningEffort ?? "medium";
     const reasoningSummary = researchConfig?.reasoningSummary ?? "detailed";
+    const scriptGeneralConfig = generalConfig ?? DEFAULT_LECTURE_CONFIG.general;
+    const scriptNarrationConfig =
+      narrationConfig ?? DEFAULT_LECTURE_CONFIG.narration;
 
     const log = createLectureLogger(runId, logger);
     const { publishStatus, publishReasoning, publishResult } =
@@ -132,7 +145,11 @@ export const createLectureScript = inngest.createFunction(
       const result = streamText({
         model: openai(model),
         system: createScriptSystemPrompt,
-        prompt: buildCreateScriptPrompt(prompt),
+        prompt: buildCreateScriptPrompt({
+          topic: prompt,
+          general: scriptGeneralConfig,
+          narration: scriptNarrationConfig,
+        }),
         experimental_output: Output.object({
           schema: generatedScriptSchema,
         }),

@@ -65,6 +65,8 @@ export const startLectureCreation = inngest.createFunction(
         lectureId,
         totalWorkflowSteps: LECTURE_WORKFLOW_TOTAL_STEPS,
         researchConfig: projectSettings.research,
+        generalConfig: projectSettings.general,
+        narrationConfig: projectSettings.narration,
         context,
       },
     });

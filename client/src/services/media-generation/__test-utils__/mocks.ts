@@ -134,7 +134,7 @@ export function createMockImageConfig(): ImageGenerationDefaults {
     height: 576,
     aspectRatio: "16:9",
     size: "1K",
-    style: "Realistic",
+    style: "Photorealistic",
     imagesPerSegment: 1,
   };
 }

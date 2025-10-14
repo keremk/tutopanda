@@ -3,7 +3,7 @@
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { NarrationConfig } from "@/types/types";
-import { segmentLengthValues } from "@/types/types";
+import { segmentLengthLabels, segmentLengthValues } from "@/types/types";
 import NarrationModelConfig from "@/components/narration-model-config";
 
 interface EditNarrationConfigurationProps {
@@ -12,6 +12,10 @@ interface EditNarrationConfigurationProps {
 }
 
 export function EditNarrationConfiguration({ config, onChange }: EditNarrationConfigurationProps) {
+  const segmentLengthValue =
+    segmentLengthValues.find((value) => value === String(config.segmentLength)) ??
+    segmentLengthValues[0];
+
   return (
     <div className="space-y-6">
       <div>
@@ -22,16 +26,16 @@ export function EditNarrationConfiguration({ config, onChange }: EditNarrationCo
         <div className="space-y-2">
           <Label htmlFor="segmentLength">Segment Length</Label>
           <Select
-            value={config.segmentLength}
+            value={segmentLengthValue}
             onValueChange={(value) => onChange({ ...config, segmentLength: value as typeof segmentLengthValues[number] })}
           >
             <SelectTrigger id="segmentLength">
-              <SelectValue />
+              <SelectValue placeholder={segmentLengthLabels[segmentLengthValue]} />
             </SelectTrigger>
             <SelectContent>
               {segmentLengthValues.map((length) => (
                 <SelectItem key={length} value={length}>
-                  {length}
+                  {segmentLengthLabels[length]}
                 </SelectItem>
               ))}
             </SelectContent>

@@ -214,30 +214,60 @@ export const timelineSchema = z.object({
 });
 
 // Configuration schemas
-export const videoDurationValues = ["30s", "1min", "3min"] as const;
+export const videoDurationValues = ["30", "60", "180", "600"] as const;
 export const audienceValues = [
   "Kids",
-  "Teens",
   "Young Adults",
   "Adults",
-  "Older Adults",
-  "Family-Friendly",
   "Academic",
   "Enthusiast/Niche"
 ] as const;
 export const imageSizeValues = ["480", "720", "1080"] as const;
-export const imageStyleValues = ["Ghibli", "Pixar", "Animated", "Realistic"] as const;
+export const imageStyleValues = ["Ghibli", "Pixar", "Anime", "Watercolor", "Cartoon", "Photorealistic"] as const;
 export const imageFormatValues = ["JPG", "PNG"] as const;
-export const videoDurationSegmentValues = ["5s", "10s"] as const;
-export const segmentLengthValues = ["5s", "10s", "15s"] as const;
+export const videoDurationSegmentValues = ["5", "10"] as const;
+export const segmentLengthValues = ["10", "15"] as const;
 export const reasoningEffortValues = ["minimal", "low", "medium", "high"] as const;
 export const reasoningSummaryValues = ["auto", "concise", "detailed"] as const;
+export const languageValues = ["en", "es", "fr", "de", "tr"] as const;
+
+export const languageLabels: Record<(typeof languageValues)[number], string> = {
+  en: "English",
+  es: "Spanish",
+  fr: "French",
+  de: "German",
+  tr: "Turkish",
+};
+
+export const videoDurationLabels: Record<(typeof videoDurationValues)[number], string> = {
+  "30": "30s",
+  "60": "1min",
+  "180": "3min",
+  "600": "10min",
+};
+
+export const videoDurationDescriptions: Record<(typeof videoDurationValues)[number], string> = {
+  "30": "about 30 seconds",
+  "60": "about 1 minute",
+  "180": "about 3 minutes",
+  "600": "about 10 minutes",
+};
+
+export const segmentLengthLabels: Record<(typeof segmentLengthValues)[number], string> = {
+  "10": "10 seconds",
+  "15": "15 seconds",
+};
+
+export const segmentLengthDescriptions: Record<(typeof segmentLengthValues)[number], string> = {
+  "10": "approximately 10 seconds of narration",
+  "15": "approximately 15 seconds of narration",
+};
 
 export const generalConfigSchema = z.object({
   duration: z.enum(videoDurationValues),
   audience: z.enum(audienceValues),
   useSubtitles: z.boolean(),
-  language: z.string(),
+  language: z.enum(languageValues),
   subtitleLanguage: z.string().optional(),
   useVideo: z.boolean(),
   maxVideoSegments: z.number().int().min(0).optional(),
@@ -334,7 +364,7 @@ export const DEFAULT_IMAGE_GENERATION_DEFAULTS: ImageGenerationDefaults = {
   height: 576,
   aspectRatio: "16:9",
   size: "1K",
-  style: "Realistic",
+  style: "Ghibli",
   imagesPerSegment: 1,
 };
 
@@ -359,7 +389,7 @@ export type SoundEffectConfig = z.infer<typeof soundEffectConfigSchema>;
 
 export const DEFAULT_LECTURE_CONFIG: LectureConfig = {
   general: {
-    duration: "3min",
+    duration: "60",
     audience: "Adults",
     useSubtitles: false,
     language: "en",
@@ -375,16 +405,16 @@ export const DEFAULT_LECTURE_CONFIG: LectureConfig = {
     size: "1080",
     aspectRatio: "16:9",
     imagesPerSegment: 1,
-    style: "Realistic",
+    style: "Ghibli",
     format: "PNG",
     model: DEFAULT_IMAGE_MODEL,
   },
   video: {
     model: DEFAULT_VIDEO_MODEL,
-    duration: "5s",
+    duration: "5",
   },
   narration: {
-    segmentLength: "15s",
+    segmentLength: "15",
     voice: DEFAULT_VOICE_ID,
     model: DEFAULT_VOICE_MODEL_ID,
   },

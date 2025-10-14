@@ -5,7 +5,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
 import type { GeneralConfig } from "@/types/types";
-import { videoDurationValues, audienceValues } from "@/types/types";
+import {
+  audienceValues,
+  languageLabels,
+  languageValues,
+  videoDurationLabels,
+  videoDurationValues,
+} from "@/types/types";
 
 interface EditGeneralConfigurationProps {
   config: GeneralConfig;
@@ -13,6 +19,13 @@ interface EditGeneralConfigurationProps {
 }
 
 export function EditGeneralConfiguration({ config, onChange }: EditGeneralConfigurationProps) {
+  const durationValue =
+    videoDurationValues.find((value) => value === String(config.duration)) ??
+    videoDurationValues[0];
+
+  const languageValue =
+    languageValues.find((value) => value === config.language) ?? languageValues[0];
+
   return (
     <div className="space-y-6">
       <div>
@@ -23,16 +36,16 @@ export function EditGeneralConfiguration({ config, onChange }: EditGeneralConfig
         <div className="space-y-2">
           <Label htmlFor="duration">Duration</Label>
           <Select
-            value={config.duration}
+            value={durationValue}
             onValueChange={(value) => onChange({ ...config, duration: value as typeof videoDurationValues[number] })}
           >
             <SelectTrigger id="duration">
-              <SelectValue />
+              <SelectValue placeholder={videoDurationLabels[durationValue]} />
             </SelectTrigger>
             <SelectContent>
               {videoDurationValues.map((duration) => (
                 <SelectItem key={duration} value={duration}>
-                  {duration}
+                  {videoDurationLabels[duration]}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -46,7 +59,7 @@ export function EditGeneralConfiguration({ config, onChange }: EditGeneralConfig
             onValueChange={(value) => onChange({ ...config, audience: value as typeof audienceValues[number] })}
           >
             <SelectTrigger id="audience">
-              <SelectValue />
+              <SelectValue placeholder={config.audience} />
             </SelectTrigger>
             <SelectContent>
               {audienceValues.map((audience) => (
@@ -60,12 +73,23 @@ export function EditGeneralConfiguration({ config, onChange }: EditGeneralConfig
 
         <div className="space-y-2">
           <Label htmlFor="language">Language</Label>
-          <Input
-            id="language"
-            value={config.language}
-            onChange={(e) => onChange({ ...config, language: e.target.value })}
-            placeholder="e.g., en"
-          />
+          <Select
+            value={languageValue}
+            onValueChange={(value) =>
+              onChange({ ...config, language: value as (typeof languageValues)[number] })
+            }
+          >
+            <SelectTrigger id="language">
+              <SelectValue placeholder={languageLabels[languageValue]} />
+            </SelectTrigger>
+            <SelectContent>
+              {languageValues.map((language) => (
+                <SelectItem key={language} value={language}>
+                  {languageLabels[language]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
         <div className="flex items-center justify-between rounded-lg border p-4">
