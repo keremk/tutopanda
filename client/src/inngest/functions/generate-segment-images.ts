@@ -12,6 +12,7 @@ import { setupFileStorage } from "@/lib/storage-utils";
 import { imageProviderRegistry, ReplicateImageProvider } from "@/services/media-generation/image";
 import { FileStorageHandler } from "@/services/media-generation/core";
 import { generateLectureImages } from "@/services/lecture/orchestrators";
+import { createLectureAssetStorage } from "@/services/lecture/storage";
 
 const inngest = getInngestApp();
 
@@ -121,6 +122,11 @@ export const generateSegmentImages = inngest.createFunction(
       const storage = setupFileStorage();
       const storageHandler = new FileStorageHandler(storage);
 
+      const assetStorage = createLectureAssetStorage(
+        { userId, projectId, lectureId },
+        { storageHandler }
+      );
+
       return generateLectureImages(
         {
           script: limitedScript,
@@ -130,13 +136,12 @@ export const generateSegmentImages = inngest.createFunction(
         {
           userId,
           projectId,
+          lectureId,
           maxConcurrency: 5,
           maxPromptConcurrency: promptConcurrency,
         },
         {
-          saveFile: async (buffer, path) => {
-            await storageHandler.saveFile(buffer, path);
-          },
+          assetStorage,
           logger: log,
           onPromptProgress: async (current, total) => {
             await publishStatus(

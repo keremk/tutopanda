@@ -11,6 +11,7 @@ import { setupFileStorage } from "@/lib/storage-utils";
 import { audioProviderRegistry, ReplicateAudioProvider } from "@/services/media-generation/audio";
 import { FileStorageHandler } from "@/services/media-generation/core";
 import { regenerateAudio } from "@/services/lecture/orchestrators";
+import { createLectureAssetStorage } from "@/services/lecture/storage";
 import { createWorkflowRun, updateWorkflowRun } from "@/data/workflow-runs";
 
 const inngest = getInngestApp();
@@ -87,6 +88,11 @@ export const regenerateSingleNarration = inngest.createFunction(
       const storage = setupFileStorage();
       const storageHandler = new FileStorageHandler(storage);
 
+      const assetStorage = createLectureAssetStorage(
+        { userId, projectId, lectureId },
+        { storageHandler }
+      );
+
       const narration = await regenerateAudio(
         {
           text: script,
@@ -97,11 +103,10 @@ export const regenerateSingleNarration = inngest.createFunction(
         {
           userId,
           projectId,
+          lectureId,
         },
         {
-          saveFile: async (buffer, path) => {
-            await storageHandler.saveFile(buffer, path);
-          },
+          assetStorage,
           logger: log,
         }
       );

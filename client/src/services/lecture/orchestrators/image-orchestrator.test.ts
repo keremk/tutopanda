@@ -1,7 +1,28 @@
 import { describe, it, expect, vi } from "vitest";
 import { generateLectureImages, regenerateImage } from "./image-orchestrator";
-import type { GenerateLectureImagesRequest, ImageGenerationContext, ImageOrchestratorDeps } from "./image-orchestrator";
-import { createMockLectureScript, createMockImageConfig, MockLogger, MockStorageHandler } from "@/services/media-generation/__test-utils__/mocks";
+import type {
+  GenerateLectureImagesRequest,
+  ImageGenerationContext,
+  ImageOrchestratorDeps,
+} from "./image-orchestrator";
+import { createLectureAssetStorage } from "@/services/lecture/storage";
+import {
+  createMockLectureScript,
+  createMockImageConfig,
+  MockLogger,
+  MockStorageHandler,
+} from "@/services/media-generation/__test-utils__/mocks";
+
+function buildAssetStorage(context: ImageGenerationContext, storage: MockStorageHandler) {
+  return createLectureAssetStorage(
+    {
+      userId: context.userId,
+      projectId: context.projectId,
+      lectureId: context.lectureId,
+    },
+    { storageHandler: storage }
+  );
+}
 
 describe("generateLectureImages", () => {
   it("generates images for all segments", async () => {
@@ -14,11 +35,13 @@ describe("generateLectureImages", () => {
     const context: ImageGenerationContext = {
       userId: "user-1",
       projectId: 42,
+      lectureId: 7,
       maxConcurrency: 5,
     };
 
     const mockLogger = new MockLogger();
     const mockStorage = new MockStorageHandler();
+    const assetStorage = buildAssetStorage(context, mockStorage);
 
     // Mock prompt generation
     const mockGeneratePrompts = vi.fn(async ({ segmentIndex }) => {
@@ -27,13 +50,17 @@ describe("generateLectureImages", () => {
 
     // Mock image generation
     const mockGenerateImages = vi.fn(async () => {
-      return [Buffer.from("fake-image-1"), Buffer.from("fake-image-2"), Buffer.from("fake-image-3")];
+      return [
+        Buffer.from("fake-image-1"),
+        Buffer.from("fake-image-2"),
+        Buffer.from("fake-image-3"),
+      ];
     });
 
     const deps: ImageOrchestratorDeps = {
       generatePrompts: mockGeneratePrompts,
       generateImages: mockGenerateImages,
-      saveFile: mockStorage.saveFile.bind(mockStorage),
+      assetStorage,
       logger: mockLogger,
     };
 
@@ -52,7 +79,7 @@ describe("generateLectureImages", () => {
       aspectRatio: "16:9",
       width: 1024,
       model: "bytedance/seedream-4",
-      sourceUrl: "user-1/42/images/img-test-run-123-0-0.jpg",
+      sourceUrl: "user-1/42/7/images/img-test-run-123-0-0.jpg",
     });
   });
 
@@ -69,9 +96,11 @@ describe("generateLectureImages", () => {
     const context: ImageGenerationContext = {
       userId: "user-1",
       projectId: 42,
+      lectureId: 11,
     };
 
     const mockStorage = new MockStorageHandler();
+    const assetStorage = buildAssetStorage(context, mockStorage);
     const mockGeneratePrompts = vi.fn(async ({ segmentIndex }) => {
       return [`Prompt ${segmentIndex + 1}-1`, `Prompt ${segmentIndex + 1}-2`];
     });
@@ -88,7 +117,7 @@ describe("generateLectureImages", () => {
     const deps: ImageOrchestratorDeps = {
       generatePrompts: mockGeneratePrompts,
       generateImages: mockGenerateImages,
-      saveFile: mockStorage.saveFile.bind(mockStorage),
+      assetStorage,
     };
 
     const results = await generateLectureImages(request, context, deps);
@@ -114,24 +143,29 @@ describe("generateLectureImages", () => {
     const context: ImageGenerationContext = {
       userId: "user-123",
       projectId: 999,
+      lectureId: 456,
     };
 
     const mockStorage = new MockStorageHandler();
+    const assetStorage = buildAssetStorage(context, mockStorage);
     const mockGeneratePrompts = vi.fn(async () => ["Prompt"]);
-    const mockGenerateImages = vi.fn(async () => [Buffer.from("img-1"), Buffer.from("img-2")]);
+    const mockGenerateImages = vi.fn(async () => [
+      Buffer.from("img-1"),
+      Buffer.from("img-2"),
+    ]);
 
     const deps: ImageOrchestratorDeps = {
       generatePrompts: mockGeneratePrompts,
       generateImages: mockGenerateImages,
-      saveFile: mockStorage.saveFile.bind(mockStorage),
+      assetStorage,
     };
 
     await generateLectureImages(request, context, deps);
 
     const paths = mockStorage.getSavedPaths();
     expect(paths).toHaveLength(2);
-    expect(paths[0]).toBe("user-123/999/images/img-test-run-789-0-0.jpg");
-    expect(paths[1]).toBe("user-123/999/images/img-test-run-789-1-0.jpg");
+    expect(paths[0]).toBe("user-123/999/456/images/img-test-run-789-0-0.jpg");
+    expect(paths[1]).toBe("user-123/999/456/images/img-test-run-789-1-0.jpg");
   });
 
   it("calls logger at key points", async () => {
@@ -144,17 +178,22 @@ describe("generateLectureImages", () => {
     const context: ImageGenerationContext = {
       userId: "user-1",
       projectId: 42,
+      lectureId: 19,
     };
 
     const mockLogger = new MockLogger();
     const mockStorage = new MockStorageHandler();
+    const assetStorage = buildAssetStorage(context, mockStorage);
     const mockGeneratePrompts = vi.fn(async () => ["Prompt"]);
-    const mockGenerateImages = vi.fn(async () => [Buffer.from("img-1"), Buffer.from("img-2")]);
+    const mockGenerateImages = vi.fn(async () => [
+      Buffer.from("img-1"),
+      Buffer.from("img-2"),
+    ]);
 
     const deps: ImageOrchestratorDeps = {
       generatePrompts: mockGeneratePrompts,
       generateImages: mockGenerateImages,
-      saveFile: mockStorage.saveFile.bind(mockStorage),
+      assetStorage,
       logger: mockLogger,
     };
 
@@ -175,10 +214,12 @@ describe("generateLectureImages", () => {
     const context: ImageGenerationContext = {
       userId: "user-1",
       projectId: 42,
+      lectureId: 23,
       maxConcurrency: 3,
     };
 
     const mockStorage = new MockStorageHandler();
+    const assetStorage = buildAssetStorage(context, mockStorage);
     const mockGeneratePrompts = vi.fn(async () => ["Prompt"]);
     const mockGenerateImages = vi.fn(async (_requests, options) => {
       // Verify maxConcurrency is passed
@@ -189,7 +230,7 @@ describe("generateLectureImages", () => {
     const deps: ImageOrchestratorDeps = {
       generatePrompts: mockGeneratePrompts,
       generateImages: mockGenerateImages,
-      saveFile: mockStorage.saveFile.bind(mockStorage),
+      assetStorage,
     };
 
     await generateLectureImages(request, context, deps);
@@ -207,10 +248,12 @@ describe("generateLectureImages", () => {
     const context: ImageGenerationContext = {
       userId: "user-1",
       projectId: 42,
+      lectureId: 33,
       maxPromptConcurrency: 3,
     };
 
     const mockStorage = new MockStorageHandler();
+    const assetStorage = buildAssetStorage(context, mockStorage);
     const onPromptProgress = vi.fn();
     let activePrompts = 0;
     let peakConcurrency = 0;
@@ -233,7 +276,7 @@ describe("generateLectureImages", () => {
     const deps: ImageOrchestratorDeps = {
       generatePrompts: mockGeneratePrompts,
       generateImages: mockGenerateImages,
-      saveFile: mockStorage.saveFile.bind(mockStorage),
+      assetStorage,
       onPromptProgress,
     };
 
@@ -256,16 +299,18 @@ describe("generateLectureImages", () => {
     const context: ImageGenerationContext = {
       userId: "user-1",
       projectId: 42,
+      lectureId: 101,
     };
 
     const mockStorage = new MockStorageHandler();
+    const assetStorage = buildAssetStorage(context, mockStorage);
     const mockGeneratePrompts = vi.fn(async () => []);
     const mockGenerateImages = vi.fn(async () => []);
 
     const deps: ImageOrchestratorDeps = {
       generatePrompts: mockGeneratePrompts,
       generateImages: mockGenerateImages,
-      saveFile: mockStorage.saveFile.bind(mockStorage),
+      assetStorage,
     };
 
     const results = await generateLectureImages(request, context, deps);
@@ -286,17 +331,19 @@ describe("regenerateImage", () => {
     const context: ImageGenerationContext = {
       userId: "user-1",
       projectId: 42,
+      lectureId: 88,
     };
 
     const mockLogger = new MockLogger();
     const mockStorage = new MockStorageHandler();
+    const assetStorage = buildAssetStorage(context, mockStorage);
     const mockGenerateImages = vi.fn(async () => {
       return [Buffer.from("new-image")];
     });
 
     const deps: ImageOrchestratorDeps = {
       generateImages: mockGenerateImages,
-      saveFile: mockStorage.saveFile.bind(mockStorage),
+      assetStorage,
       logger: mockLogger,
     };
 
@@ -308,7 +355,7 @@ describe("regenerateImage", () => {
       prompt: "New updated prompt",
       aspectRatio: "16:9",
       model: "bytedance/seedream-4",
-      sourceUrl: "user-1/42/images/img-regen-123.jpg",
+      sourceUrl: "user-1/42/88/images/img-regen-123.jpg",
     });
 
     expect(mockGenerateImages).toHaveBeenCalledTimes(1);
@@ -325,21 +372,23 @@ describe("regenerateImage", () => {
     const context: ImageGenerationContext = {
       userId: "user-456",
       projectId: 789,
+      lectureId: 222,
     };
 
     const mockStorage = new MockStorageHandler();
+    const assetStorage = buildAssetStorage(context, mockStorage);
     const mockGenerateImages = vi.fn(async () => [Buffer.from("image")]);
 
     const deps: ImageOrchestratorDeps = {
       generateImages: mockGenerateImages,
-      saveFile: mockStorage.saveFile.bind(mockStorage),
+      assetStorage,
     };
 
     await regenerateImage(request, context, deps);
 
     const paths = mockStorage.getSavedPaths();
     expect(paths).toHaveLength(1);
-    expect(paths[0]).toBe("user-456/789/images/img-path-test.jpg");
+    expect(paths[0]).toBe("user-456/789/222/images/img-path-test.jpg");
   });
 
   it("logs regeneration activity", async () => {
@@ -352,15 +401,17 @@ describe("regenerateImage", () => {
     const context: ImageGenerationContext = {
       userId: "user-1",
       projectId: 42,
+      lectureId: 303,
     };
 
     const mockLogger = new MockLogger();
     const mockStorage = new MockStorageHandler();
+    const assetStorage = buildAssetStorage(context, mockStorage);
     const mockGenerateImages = vi.fn(async () => [Buffer.from("image")]);
 
     const deps: ImageOrchestratorDeps = {
       generateImages: mockGenerateImages,
-      saveFile: mockStorage.saveFile.bind(mockStorage),
+      assetStorage,
       logger: mockLogger,
     };
 
@@ -384,14 +435,16 @@ describe("regenerateImage", () => {
     const context: ImageGenerationContext = {
       userId: "user-1",
       projectId: 42,
+      lectureId: 404,
     };
 
     const mockStorage = new MockStorageHandler();
+    const assetStorage = buildAssetStorage(context, mockStorage);
     const mockGenerateImages = vi.fn(async () => [Buffer.from("image")]);
 
     const deps: ImageOrchestratorDeps = {
       generateImages: mockGenerateImages,
-      saveFile: mockStorage.saveFile.bind(mockStorage),
+      assetStorage,
     };
 
     const result = await regenerateImage(request, context, deps);

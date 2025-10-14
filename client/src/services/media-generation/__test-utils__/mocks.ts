@@ -145,8 +145,33 @@ export function createMockImageConfig(): ImageGenerationDefaults {
 export class MockStorageHandler {
   savedFiles: Map<string, Buffer> = new Map();
 
-  async saveFile(buffer: Buffer, path: string): Promise<void> {
+  async saveFile(
+    content: Buffer | Uint8Array | ReadableStream,
+    path: string
+  ): Promise<void> {
+    const buffer = await this.ensureBuffer(content);
     this.savedFiles.set(path, buffer);
+  }
+
+  private async ensureBuffer(content: Buffer | Uint8Array | ReadableStream): Promise<Buffer> {
+    if (content instanceof Buffer) {
+      return content;
+    }
+
+    if (content instanceof Uint8Array) {
+      return Buffer.from(content);
+    }
+
+    const reader = content.getReader();
+    const chunks: Uint8Array[] = [];
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+    }
+
+    return Buffer.concat(chunks);
   }
 
   getFile(path: string): Buffer | undefined {

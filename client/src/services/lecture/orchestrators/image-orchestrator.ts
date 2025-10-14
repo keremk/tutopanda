@@ -7,6 +7,7 @@ import {
 } from "@/services/media-generation/core";
 import type { Logger } from "@/services/media-generation/core";
 import { DEFAULT_IMAGE_MODEL } from "@/lib/models";
+import type { LectureAssetStorage } from "@/services/lecture/storage";
 
 /**
  * Request for generating all lecture images
@@ -23,6 +24,7 @@ export type GenerateLectureImagesRequest = {
 export type ImageGenerationContext = {
   userId: string;
   projectId: number;
+  lectureId: number;
   maxConcurrency?: number;
   maxPromptConcurrency?: number;
 };
@@ -33,7 +35,7 @@ export type ImageGenerationContext = {
 export type ImageOrchestratorDeps = {
   generatePrompts?: typeof generatePromptsForSegment;
   generateImages?: typeof generateImagesThrottled;
-  saveFile: (buffer: Buffer, path: string) => Promise<void>;
+  assetStorage: LectureAssetStorage;
   logger?: Logger;
   onImageProgress?: (current: number, total: number) => void | Promise<void>;
   onPromptProgress?: (current: number, total: number) => void | Promise<void>;
@@ -54,16 +56,11 @@ export async function generateLectureImages(
   deps: ImageOrchestratorDeps
 ): Promise<ImageAsset[]> {
   const { script, config, runId } = request;
-  const {
-    userId,
-    projectId,
-    maxConcurrency = 5,
-    maxPromptConcurrency,
-  } = context;
+  const { maxConcurrency = 5, maxPromptConcurrency } = context;
   const {
     generatePrompts = generatePromptsForSegment,
     generateImages = generateImagesThrottled,
-    saveFile,
+    assetStorage,
     logger,
     onImageProgress,
     onPromptProgress,
@@ -165,18 +162,13 @@ export async function generateLectureImages(
     buffers.map(async (buffer, index) => {
       const { segmentIndex, imageIndex, prompt } = allPrompts[index];
       const id = `img-${runId}-${segmentIndex}-${imageIndex}`;
-      const relativePath = `images/${id}.jpg`;
-      const sourceUrl = `${userId}/${projectId}/${relativePath}`;
-
-      // Save to storage
-      const fullPath = sourceUrl;
-      await saveFile(buffer, fullPath);
+      const sourceUrl = await assetStorage.saveImage(buffer, id);
 
       logger?.info("Image saved", {
         id,
         segmentIndex,
         imageIndex,
-        path: fullPath,
+        path: sourceUrl,
       });
 
       return {
@@ -220,12 +212,11 @@ export type RegenerateImageRequest = {
  */
 export async function regenerateImage(
   request: RegenerateImageRequest,
-  context: ImageGenerationContext,
+  _context: ImageGenerationContext,
   deps: ImageOrchestratorDeps
 ): Promise<ImageAsset> {
   const { prompt, config, imageId } = request;
-  const { userId, projectId } = context;
-  const { generateImages = generateImagesThrottled, saveFile, logger } = deps;
+  const { generateImages = generateImagesThrottled, assetStorage, logger } = deps;
 
   logger?.info("Regenerating image", {
     imageId,
@@ -260,14 +251,11 @@ export async function regenerateImage(
   );
 
   // Save image
-  const relativePath = `images/${imageId}.jpg`;
-  const sourceUrl = `${userId}/${projectId}/${relativePath}`;
-  const fullPath = sourceUrl;
-  await saveFile(buffer, fullPath);
+  const sourceUrl = await assetStorage.saveImage(buffer, imageId);
 
   logger?.info("Image regenerated and saved", {
     imageId,
-    path: fullPath,
+    path: sourceUrl,
   });
 
   return {

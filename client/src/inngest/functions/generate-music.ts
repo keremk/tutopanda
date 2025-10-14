@@ -12,6 +12,7 @@ import { setupFileStorage } from "@/lib/storage-utils";
 import { musicProviderRegistry, ReplicateMusicProvider } from "@/services/media-generation/music";
 import { FileStorageHandler } from "@/services/media-generation/core";
 import { generateLectureMusic } from "@/services/lecture/orchestrators";
+import { createLectureAssetStorage } from "@/services/lecture/storage";
 
 const inngest = getInngestApp();
 
@@ -91,6 +92,11 @@ export const generateMusic = inngest.createFunction(
       const storage = setupFileStorage();
       const storageHandler = new FileStorageHandler(storage);
 
+      const assetStorage = createLectureAssetStorage(
+        { userId, projectId, lectureId },
+        { storageHandler }
+      );
+
       return generateLectureMusic(
         {
           script,
@@ -100,11 +106,10 @@ export const generateMusic = inngest.createFunction(
         {
           userId,
           projectId,
+          lectureId,
         },
         {
-          saveFile: async (buffer, path) => {
-            await storageHandler.saveFile(buffer, path);
-          },
+          assetStorage,
           logger: log,
         }
       );

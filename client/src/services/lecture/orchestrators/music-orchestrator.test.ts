@@ -1,7 +1,27 @@
 import { describe, it, expect, vi } from "vitest";
 import { generateLectureMusic, regenerateMusic } from "./music-orchestrator";
-import type { GenerateLectureMusicRequest, MusicGenerationContext, MusicOrchestratorDeps } from "./music-orchestrator";
-import { createMockLectureScript, MockLogger, MockStorageHandler } from "@/services/media-generation/__test-utils__/mocks";
+import type {
+  GenerateLectureMusicRequest,
+  MusicGenerationContext,
+  MusicOrchestratorDeps,
+} from "./music-orchestrator";
+import { createLectureAssetStorage } from "@/services/lecture/storage";
+import {
+  createMockLectureScript,
+  MockLogger,
+  MockStorageHandler,
+} from "@/services/media-generation/__test-utils__/mocks";
+
+function buildAssetStorage(context: MusicGenerationContext, storage: MockStorageHandler) {
+  return createLectureAssetStorage(
+    {
+      userId: context.userId,
+      projectId: context.projectId,
+      lectureId: context.lectureId,
+    },
+    { storageHandler: storage }
+  );
+}
 
 describe("generateLectureMusic", () => {
   it("generates music for a lecture", async () => {
@@ -15,25 +35,20 @@ describe("generateLectureMusic", () => {
     const context: MusicGenerationContext = {
       userId: "user-1",
       projectId: 42,
+      lectureId: 4,
     };
 
     const mockLogger = new MockLogger();
     const mockStorage = new MockStorageHandler();
+    const assetStorage = buildAssetStorage(context, mockStorage);
 
-    // Mock prompt generation
-    const mockGeneratePrompt = vi.fn(async () => {
-      return "Upbeat background music with piano";
-    });
-
-    // Mock music generation
-    const mockGenerateMusics = vi.fn(async () => {
-      return [Buffer.from("fake-music-data")];
-    });
+    const mockGeneratePrompt = vi.fn(async () => "Upbeat background music with piano");
+    const mockGenerateMusics = vi.fn(async () => [Buffer.from("fake-music-data")]);
 
     const deps: MusicOrchestratorDeps = {
       generatePrompt: mockGeneratePrompt,
       generateMusics: mockGenerateMusics,
-      saveFile: mockStorage.saveFile.bind(mockStorage),
+      assetStorage,
       logger: mockLogger,
     };
 
@@ -44,7 +59,7 @@ describe("generateLectureMusic", () => {
       label: "Background Score",
       prompt: "Upbeat background music with piano",
       duration: 60,
-      audioUrl: "user-1/42/musical-score/music-test-run-music-123.mp3",
+      audioUrl: "user-1/42/4/music/music-test-run-music-123.mp3",
     });
 
     expect(mockGeneratePrompt).toHaveBeenCalledTimes(1);
@@ -62,23 +77,25 @@ describe("generateLectureMusic", () => {
     const context: MusicGenerationContext = {
       userId: "user-789",
       projectId: 999,
+      lectureId: 18,
     };
 
     const mockStorage = new MockStorageHandler();
+    const assetStorage = buildAssetStorage(context, mockStorage);
     const mockGeneratePrompt = vi.fn(async () => "Test prompt");
     const mockGenerateMusics = vi.fn(async () => [Buffer.from("music")]);
 
     const deps: MusicOrchestratorDeps = {
       generatePrompt: mockGeneratePrompt,
       generateMusics: mockGenerateMusics,
-      saveFile: mockStorage.saveFile.bind(mockStorage),
+      assetStorage,
     };
 
     await generateLectureMusic(request, context, deps);
 
     const paths = mockStorage.getSavedPaths();
     expect(paths).toHaveLength(1);
-    expect(paths[0]).toBe("user-789/999/musical-score/music-test-run-music-path.mp3");
+    expect(paths[0]).toBe("user-789/999/18/music/music-test-run-music-path.mp3");
   });
 
   it("calls logger at key points", async () => {
@@ -91,17 +108,19 @@ describe("generateLectureMusic", () => {
     const context: MusicGenerationContext = {
       userId: "user-1",
       projectId: 42,
+      lectureId: 22,
     };
 
     const mockLogger = new MockLogger();
     const mockStorage = new MockStorageHandler();
+    const assetStorage = buildAssetStorage(context, mockStorage);
     const mockGeneratePrompt = vi.fn(async () => "Test prompt");
     const mockGenerateMusics = vi.fn(async () => [Buffer.from("music")]);
 
     const deps: MusicOrchestratorDeps = {
       generatePrompt: mockGeneratePrompt,
       generateMusics: mockGenerateMusics,
-      saveFile: mockStorage.saveFile.bind(mockStorage),
+      assetStorage,
       logger: mockLogger,
     };
 
@@ -122,27 +141,28 @@ describe("generateLectureMusic", () => {
     const context: MusicGenerationContext = {
       userId: "user-1",
       projectId: 42,
+      lectureId: 26,
     };
 
     const mockLogger = new MockLogger();
     const mockStorage = new MockStorageHandler();
+    const assetStorage = buildAssetStorage(context, mockStorage);
     const mockGeneratePrompt = vi.fn(async () => "Test prompt");
     const mockGenerateMusics = vi.fn(async () => [Buffer.from("music")]);
 
     const deps: MusicOrchestratorDeps = {
       generatePrompt: mockGeneratePrompt,
       generateMusics: mockGenerateMusics,
-      saveFile: mockStorage.saveFile.bind(mockStorage),
+      assetStorage,
       logger: mockLogger,
     };
 
     await generateLectureMusic(request, context, deps);
 
-    // Check logger for default model
     expect(
       mockLogger.logs.some((log) => {
-        const context = log.context as { model?: string } | undefined;
-        return context?.model === "stability-ai/stable-audio-2.5";
+        const details = log.context as { model?: string } | undefined;
+        return details?.model === "stability-ai/stable-audio-2.5";
       })
     ).toBe(true);
   });
@@ -158,9 +178,11 @@ describe("generateLectureMusic", () => {
     const context: MusicGenerationContext = {
       userId: "user-1",
       projectId: 42,
+      lectureId: 30,
     };
 
     const mockStorage = new MockStorageHandler();
+    const assetStorage = buildAssetStorage(context, mockStorage);
     const mockGeneratePrompt = vi.fn(async (receivedScript, receivedDuration) => {
       expect(receivedScript).toBe(script);
       expect(receivedDuration).toBe(90);
@@ -171,7 +193,7 @@ describe("generateLectureMusic", () => {
     const deps: MusicOrchestratorDeps = {
       generatePrompt: mockGeneratePrompt,
       generateMusics: mockGenerateMusics,
-      saveFile: mockStorage.saveFile.bind(mockStorage),
+      assetStorage,
     };
 
     await generateLectureMusic(request, context, deps);
@@ -192,17 +214,17 @@ describe("regenerateMusic", () => {
     const context: MusicGenerationContext = {
       userId: "user-1",
       projectId: 42,
+      lectureId: 35,
     };
 
     const mockLogger = new MockLogger();
     const mockStorage = new MockStorageHandler();
-    const mockGenerateMusics = vi.fn(async () => {
-      return [Buffer.from("new-music")];
-    });
+    const assetStorage = buildAssetStorage(context, mockStorage);
+    const mockGenerateMusics = vi.fn(async () => [Buffer.from("new-music")]);
 
     const deps: MusicOrchestratorDeps = {
       generateMusics: mockGenerateMusics,
-      saveFile: mockStorage.saveFile.bind(mockStorage),
+      assetStorage,
       logger: mockLogger,
     };
 
@@ -213,7 +235,7 @@ describe("regenerateMusic", () => {
       label: "Regenerated Music",
       prompt: "New orchestral music with strings",
       duration: 45,
-      audioUrl: "user-1/42/musical-score/music-regen-123.mp3",
+      audioUrl: "user-1/42/35/music/music-regen-123.mp3",
     });
 
     expect(mockGenerateMusics).toHaveBeenCalledTimes(1);
@@ -230,21 +252,23 @@ describe("regenerateMusic", () => {
     const context: MusicGenerationContext = {
       userId: "user-456",
       projectId: 789,
+      lectureId: 41,
     };
 
     const mockStorage = new MockStorageHandler();
+    const assetStorage = buildAssetStorage(context, mockStorage);
     const mockGenerateMusics = vi.fn(async () => [Buffer.from("music")]);
 
     const deps: MusicOrchestratorDeps = {
       generateMusics: mockGenerateMusics,
-      saveFile: mockStorage.saveFile.bind(mockStorage),
+      assetStorage,
     };
 
     await regenerateMusic(request, context, deps);
 
     const paths = mockStorage.getSavedPaths();
     expect(paths).toHaveLength(1);
-    expect(paths[0]).toBe("user-456/789/musical-score/music-path-test.mp3");
+    expect(paths[0]).toBe("user-456/789/41/music/music-path-test.mp3");
   });
 
   it("logs regeneration activity", async () => {
@@ -257,15 +281,17 @@ describe("regenerateMusic", () => {
     const context: MusicGenerationContext = {
       userId: "user-1",
       projectId: 42,
+      lectureId: 46,
     };
 
     const mockLogger = new MockLogger();
     const mockStorage = new MockStorageHandler();
+    const assetStorage = buildAssetStorage(context, mockStorage);
     const mockGenerateMusics = vi.fn(async () => [Buffer.from("music")]);
 
     const deps: MusicOrchestratorDeps = {
       generateMusics: mockGenerateMusics,
-      saveFile: mockStorage.saveFile.bind(mockStorage),
+      assetStorage,
       logger: mockLogger,
     };
 
@@ -285,25 +311,26 @@ describe("regenerateMusic", () => {
     const context: MusicGenerationContext = {
       userId: "user-1",
       projectId: 42,
+      lectureId: 52,
     };
 
     const mockLogger = new MockLogger();
     const mockStorage = new MockStorageHandler();
+    const assetStorage = buildAssetStorage(context, mockStorage);
     const mockGenerateMusics = vi.fn(async () => [Buffer.from("music")]);
 
     const deps: MusicOrchestratorDeps = {
       generateMusics: mockGenerateMusics,
-      saveFile: mockStorage.saveFile.bind(mockStorage),
+      assetStorage,
       logger: mockLogger,
     };
 
     await regenerateMusic(request, context, deps);
 
-    // Check logger for default model
     expect(
       mockLogger.logs.some((log) => {
-        const context = log.context as { model?: string } | undefined;
-        return context?.model === "stability-ai/stable-audio-2.5";
+        const details = log.context as { model?: string } | undefined;
+        return details?.model === "stability-ai/stable-audio-2.5";
       })
     ).toBe(true);
   });

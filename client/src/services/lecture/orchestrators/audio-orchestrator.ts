@@ -4,6 +4,7 @@ import {
   type AudioGenerationRequest,
 } from "@/services/media-generation/core";
 import type { Logger } from "@/services/media-generation/core";
+import type { LectureAssetStorage } from "@/services/lecture/storage";
 
 /**
  * Request for generating all lecture audio narrations
@@ -21,6 +22,7 @@ export type GenerateLectureAudioRequest = {
 export type AudioGenerationContext = {
   userId: string;
   projectId: number;
+  lectureId: number;
   maxConcurrency?: number;
 };
 
@@ -29,7 +31,7 @@ export type AudioGenerationContext = {
  */
 export type AudioOrchestratorDeps = {
   generateAudios?: typeof generateAudiosThrottled;
-  saveFile: (buffer: Buffer, path: string) => Promise<void>;
+  assetStorage: LectureAssetStorage;
   logger?: Logger;
   onAudioProgress?: (current: number, total: number) => void | Promise<void>;
 };
@@ -49,8 +51,8 @@ export async function generateLectureAudio(
   deps: AudioOrchestratorDeps
 ): Promise<NarrationSettings[]> {
   const { script, voice, model, runId } = request;
-  const { userId, projectId, maxConcurrency = 5 } = context;
-  const { generateAudios = generateAudiosThrottled, saveFile, logger, onAudioProgress } = deps;
+  const { maxConcurrency = 5 } = context;
+  const { generateAudios = generateAudiosThrottled, assetStorage, logger, onAudioProgress } = deps;
 
   const segments = script.segments || [];
 
@@ -85,18 +87,13 @@ export async function generateLectureAudio(
   const narrationAssets: NarrationSettings[] = await Promise.all(
     audioResults.map(async (result, segmentIndex) => {
       const id = `narration-${runId}-${segmentIndex}`;
-      const relativePath = `narration/${id}.mp3`;
-      const sourceUrl = `${userId}/${projectId}/${relativePath}`;
-
-      // Save to storage
-      const fullPath = sourceUrl;
-      await saveFile(result.buffer, fullPath);
+      const sourceUrl = await assetStorage.saveNarration(result.buffer, id);
 
       logger?.info("Audio saved", {
         id,
         segmentIndex,
         duration: result.duration,
-        path: fullPath,
+        path: sourceUrl,
       });
 
       return {
@@ -139,12 +136,11 @@ export type RegenerateAudioRequest = {
  */
 export async function regenerateAudio(
   request: RegenerateAudioRequest,
-  context: AudioGenerationContext,
+  _context: AudioGenerationContext,
   deps: AudioOrchestratorDeps
 ): Promise<NarrationSettings> {
   const { text, voice, model, narrationId } = request;
-  const { userId, projectId } = context;
-  const { generateAudios = generateAudiosThrottled, saveFile, logger } = deps;
+  const { generateAudios = generateAudiosThrottled, assetStorage, logger } = deps;
 
   logger?.info("Regenerating audio", {
     narrationId,
@@ -165,15 +161,12 @@ export async function regenerateAudio(
   );
 
   // Save audio
-  const relativePath = `narration/${narrationId}.mp3`;
-  const sourceUrl = `${userId}/${projectId}/${relativePath}`;
-  const fullPath = sourceUrl;
-  await saveFile(result.buffer, fullPath);
+  const sourceUrl = await assetStorage.saveNarration(result.buffer, narrationId);
 
   logger?.info("Audio regenerated and saved", {
     narrationId,
     duration: result.duration,
-    path: fullPath,
+    path: sourceUrl,
   });
 
   return {

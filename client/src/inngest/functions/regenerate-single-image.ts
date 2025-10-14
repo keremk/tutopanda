@@ -12,6 +12,7 @@ import { imageProviderRegistry, ReplicateImageProvider } from "@/services/media-
 import { FileStorageHandler } from "@/services/media-generation/core";
 import { regenerateImage } from "@/services/lecture/orchestrators";
 import { createWorkflowRun, updateWorkflowRun } from "@/data/workflow-runs";
+import { createLectureAssetStorage } from "@/services/lecture/storage";
 
 const inngest = getInngestApp();
 
@@ -96,6 +97,11 @@ export const regenerateSingleImage = inngest.createFunction(
         imageDefaults.style = model as any;
       }
 
+      const assetStorage = createLectureAssetStorage(
+        { userId, projectId, lectureId },
+        { storageHandler }
+      );
+
       const image = await regenerateImage(
         {
           prompt,
@@ -105,11 +111,10 @@ export const regenerateSingleImage = inngest.createFunction(
         {
           userId,
           projectId,
+          lectureId,
         },
         {
-          saveFile: async (buffer, path) => {
-            await storageHandler.saveFile(buffer, path);
-          },
+          assetStorage,
           logger: log,
         }
       );

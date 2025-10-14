@@ -6,6 +6,7 @@ import {
 } from "@/services/media-generation/core";
 import type { Logger } from "@/services/media-generation/core";
 import { DEFAULT_MUSIC_MODEL } from "@/lib/models";
+import type { LectureAssetStorage } from "@/services/lecture/storage";
 
 /**
  * Request for generating lecture music
@@ -23,6 +24,7 @@ export type GenerateLectureMusicRequest = {
 export type MusicGenerationContext = {
   userId: string;
   projectId: number;
+  lectureId: number;
 };
 
 /**
@@ -31,7 +33,7 @@ export type MusicGenerationContext = {
 export type MusicOrchestratorDeps = {
   generatePrompt?: typeof generateMusicPrompt;
   generateMusics?: typeof generateMusicsThrottled;
-  saveFile: (buffer: Buffer, path: string) => Promise<void>;
+  assetStorage: LectureAssetStorage;
   logger?: Logger;
 };
 
@@ -50,11 +52,10 @@ export async function generateLectureMusic(
   deps: MusicOrchestratorDeps
 ): Promise<MusicSettings> {
   const { script, durationSeconds, model = DEFAULT_MUSIC_MODEL, runId } = request;
-  const { userId, projectId } = context;
   const {
     generatePrompt = generateMusicPrompt,
     generateMusics = generateMusicsThrottled,
-    saveFile,
+    assetStorage,
     logger,
   } = deps;
 
@@ -87,14 +88,11 @@ export async function generateLectureMusic(
 
   // Step 3: Save music file
   const id = `music-${runId}`;
-  const relativePath = `musical-score/${id}.mp3`;
-  const audioUrl = `${userId}/${projectId}/${relativePath}`;
-  const fullPath = audioUrl;
-  await saveFile(buffer, fullPath);
+  const audioUrl = await assetStorage.saveMusic(buffer, id);
 
   logger?.info("Music saved", {
     id,
-    path: fullPath,
+    path: audioUrl,
     bufferSize: buffer.length,
   });
 
@@ -134,12 +132,11 @@ export type RegenerateMusicRequest = {
  */
 export async function regenerateMusic(
   request: RegenerateMusicRequest,
-  context: MusicGenerationContext,
+  _context: MusicGenerationContext,
   deps: MusicOrchestratorDeps
 ): Promise<MusicSettings> {
   const { prompt, durationSeconds, model = DEFAULT_MUSIC_MODEL, musicId } = request;
-  const { userId, projectId } = context;
-  const { generateMusics = generateMusicsThrottled, saveFile, logger } = deps;
+  const { generateMusics = generateMusicsThrottled, assetStorage, logger } = deps;
 
   logger?.info("Regenerating music", {
     musicId,
@@ -162,14 +159,11 @@ export async function regenerateMusic(
   );
 
   // Save music file
-  const relativePath = `musical-score/${musicId}.mp3`;
-  const audioUrl = `${userId}/${projectId}/${relativePath}`;
-  const fullPath = audioUrl;
-  await saveFile(buffer, fullPath);
+  const audioUrl = await assetStorage.saveMusic(buffer, musicId);
 
   logger?.info("Music regenerated and saved", {
     musicId,
-    path: fullPath,
+    path: audioUrl,
     bufferSize: buffer.length,
   });
 
