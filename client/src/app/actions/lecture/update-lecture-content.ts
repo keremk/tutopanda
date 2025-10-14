@@ -1,33 +1,12 @@
 "use server";
 
-import { z } from "zod";
-
 import { getSession } from "@/lib/session";
-import {
-  lectureUpdatePayloadSchema,
-  updateLectureContent,
-  type LectureUpdatePayload,
-} from "@/services/lecture/persist";
+import { updateLectureContent } from "@/services/lecture/persist";
 import { toSerializableLectureSnapshot } from "@/data/lecture/repository";
-
-const updateLectureContentActionSchema = z.object({
-  lectureId: z.number().int().positive(),
-  baseRevision: z.number().int().nonnegative().optional(),
-  payload: lectureUpdatePayloadSchema.refine(
-    (value) => Object.keys(value).length > 0,
-    {
-      message: "Provide at least one field to update.",
-    }
-  ),
-});
-
-export type UpdateLectureContentActionInput = z.infer<
-  typeof updateLectureContentActionSchema
->;
-
-export type SerializedLectureSnapshot = ReturnType<
-  typeof toSerializableLectureSnapshot
->;
+import {
+  type UpdateLectureContentActionInput,
+  updateLectureContentActionSchema,
+} from "./types";
 
 export async function updateLectureContentAction({
   lectureId,
@@ -51,5 +30,3 @@ export async function updateLectureContentAction({
 
   return toSerializableLectureSnapshot(snapshot);
 }
-
-export type { LectureUpdatePayload } from "@/services/lecture/persist";

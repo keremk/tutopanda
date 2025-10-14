@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import VideoPreviewContent from "./video-preview-content";
+import LazyVideoPreview from "./lazy-video-preview";
 import EditorLayout from "./editor-layout";
 import { useLectureEditor } from "./lecture-editor-provider";
 import type { Timeline, TimelineTrackKey, aspectRatioValues } from "@/types/types";
@@ -58,7 +58,7 @@ export default function PreviewTab({
       onRemoveClip={onRemoveClip}
       onUpdateClip={onUpdateClip}
     >
-      <VideoPreviewContent
+      <LazyVideoPreview
         timeline={activeTimeline}
         currentTime={currentTime}
         isPlaying={isPlaying}

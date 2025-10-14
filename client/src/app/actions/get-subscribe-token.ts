@@ -8,7 +8,7 @@ import { getInngestApp } from "@/inngest/client";
 
 const inngest = getInngestApp();
 
-export type LectureProgressToken = Realtime.Token<
+type LectureProgressToken = Realtime.Token<
   typeof lectureProgressChannel,
   ["progress"]
 >;

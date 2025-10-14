@@ -17,7 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import EffectPreview from "./effect-preview";
+import LazyEffectPreview from "./lazy-effect-preview";
 import { kenBurnsEffects } from "@/lib/timeline/ken-burns";
 import { regenerateImageAction } from "@/app/actions/regenerate-image";
 import ImagePreviewModal from "@/components/image-preview-modal";
@@ -299,7 +299,7 @@ export default function VisualsEditor({ selectedClipId }: VisualsEditorProps) {
       <div className="h-full flex gap-6 bg-background">
         <div className="flex-1 flex items-center justify-center bg-muted/30 rounded-lg border border-border overflow-hidden">
           {committedImageUrl ? (
-            <EffectPreview
+            <LazyEffectPreview
               clip={selectedClip}
               imageUrl={committedImageUrl}
               effectName={localEffectName}

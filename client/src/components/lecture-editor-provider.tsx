@@ -12,10 +12,8 @@ import {
 } from "react";
 import { useInngestSubscription } from "@inngest/realtime/hooks";
 
-import {
-  updateLectureContentAction,
-  type UpdateLectureContentActionInput,
-} from "@/app/actions/lecture/update-lecture-content";
+import { updateLectureContentAction } from "@/app/actions/lecture/update-lecture-content";
+import type { UpdateLectureContentActionInput } from "@/app/actions/lecture/types";
 import { getLectureAction } from "@/app/actions/lecture/get-lecture";
 import type { SerializableLectureSnapshot } from "@/data/lecture/repository";
 import type {
