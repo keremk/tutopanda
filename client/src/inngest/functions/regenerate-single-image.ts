@@ -25,7 +25,8 @@ export type RegenerateSingleImageEvent = {
   lectureId: number;
   projectId: number;
   imageAssetId: string;
-  prompt: string;
+  basePrompt: string;
+  style?: LectureConfig["image"]["style"];
   model?: string;
   config: LectureConfig;
 };
@@ -40,7 +41,8 @@ export const regenerateSingleImage = inngest.createFunction(
       lectureId,
       projectId,
       imageAssetId,
-      prompt,
+      basePrompt,
+      style,
       model,
       config,
     } = event.data as RegenerateSingleImageEvent;
@@ -78,7 +80,12 @@ export const regenerateSingleImage = inngest.createFunction(
 
     // Step 3: Generate single image
     const generatedImage = await step.run("generate-single-image", async () => {
-      log.info("Generating single image", { prompt, model, imageAssetId });
+      log.info("Generating single image", {
+        basePrompt,
+        style,
+        model,
+        imageAssetId,
+      });
       await publishStatus("Generating image with AI", 0);
 
       const storage = setupFileStorage();
@@ -89,13 +96,8 @@ export const regenerateSingleImage = inngest.createFunction(
         height: 576,
         aspectRatio: config.image?.aspectRatio || "16:9",
         size: config.image?.size || "1080",
-        style: config.image?.style,
+        style: style ?? config.image?.style,
       };
-
-      // If model is specified, override the config
-      if (model) {
-        imageDefaults.style = model as any;
-      }
 
       const assetStorage = createLectureAssetStorage(
         { userId, projectId, lectureId },
@@ -104,7 +106,8 @@ export const regenerateSingleImage = inngest.createFunction(
 
       const image = await regenerateImage(
         {
-          prompt,
+          basePrompt,
+          style: style ?? config.image?.style,
           config: imageDefaults,
           imageId: imageAssetId, // Use existing ID to maintain references
         },
@@ -193,7 +196,8 @@ export const regenerateSingleImage = inngest.createFunction(
         img.id === imageAssetId
           ? {
               id: imageAssetId, // Keep the same ID
-              prompt, // Update with new prompt
+              prompt: basePrompt, // Update with new prompt
+              style: generatedImage.style,
               model: model || img.model || generatedImage.model, // Update model if provided
               sourceUrl: generatedImage.sourceUrl,
               aspectRatio: generatedImage.aspectRatio,

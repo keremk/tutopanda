@@ -69,6 +69,15 @@ export const aspectRatioValues = [
   "2:3",
 ] as const;
 
+export const imageStyleValues = [
+  "Ghibli",
+  "Pixar",
+  "Anime",
+  "Watercolor",
+  "Cartoon",
+  "Photorealistic",
+] as const;
+
 export const kenBurnsEffectNames = [
   "portraitZoomIn",
   "portraitZoomOut",
@@ -102,6 +111,7 @@ export const imageAssetSchema = baseAssetSchema
     width: z.number().nonnegative().optional(),
     height: z.number().nonnegative().optional(),
     size: z.string().optional(),
+    style: z.enum(imageStyleValues).optional(),
     sourceUrl: z.string().optional(),
   })
   .passthrough();
@@ -223,7 +233,6 @@ export const audienceValues = [
   "Enthusiast/Niche"
 ] as const;
 export const imageSizeValues = ["480", "720", "1080"] as const;
-export const imageStyleValues = ["Ghibli", "Pixar", "Anime", "Watercolor", "Cartoon", "Photorealistic"] as const;
 export const imageFormatValues = ["JPG", "PNG"] as const;
 export const videoDurationSegmentValues = ["5", "10"] as const;
 export const segmentLengthValues = ["10", "15"] as const;

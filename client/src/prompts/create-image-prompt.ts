@@ -1,14 +1,15 @@
 import { z } from "zod";
+import { buildStyledImagePrompt, type ImageStyleValue } from "@/lib/image-styles";
 import type { LectureScript } from "@/prompts/create-script";
 
-export const createImagePromptDeveloperPrompt = [
-  "You are an expert documentary film maker and trying to select the best scene that describes the key point in a narrative.",
-  "You will be given the narrative text.",
-  "Use the narrative text to come up with a prompt that best describes the key point in that narrative to be fed into an image generation model.",
-  "The image will be generated using a diffusion model using that prompt, and make sure that there are no instructions to generate any text in the image.",
-  "Only pick up one or two most key points, DO NOT TRY to depict every possible point as it will lead to a very crowded scene.",
-  "The scene should succinctly and unambiguously present the main point.",
-].join(" ");
+export const createImagePromptDeveloperPrompt = `
+You are an expert documentary filmmaker choosing a single compelling scene that illustrates the key point in a narrative.
+You will be given the narrative text.
+Use the narrative text to craft a prompt that highlights the core idea for an image generation model.
+The image will be produced by a diffusion model; do not instruct it to render any text or lettering.
+Focus on one or two essential details so the scene remains clear and uncluttered.
+The resulting scene should deliver the primary idea with clarity and emotional resonance.
+`.trim();
 
 type LectureSegment = LectureScript["segments"][number];
 
@@ -29,7 +30,7 @@ export type ImagePromptRequest = {
   imagesPerSegment?: number;
 };
 
-export const buildImagePromptUserMessage = ({
+export const buildPromptForImageGeneration = ({
   segment,
   segmentIndex,
   imagesPerSegment = 1,
@@ -45,15 +46,40 @@ export const buildImagePromptUserMessage = ({
     .join("\n\n");
 
   const countInstruction = imagesPerSegment > 1
-    ? `\n\nGenerate exactly ${imagesPerSegment} distinct image prompts. Each prompt should capture a different key moment or aspect from the narrative.`
-    : "";
+    ? `Generate exactly ${imagesPerSegment} distinct image prompts. Each prompt should capture a different key moment or aspect from the narrative.`
+    : null;
 
-  return [
-    "Narrative excerpt:",
-    summary,
-    `Create a concise, vivid prompt for an image generation diffusion model that captures the primary idea. Do not include text generation instructions.${countInstruction}`,
-  ]
-    .filter(Boolean)
-    .join("\n\n");
+  return `
+Narrative excerpt:
+${summary}
+
+Create a concise, vivid prompt for an image generation diffusion model that captures the primary idea. Do not include text generation instructions.${countInstruction ? `\n\n${countInstruction}` : ""}`.trim();
 };
 
+type BuildImageGenerationPromptOptions = {
+  basePrompt: string;
+  segment?: LectureSegment;
+  style?: ImageStyleValue | null;
+};
+
+export const buildImageGenerationPrompt = ({
+  basePrompt,
+  segment,
+  style,
+}: BuildImageGenerationPromptOptions) => {
+  const fallbackPrompt = segment
+    ? [
+        segment.narration.trim(),
+        segment.backgroundMusic?.trim(),
+        segment.effect?.trim(),
+      ]
+        .filter(Boolean)
+        .join(" ")
+    : "";
+
+  const promptSource = basePrompt.trim() || fallbackPrompt;
+  return buildStyledImagePrompt({
+    basePrompt: promptSource,
+    style,
+  });
+};

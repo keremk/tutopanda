@@ -2,7 +2,7 @@ import { openai } from "@ai-sdk/openai";
 import { generateObject } from "ai";
 import {
   createImagePromptDeveloperPrompt,
-  buildImagePromptUserMessage,
+  buildPromptForImageGeneration,
   singleImagePromptSchema,
   multipleImagePromptsSchema,
 } from "@/prompts/create-image-prompt";
@@ -10,15 +10,15 @@ import type { PromptGenerationOptions } from "./types";
 import { LLM_MODELS } from "@/lib/models";
 
 /**
- * Generate image prompts for a segment using Vercel AI SDK.
- * Returns an array of styled prompts ready for image generation.
+ * Generate base image prompts for a segment using Vercel AI SDK.
+ * Returns prompts without style embellishments so they can be combined later.
  */
 export async function generatePromptsForSegment(
   options: PromptGenerationOptions
 ): Promise<string[]> {
-  const { segment, segmentIndex, imagesPerSegment, style } = options;
+  const { segment, segmentIndex, imagesPerSegment } = options;
 
-  const userPrompt = buildImagePromptUserMessage({
+  const userPrompt = buildPromptForImageGeneration({
     segment,
     segmentIndex,
     imagesPerSegment,
@@ -39,9 +39,5 @@ export async function generatePromptsForSegment(
       ? (object as { prompts: string[] }).prompts
       : [(object as { prompt: string }).prompt];
 
-  // Apply style prefix if specified
-  const stylePrefix = style ? `${style} style, ` : "";
-  const styledPrompts = basePrompts.map((p) => `${stylePrefix}${p}`);
-
-  return styledPrompts;
+  return basePrompts;
 }

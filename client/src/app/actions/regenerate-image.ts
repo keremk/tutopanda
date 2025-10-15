@@ -8,20 +8,23 @@ import { getProjectSettings } from "@/data/project";
 import { getInngestApp } from "@/inngest/client";
 import type { RegenerateSingleImageEvent } from "@/inngest/functions/regenerate-single-image";
 import type { LectureConfig } from "@/types/types";
+import { imageStyleValues } from "@/types/types";
 
 const inngest = getInngestApp();
 
 type RegenerateImageInput = {
   lectureId: number;
   imageAssetId: string;
-  prompt: string;
+  basePrompt: string;
+  style?: (typeof imageStyleValues)[number];
   model?: string;
 };
 
 export async function regenerateImageAction({
   lectureId,
   imageAssetId,
-  prompt,
+  basePrompt,
+  style,
   model,
 }: RegenerateImageInput) {
   const { user } = await getSession();
@@ -57,7 +60,8 @@ export async function regenerateImageAction({
       lectureId,
       projectId: lecture.projectId,
       imageAssetId,
-      prompt,
+      basePrompt,
+      style,
       model,
       config: projectSettings,
     } satisfies RegenerateSingleImageEvent,

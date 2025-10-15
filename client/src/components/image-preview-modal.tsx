@@ -8,6 +8,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import type { ImageAsset } from "@/types/types";
+import { buildStyledImagePrompt, getImageStyleMetadata } from "@/lib/image-styles";
 
 interface ImagePreviewModalProps {
   isOpen: boolean;
@@ -29,6 +30,12 @@ export default function ImagePreviewModal({
   isDecisionPending = false,
 }: ImagePreviewModalProps) {
   if (!imageAsset) return null;
+
+  const styleMetadata = getImageStyleMetadata(imageAsset.style);
+  const finalPrompt = buildStyledImagePrompt({
+    basePrompt: imageAsset.prompt ?? "",
+    style: imageAsset.style,
+  });
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
@@ -54,12 +61,35 @@ export default function ImagePreviewModal({
           )}
         </div>
 
-        {imageAsset.prompt && (
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Prompt Used:</label>
-            <p className="text-sm text-muted-foreground">{imageAsset.prompt}</p>
-          </div>
-        )}
+        <div className="space-y-4">
+          {imageAsset.prompt && (
+            <div className="space-y-1">
+              <label className="text-sm font-medium">Base Prompt</label>
+              <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+                {imageAsset.prompt}
+              </p>
+            </div>
+          )}
+
+          {styleMetadata && (
+            <div className="space-y-1">
+              <label className="text-sm font-medium">Style</label>
+              <p className="text-sm text-foreground">{styleMetadata.label}</p>
+              <p className="text-xs text-muted-foreground whitespace-pre-wrap">
+                {styleMetadata.description}
+              </p>
+            </div>
+          )}
+
+          {styleMetadata && finalPrompt !== imageAsset.prompt && (
+            <div className="space-y-1">
+              <label className="text-sm font-medium">Final AI Prompt</label>
+              <p className="text-xs text-muted-foreground whitespace-pre-wrap">
+                {finalPrompt}
+              </p>
+            </div>
+          )}
+        </div>
 
         <DialogFooter>
           <Button

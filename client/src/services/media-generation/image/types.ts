@@ -1,4 +1,4 @@
-import type { LectureScript, ImageAsset, ImageGenerationDefaults } from "@/types/types";
+import type { LectureScript, ImageGenerationDefaults } from "@/types/types";
 import type { MediaProvider } from "../core";
 
 type LectureSegment = LectureScript["segments"][number];
@@ -54,5 +54,4 @@ export type PromptGenerationOptions = {
   segment: LectureSegment;
   segmentIndex: number;
   imagesPerSegment: number;
-  style?: string;
 };

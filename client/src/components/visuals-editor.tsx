@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLectureEditor } from "./lecture-editor-provider";
-import type { KenBurnsClip } from "@/types/types";
+import { DEFAULT_IMAGE_GENERATION_DEFAULTS, type KenBurnsClip } from "@/types/types";
 import { imageModelValues } from "@/lib/models";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -27,6 +27,7 @@ import { useAssetGenerationFlow } from "@/hooks/use-asset-generation-flow";
 import { useAssetDraft } from "@/hooks/use-asset-draft";
 import { buildAssetUrl } from "@/lib/asset-url";
 import type { LectureImagePreviewMessage } from "@/inngest/functions/workflow-utils";
+import { getImageStyleMetadata, listImageStyles, type ImageStyleValue } from "@/lib/image-styles";
 
 interface VisualsEditorProps {
   selectedClipId: string | null;
@@ -35,6 +36,7 @@ interface VisualsEditorProps {
 type ImageDraftState = {
   prompt: string;
   model: string;
+  style: ImageStyleValue;
 };
 
 const toStorageUrl = (sourceUrl?: string | null) =>
@@ -71,13 +73,17 @@ export default function VisualsEditor({ selectedClipId }: VisualsEditorProps) {
   );
 
   const defaultImageModel = projectSettings.image.model || "";
+  const defaultImageStyle =
+    projectSettings.image.style || DEFAULT_IMAGE_GENERATION_DEFAULTS.style;
+  const availableStyles = useMemo(() => listImageStyles(), []);
 
   const baseImageDraft = useMemo<ImageDraftState>(
     () => ({
       prompt: imageAsset?.prompt || "",
       model: imageAsset?.model || defaultImageModel,
+      style: imageAsset?.style ?? defaultImageStyle,
     }),
-    [imageAsset?.prompt, imageAsset?.model, defaultImageModel]
+    [imageAsset?.prompt, imageAsset?.model, imageAsset?.style, defaultImageModel, defaultImageStyle]
   );
 
   const {
@@ -99,6 +105,13 @@ export default function VisualsEditor({ selectedClipId }: VisualsEditorProps) {
   const handleModelChange = useCallback(
     (value: string) => {
       setImageDraft((prev) => ({ ...prev, model: value }));
+    },
+    [setImageDraft]
+  );
+
+  const handleStyleChange = useCallback(
+    (value: string) => {
+      setImageDraft((prev) => ({ ...prev, style: value as ImageStyleValue }));
     },
     [setImageDraft]
   );
@@ -130,7 +143,8 @@ export default function VisualsEditor({ selectedClipId }: VisualsEditorProps) {
       regenerateImageAction({
         lectureId,
         imageAssetId: imageAsset!.id,
-        prompt: imageDraft.prompt,
+        basePrompt: imageDraft.prompt,
+        style: imageDraft.style,
         model: imageDraft.model || undefined,
       }),
     onAccept: (runId, assetId) =>
@@ -154,6 +168,7 @@ export default function VisualsEditor({ selectedClipId }: VisualsEditorProps) {
       applyImageDraftPreview({
         prompt: message.imageAsset.prompt || "",
         model: message.imageAsset.model || defaultImageModel,
+        style: message.imageAsset.style || defaultImageStyle,
       });
     },
   });
@@ -224,6 +239,11 @@ export default function VisualsEditor({ selectedClipId }: VisualsEditorProps) {
         ? "text-xs text-destructive mt-2"
         : "text-xs text-muted-foreground mt-2",
     [generationError]
+  );
+
+  const selectedStyleMetadata = useMemo(
+    () => getImageStyleMetadata(imageDraft.style || defaultImageStyle),
+    [imageDraft.style, defaultImageStyle]
   );
 
   const handlePrimaryAction = useCallback(() => {
@@ -335,6 +355,29 @@ export default function VisualsEditor({ selectedClipId }: VisualsEditorProps) {
                     placeholder="Describe the image..."
                     disabled={!imageAsset}
                   />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="image-style">Style</Label>
+                  <Select
+                    value={imageDraft.style}
+                    onValueChange={handleStyleChange}
+                    disabled={!imageAsset}
+                  >
+                    <SelectTrigger id="image-style">
+                      <SelectValue placeholder="Select a style..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {availableStyles.map((styleOption) => (
+                        <SelectItem key={styleOption.value} value={styleOption.value}>
+                          {styleOption.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    {selectedStyleMetadata?.description ?? "Choose a style to guide the image aesthetic."}
+                  </p>
                 </div>
 
                 <div className="space-y-2">

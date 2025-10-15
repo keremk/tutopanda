@@ -1,4 +1,10 @@
-import type { LectureScript, ImageAsset, ImageGenerationDefaults } from "@/types/types";
+import {
+  DEFAULT_IMAGE_GENERATION_DEFAULTS,
+  type LectureScript,
+  type ImageAsset,
+  type ImageGenerationDefaults,
+} from "@/types/types";
+import { buildImageGenerationPrompt } from "@/prompts/create-image-prompt";
 import { generatePromptsForSegment } from "@/services/media-generation/image/prompt-generator";
 import {
   batchWithConcurrency,
@@ -68,6 +74,7 @@ export async function generateLectureImages(
 
   const segments = script.segments || [];
   const imagesPerSegment = config.imagesPerSegment ?? 1;
+  const appliedStyle = config.style ?? DEFAULT_IMAGE_GENERATION_DEFAULTS.style;
 
   logger?.info("Starting lecture image generation", {
     segmentCount: segments.length,
@@ -95,7 +102,6 @@ export async function generateLectureImages(
         segment,
         segmentIndex,
         imagesPerSegment,
-        style: config.style,
       });
 
       completedPromptSegments += 1;
@@ -112,10 +118,10 @@ export async function generateLectureImages(
   );
 
   const allPrompts = promptResults.flatMap(({ segmentIndex, prompts }) =>
-    prompts.map((prompt, imageIndex) => ({
+    prompts.map((basePrompt, imageIndex) => ({
       segmentIndex,
       imageIndex,
-      prompt,
+      basePrompt,
     }))
   );
 
@@ -134,16 +140,30 @@ export async function generateLectureImages(
       ? Math.round((config.width / aspectWidth) * aspectHeight)
       : config.height;
 
-  const imageRequests: ImageGenerationRequest[] = allPrompts.map((item) => ({
-    prompt: item.prompt,
-    config: {
-      aspectRatio: config.aspectRatio,
-      size: config.size,
-      width: config.width,
-      height: computedHeight,
-      model: DEFAULT_IMAGE_MODEL,
-    },
-  }));
+  const imageRequests: ImageGenerationRequest[] = allPrompts.map((item) => {
+    const segment = segments[item.segmentIndex];
+
+    if (!segment) {
+      throw new Error(`Segment ${item.segmentIndex} not found while building image prompt`);
+    }
+
+    const styledPrompt = buildImageGenerationPrompt({
+      basePrompt: item.basePrompt,
+      segment,
+      style: appliedStyle,
+    });
+
+    return {
+      prompt: styledPrompt,
+      config: {
+        aspectRatio: config.aspectRatio,
+        size: config.size,
+        width: config.width,
+        height: computedHeight,
+        model: DEFAULT_IMAGE_MODEL,
+      },
+    };
+  });
 
   // Step 3: Generate images with throttling
   const buffers = await generateImages(imageRequests, {
@@ -160,7 +180,7 @@ export async function generateLectureImages(
   // Step 4: Save images and build assets
   const imageAssets: ImageAsset[] = await Promise.all(
     buffers.map(async (buffer, index) => {
-      const { segmentIndex, imageIndex, prompt } = allPrompts[index];
+      const { segmentIndex, imageIndex, basePrompt } = allPrompts[index];
       const id = `img-${runId}-${segmentIndex}-${imageIndex}`;
       const sourceUrl = await assetStorage.saveImage(buffer, id);
 
@@ -174,7 +194,8 @@ export async function generateLectureImages(
       return {
         id,
         label: `Segment ${segmentIndex + 1}${imagesPerSegment > 1 ? ` Image ${imageIndex + 1}` : ""}`,
-        prompt,
+        prompt: basePrompt,
+        style: appliedStyle,
         aspectRatio: config.aspectRatio,
         width: config.width,
         height: computedHeight,
@@ -196,7 +217,8 @@ export async function generateLectureImages(
  * Request for regenerating a single image
  */
 export type RegenerateImageRequest = {
-  prompt: string;
+  basePrompt: string;
+  style?: ImageGenerationDefaults["style"];
   config: ImageGenerationDefaults;
   imageId: string;
 };
@@ -215,12 +237,19 @@ export async function regenerateImage(
   _context: ImageGenerationContext,
   deps: ImageOrchestratorDeps
 ): Promise<ImageAsset> {
-  const { prompt, config, imageId } = request;
+  const { basePrompt, style, config, imageId } = request;
   const { generateImages = generateImagesThrottled, assetStorage, logger } = deps;
+
+  const appliedStyle = style ?? config.style ?? DEFAULT_IMAGE_GENERATION_DEFAULTS.style;
+  const styledPrompt = buildImageGenerationPrompt({
+    basePrompt,
+    style: appliedStyle,
+  });
 
   logger?.info("Regenerating image", {
     imageId,
-    promptPreview: prompt.substring(0, 100) + "...",
+    basePromptPreview: basePrompt.substring(0, 100) + "...",
+    styledPromptPreview: styledPrompt.substring(0, 100) + "...",
   });
 
   // Calculate dimensions
@@ -237,7 +266,7 @@ export async function regenerateImage(
   const [buffer] = await generateImages(
     [
       {
-        prompt,
+        prompt: styledPrompt,
         config: {
           aspectRatio: config.aspectRatio,
           size: config.size,
@@ -261,7 +290,8 @@ export async function regenerateImage(
   return {
     id: imageId,
     label: "Regenerated Image",
-    prompt,
+    prompt: basePrompt,
+    style: appliedStyle,
     aspectRatio: config.aspectRatio,
     width: config.width,
     height: computedHeight,

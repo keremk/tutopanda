@@ -76,11 +76,16 @@ describe("generateLectureImages", () => {
       id: "img-test-run-123-0-0",
       label: "Segment 1",
       prompt: "Prompt for segment 1",
+      style: "Photorealistic",
       aspectRatio: "16:9",
       width: 1024,
       model: "bytedance/seedream-4",
       sourceUrl: "user-1/42/7/images/img-test-run-123-0-0.jpg",
     });
+
+    const imageRequests = mockGenerateImages.mock.calls[0]?.[0];
+    expect(Array.isArray(imageRequests)).toBe(true);
+    expect(imageRequests?.[0]?.prompt).toContain("photorealistic cinematic shot");
   });
 
   it("handles multiple images per segment", async () => {
@@ -131,6 +136,7 @@ describe("generateLectureImages", () => {
     expect(results[1].label).toBe("Segment 1 Image 2");
     expect(results[2].label).toBe("Segment 2 Image 1");
     expect(results[3].label).toBe("Segment 2 Image 2");
+    expect(results.every((image) => image.style === config.style)).toBe(true);
   });
 
   it("saves files to correct paths", async () => {
@@ -323,7 +329,8 @@ describe("generateLectureImages", () => {
 describe("regenerateImage", () => {
   it("regenerates a single image", async () => {
     const request = {
-      prompt: "New updated prompt",
+      basePrompt: "New updated prompt",
+      style: "Anime",
       config: createMockImageConfig(),
       imageId: "img-regen-123",
     };
@@ -353,6 +360,7 @@ describe("regenerateImage", () => {
       id: "img-regen-123",
       label: "Regenerated Image",
       prompt: "New updated prompt",
+      style: "Anime",
       aspectRatio: "16:9",
       model: "bytedance/seedream-4",
       sourceUrl: "user-1/42/88/images/img-regen-123.jpg",
@@ -360,11 +368,14 @@ describe("regenerateImage", () => {
 
     expect(mockGenerateImages).toHaveBeenCalledTimes(1);
     expect(mockStorage.savedFiles.size).toBe(1);
+
+    const imageRequests = mockGenerateImages.mock.calls[0]?.[0];
+    expect(imageRequests?.[0]?.prompt).toContain("modern anime illustration");
   });
 
   it("saves to correct path", async () => {
     const request = {
-      prompt: "Test prompt",
+      basePrompt: "Test prompt",
       config: createMockImageConfig(),
       imageId: "img-path-test",
     };
@@ -393,7 +404,7 @@ describe("regenerateImage", () => {
 
   it("logs regeneration activity", async () => {
     const request = {
-      prompt: "A very long prompt ".repeat(20),
+      basePrompt: "A very long prompt ".repeat(20),
       config: createMockImageConfig(),
       imageId: "img-log-test",
     };
@@ -427,7 +438,7 @@ describe("regenerateImage", () => {
     config.width = 800;
 
     const request = {
-      prompt: "Test",
+      basePrompt: "Test",
       config,
       imageId: "img-dims-test",
     };
