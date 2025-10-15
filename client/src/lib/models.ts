@@ -138,14 +138,18 @@ export const DEFAULT_SOUND_EFFECT_MODEL = SOUND_EFFECT_MODELS.ELEVENLABS;
 // ============================================================================
 
 export const VIDEO_MODELS = {
-  SEADANCE_1_LITE: "Seadance-1-lite",
+  BYTEDANCE_SEEDANCE_1_LITE: "bytedance/seedance-1-lite",
 } as const;
 
 export const videoModelValues = [
-  VIDEO_MODELS.SEADANCE_1_LITE,
+  VIDEO_MODELS.BYTEDANCE_SEEDANCE_1_LITE,
 ] as const;
 
-export const DEFAULT_VIDEO_MODEL = VIDEO_MODELS.SEADANCE_1_LITE;
+export const videoModelOptions = [
+  { id: VIDEO_MODELS.BYTEDANCE_SEEDANCE_1_LITE, name: "Seadance 1 Lite" },
+] as const;
+
+export const DEFAULT_VIDEO_MODEL = VIDEO_MODELS.BYTEDANCE_SEEDANCE_1_LITE;
 
 // ============================================================================
 // LLM MODELS (Script Generation)

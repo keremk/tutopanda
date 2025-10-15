@@ -235,6 +235,7 @@ export const audienceValues = [
 export const imageSizeValues = ["480", "720", "1080"] as const;
 export const imageFormatValues = ["JPG", "PNG"] as const;
 export const videoDurationSegmentValues = ["5", "10"] as const;
+export const videoResolutionValues = ["480", "720", "1080"] as const;
 export const segmentLengthValues = ["10", "15"] as const;
 export const reasoningEffortValues = ["minimal", "low", "medium", "high"] as const;
 export const reasoningSummaryValues = ["auto", "concise", "detailed"] as const;
@@ -272,6 +273,17 @@ export const segmentLengthDescriptions: Record<(typeof segmentLengthValues)[numb
   "15": "approximately 15 seconds of narration",
 };
 
+export const videoDurationSegmentLabels: Record<(typeof videoDurationSegmentValues)[number], string> = {
+  "5": "5 seconds",
+  "10": "10 seconds",
+};
+
+export const videoResolutionLabels: Record<(typeof videoResolutionValues)[number], string> = {
+  "480": "480p",
+  "720": "720p",
+  "1080": "1080p",
+};
+
 export const generalConfigSchema = z.object({
   duration: z.enum(videoDurationValues),
   audience: z.enum(audienceValues),
@@ -299,6 +311,7 @@ export const imageConfigSchema = z.object({
 
 export const videoConfigSchema = z.object({
   model: z.string(),
+  resolution: z.enum(videoResolutionValues),
   duration: z.enum(videoDurationSegmentValues),
 });
 
@@ -420,7 +433,8 @@ export const DEFAULT_LECTURE_CONFIG: LectureConfig = {
   },
   video: {
     model: DEFAULT_VIDEO_MODEL,
-    duration: "5",
+    resolution: "480",
+    duration: "10",
   },
   narration: {
     segmentLength: "15",

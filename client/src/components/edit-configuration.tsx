@@ -9,6 +9,7 @@ import type {
   GeneralConfig,
   ResearchConfig,
   ImageConfig,
+  VideoConfig,
   NarrationConfig,
   MusicConfig,
   SoundEffectConfig,
@@ -17,6 +18,7 @@ import { DEFAULT_LECTURE_CONFIG } from "@/types/types";
 import { EditGeneralConfiguration } from "./configuration/edit-general-configuration";
 import { EditResearchConfiguration } from "./configuration/edit-research-configuration";
 import { EditImageConfiguration } from "./configuration/edit-image-configuration";
+import { EditVideoConfiguration } from "./configuration/edit-video-configuration";
 import { EditNarrationConfiguration } from "./configuration/edit-narration-configuration";
 import { EditMusicConfiguration } from "./configuration/edit-music-configuration";
 import { EditSoundEffectsConfiguration } from "./configuration/edit-sound-effects-configuration";
@@ -29,12 +31,13 @@ interface EditConfigurationProps {
   onConfigEditComplete?: (runId: string, config: LectureConfig) => void;
 }
 
-type ConfigSection = "general" | "research" | "image" | "narration" | "music" | "effects";
+type ConfigSection = "general" | "research" | "image" | "video" | "narration" | "music" | "effects";
 
 const sections: { id: ConfigSection; label: string }[] = [
   { id: "general", label: "General" },
   { id: "research", label: "Research" },
   { id: "image", label: "Image" },
+  { id: "video", label: "Video" },
   { id: "narration", label: "Narration" },
   { id: "music", label: "Music" },
   { id: "effects", label: "Sound Effects" },
@@ -142,6 +145,12 @@ export default function EditConfiguration({
                 <EditImageConfiguration
                   config={editedConfig.image}
                   onChange={(image: ImageConfig) => setEditedConfig({ ...editedConfig, image })}
+                />
+              )}
+              {activeSection === "video" && (
+                <EditVideoConfiguration
+                  config={editedConfig.video}
+                  onChange={(video: VideoConfig) => setEditedConfig({ ...editedConfig, video })}
                 />
               )}
               {activeSection === "narration" && (
