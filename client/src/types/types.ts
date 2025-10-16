@@ -291,7 +291,6 @@ export const generalConfigSchema = z.object({
   language: z.enum(languageValues),
   subtitleLanguage: z.string().optional(),
   useVideo: z.boolean(),
-  maxVideoSegments: z.number().int().min(0).optional(),
 });
 
 export const researchConfigSchema = z.object({
@@ -416,7 +415,6 @@ export const DEFAULT_LECTURE_CONFIG: LectureConfig = {
     useSubtitles: false,
     language: "en",
     useVideo: false,
-    maxVideoSegments: 0,
   },
   research: {
     model: DEFAULT_SCRIPT_MODEL,

@@ -128,18 +128,6 @@ export function EditGeneralConfiguration({ config, onChange }: EditGeneralConfig
           />
         </div>
 
-        {config.useVideo && (
-          <div className="space-y-2">
-            <Label htmlFor="maxVideoSegments">Max Video Segments</Label>
-            <Input
-              id="maxVideoSegments"
-              type="number"
-              min="0"
-              value={config.maxVideoSegments || 0}
-              onChange={(e) => onChange({ ...config, maxVideoSegments: parseInt(e.target.value) || 0 })}
-            />
-          </div>
-        )}
       </div>
     </div>
   );

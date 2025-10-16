@@ -146,6 +146,7 @@ export async function getProjectSettings(
     // Migrate old configs that don't have research section
     return {
       ...settings,
+      general: settings.general ?? DEFAULT_LECTURE_CONFIG.general,
       research: settings.research ?? DEFAULT_LECTURE_CONFIG.research,
     };
   }

@@ -57,6 +57,7 @@ export default function EditConfiguration({
     if (!cfg) return null;
     return {
       ...cfg,
+      general: cfg.general ?? DEFAULT_LECTURE_CONFIG.general,
       research: cfg.research ?? DEFAULT_LECTURE_CONFIG.research,
     };
   };
