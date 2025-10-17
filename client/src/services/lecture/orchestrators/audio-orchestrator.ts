@@ -1,4 +1,5 @@
 import type { LectureScript, NarrationSettings } from "@/types/types";
+import { getNarrationLanguageSettings } from "@/lib/models";
 import {
   generateAudiosThrottled,
   type AudioGenerationRequest,
@@ -14,6 +15,8 @@ export type GenerateLectureAudioRequest = {
   voice: string;
   model: string;
   runId: string;
+  emotion?: string;
+  language?: string;
 };
 
 /**
@@ -50,16 +53,19 @@ export async function generateLectureAudio(
   context: AudioGenerationContext,
   deps: AudioOrchestratorDeps
 ): Promise<NarrationSettings[]> {
-  const { script, voice, model, runId } = request;
+  const { script, voice, model, runId, emotion, language } = request;
   const { maxConcurrency = 5 } = context;
   const { generateAudios = generateAudiosThrottled, assetStorage, logger, onAudioProgress } = deps;
 
   const segments = script.segments || [];
+  const languageSettings = getNarrationLanguageSettings(model, language);
 
   logger?.info("Starting lecture audio generation", {
     segmentCount: segments.length,
     voice,
     model,
+    emotion,
+    language: languageSettings.language ?? language,
   });
 
   // Step 1: Build audio generation requests
@@ -68,6 +74,9 @@ export async function generateLectureAudio(
     config: {
       voice,
       model,
+      emotion,
+      languageBoost: languageSettings.languageBoost,
+      englishNormalization: languageSettings.englishNormalization,
     },
   }));
 
@@ -102,6 +111,8 @@ export async function generateLectureAudio(
         finalScript: segments[segmentIndex].narration,
         model,
         voice,
+        emotion,
+        language: languageSettings.language ?? language,
         duration: result.duration,
         sourceUrl,
       };
@@ -123,6 +134,8 @@ export type RegenerateAudioRequest = {
   voice: string;
   model: string;
   narrationId: string;
+  emotion?: string;
+  language?: string;
 };
 
 /**
@@ -139,14 +152,17 @@ export async function regenerateAudio(
   _context: AudioGenerationContext,
   deps: AudioOrchestratorDeps
 ): Promise<NarrationSettings> {
-  const { text, voice, model, narrationId } = request;
+  const { text, voice, model, narrationId, emotion, language } = request;
   const { generateAudios = generateAudiosThrottled, assetStorage, logger } = deps;
+  const languageSettings = getNarrationLanguageSettings(model, language);
 
   logger?.info("Regenerating audio", {
     narrationId,
     textLength: text.length,
     voice,
     model,
+    emotion,
+    language: languageSettings.language ?? language,
   });
 
   // Generate single audio
@@ -154,7 +170,13 @@ export async function regenerateAudio(
     [
       {
         text,
-        config: { voice, model },
+        config: {
+          voice,
+          model,
+          emotion,
+          languageBoost: languageSettings.languageBoost,
+          englishNormalization: languageSettings.englishNormalization,
+        },
       },
     ],
     { logger }
@@ -175,6 +197,8 @@ export async function regenerateAudio(
     finalScript: text,
     model,
     voice,
+    emotion,
+    language: languageSettings.language ?? language,
     duration: result.duration,
     sourceUrl,
   };

@@ -12,6 +12,7 @@ import {
   DEFAULT_IMAGE_GENERATION_DEFAULTS,
   DEFAULT_NARRATION_GENERATION_DEFAULTS,
 } from "@/types/types";
+import { getDefaultVoiceForNarrationModel, getNarrationModelDefinition } from "@/lib/models";
 
 const inngest = getInngestApp();
 
@@ -118,7 +119,26 @@ export async function rerunWorkflowAction(
       runId: newRunId,
       lectureId: workflowRun.lectureId,
       imageDefaults: imageSettings,
-      narrationDefaults: DEFAULT_NARRATION_GENERATION_DEFAULTS,
+      narrationDefaults: (() => {
+        const model =
+          projectSettings.narration.model ??
+          DEFAULT_NARRATION_GENERATION_DEFAULTS.model;
+        const definition = getNarrationModelDefinition(model);
+
+        return {
+          model,
+          voice:
+            projectSettings.narration.voice ??
+            getDefaultVoiceForNarrationModel(model) ??
+            DEFAULT_NARRATION_GENERATION_DEFAULTS.voice,
+          language:
+            projectSettings.general.language ??
+            DEFAULT_NARRATION_GENERATION_DEFAULTS.language,
+          emotion: definition?.supportsEmotion
+            ? projectSettings.narration.emotion ?? DEFAULT_NARRATION_GENERATION_DEFAULTS.emotion
+            : undefined,
+        };
+      })(),
       context, // Pass the resume context
     } satisfies LectureCreationEventData & { context?: Record<string, unknown> },
   });

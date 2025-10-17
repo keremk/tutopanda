@@ -19,7 +19,7 @@ export const imageModelValues = [
   IMAGE_MODELS.BYTEDANCE_SEEDREAM_4,
   IMAGE_MODELS.GOOGLE_NANO_BANANA,
   IMAGE_MODELS.QWEN_IMAGE,
-] as const;
+] ;
 
 export const imageModelOptions = [
   { id: IMAGE_MODELS.BYTEDANCE_SEEDREAM_4, name: "Bytedance Seedream 4" },
@@ -35,45 +35,274 @@ export const DEFAULT_IMAGE_MODEL = IMAGE_MODELS.BYTEDANCE_SEEDREAM_4;
 
 export const NARRATION_MODELS = {
   MINIMAX_SPEECH_02_HD: "minimax/speech-02-hd",
-  ELEVEN_V3: "eleven_v3",
-  DEEPGRAM_AURA_ASTERIA: "aura-asteria-en",
+  ELEVEN_V3: "elevenlabs/eleven-monolingual-v3",
 } as const;
 
 export const DEFAULT_NARRATION_MODEL = NARRATION_MODELS.MINIMAX_SPEECH_02_HD;
 
-// MiniMax voice IDs
+export type NarrationVoiceOption = {
+  id: string;
+  label: string;
+  description?: string;
+  languages: readonly string[];
+};
+
+export type NarrationLanguageSettings = {
+  language?: string;
+  languageBoost?: string;
+  englishNormalization?: boolean;
+};
+
 export const MINIMAX_VOICES = {
-  MALE_QN_QINGSE: "male-qn-qingse",
-  FEMALE_SHAONV: "female-shaonv",
-  FEMALE_YUJIE: "female-yujie",
-  MALE_QINGSE_JINGPIN: "male-qingse-jingpin",
-  FEMALE_SHAONV_JINGPIN: "female-shaonv-jingpin",
+  MALE_ENGLISH_STORYTELLER: "English_CaptivatingStoryteller",
+  MALE_ENGLISH_DEEP_VOICED: "English_Deep-VoicedGentleman",
+  MALE_ENGLISH_WISE_SCHOLAR: "English_WiseScholar",
+  FEMALE_ENGLISH_WISE_SCHOLAR: "English_Wiselady",
+  FEMALE_ENGLISH_GRACEFUL: "English_Graceful_Lady",
+  MALE_SPANISH_MENTOR: "Spanish_Steadymentor",
+  FEMALE_SPANISH_THOUGHTFUL: "Spanish_ThoughtfulLady",
+  FEMALE_FRENCH_NARRATOR: "French_MaleNarrator",
+  FEMALE_FRENCH_NEWS_ANCHOR: "French_Female_News Anchor",
+  MALE_TURKISH_NARRATOR: "Turkish_Trustworthyman",
+  MALE_GERMAN_FRIENDLY: "German_FriendlyMan",
 } as const;
 
-export const minimaxVoiceOptions = [
-  { id: MINIMAX_VOICES.MALE_QN_QINGSE, name: "Male - Qingse" },
-  { id: MINIMAX_VOICES.FEMALE_SHAONV, name: "Female - Shaonv" },
-  { id: MINIMAX_VOICES.FEMALE_YUJIE, name: "Female - Yujie" },
-  { id: MINIMAX_VOICES.MALE_QINGSE_JINGPIN, name: "Male - Qingse Jingpin" },
-  { id: MINIMAX_VOICES.FEMALE_SHAONV_JINGPIN, name: "Female - Shaonv Jingpin" },
+export type MinimaxVoiceType = typeof MINIMAX_VOICES[keyof typeof MINIMAX_VOICES];
+
+const MINIMAX_LANGUAGES = ["en", "es", "fr", "de", "tr"] as const;
+type MinimaxLanguage = typeof MINIMAX_LANGUAGES[number];
+
+type MinimaxVoiceOption = NarrationVoiceOption & { languages: ReadonlyArray<MinimaxLanguage> };
+
+const MINIMAX_VOICE_CATALOG: readonly MinimaxVoiceOption[] = [
+  {
+    id: MINIMAX_VOICES.MALE_ENGLISH_STORYTELLER,
+    label: "Atlas — Captivating English storyteller",
+    description: "Warm, engaging pacing that keeps educational and narrative scripts approachable.",
+    languages: ["en"],
+  },
+  {
+    id: MINIMAX_VOICES.MALE_ENGLISH_DEEP_VOICED,
+    label: "Bennett — Deep-voiced English gentleman",
+    description: "Rich baritone delivery suited to authoritative explainers and inspirational pieces.",
+    languages: ["en"],
+  },
+  {
+    id: MINIMAX_VOICES.MALE_ENGLISH_WISE_SCHOLAR,
+    label: "Rowan — Reflective English scholar",
+    description: "Measured cadence with subtle gravitas, ideal for concept walkthroughs and summaries.",
+    languages: ["en"],
+  },
+  {
+    id: MINIMAX_VOICES.FEMALE_ENGLISH_WISE_SCHOLAR,
+    label: "Clara — Insightful English scholar",
+    description: "Clear, confident guidance that balances approachability with expertise.",
+    languages: ["en"],
+  },
+  {
+    id: MINIMAX_VOICES.FEMALE_ENGLISH_GRACEFUL,
+    label: "Evelyn — Graceful English presenter",
+    description: "Polished broadcast tone perfect for introductions, transitions, and premium content.",
+    languages: ["en"],
+  },
+  {
+    id: MINIMAX_VOICES.MALE_SPANISH_MENTOR,
+    label: "Mateo — Steady Spanish mentor",
+    description: "Supportive, encouraging style that works well for instructional Spanish materials.",
+    languages: ["es"],
+  },
+  {
+    id: MINIMAX_VOICES.FEMALE_SPANISH_THOUGHTFUL,
+    label: "Lucia — Thoughtful Spanish narrator",
+    description: "Gentle emphasis and smooth pacing for storytelling or reflective explainers.",
+    languages: ["es"],
+  },
+  {
+    id: MINIMAX_VOICES.FEMALE_FRENCH_NARRATOR,
+    label: "Camille — Expressive French narrator",
+    description: "Articulate narration with just enough flair for immersive French content.",
+    languages: ["fr"],
+  },
+  {
+    id: MINIMAX_VOICES.FEMALE_FRENCH_NEWS_ANCHOR,
+    label: "Elodie — French news anchor",
+    description: "Crisp and professional delivery tailored to concise updates and announcements.",
+    languages: ["fr"],
+  },
+  {
+    id: MINIMAX_VOICES.MALE_TURKISH_NARRATOR,
+    label: "Kemal — Trustworthy Turkish narrator",
+    description: "Steady, reassuring tone that suits guidance, onboarding, and educational scripts.",
+    languages: ["tr"],
+  },
+  {
+    id: MINIMAX_VOICES.MALE_GERMAN_FRIENDLY,
+    label: "Felix — Friendly German narrator",
+    description: "Bright and inviting voice for approachable German explainers and tutorials.",
+    languages: ["de"],
+  },
 ] as const;
 
-export const narrationModelOptions = [
-  {
+const MINIMAX_DEFAULT_LANGUAGE: MinimaxLanguage = "en";
+
+export const minimaxVoiceOptions = MINIMAX_VOICE_CATALOG;
+
+export function getMinimaxVoiceOptionsForLanguage(language: string | undefined): readonly NarrationVoiceOption[] {
+  if (!language) {
+    return minimaxVoiceOptions;
+  }
+
+  const normalizedLanguage = language.toLowerCase();
+  const supportedLanguage =
+    (MINIMAX_LANGUAGES.find((code) => code === normalizedLanguage) ?? MINIMAX_DEFAULT_LANGUAGE) as MinimaxLanguage;
+
+  const filtered = minimaxVoiceOptions.filter((voice) => voice.languages.includes(supportedLanguage));
+  return filtered.length > 0
+    ? filtered
+    : minimaxVoiceOptions.filter((voice) => voice.languages.includes(MINIMAX_DEFAULT_LANGUAGE));
+}
+
+const MINIMAX_LANGUAGE_CONFIG: Record<MinimaxLanguage, { languageBoost: string; englishNormalization: boolean }> = {
+  en: { languageBoost: "English", englishNormalization: true },
+  es: { languageBoost: "Spanish", englishNormalization: false },
+  fr: { languageBoost: "French", englishNormalization: false },
+  de: { languageBoost: "German", englishNormalization: false },
+  tr: { languageBoost: "Turkish", englishNormalization: false },
+};
+
+export function getMinimaxLanguageSettings(language: string | undefined): NarrationLanguageSettings {
+  const normalizedLanguage = language?.toLowerCase();
+  const matchedLanguage =
+    MINIMAX_LANGUAGES.find((code) => code === normalizedLanguage) ?? MINIMAX_DEFAULT_LANGUAGE;
+
+  return {
+    language: matchedLanguage,
+    languageBoost: MINIMAX_LANGUAGE_CONFIG[matchedLanguage].languageBoost,
+    englishNormalization: MINIMAX_LANGUAGE_CONFIG[matchedLanguage].englishNormalization,
+  };
+}
+
+type PresetVoiceSelection = {
+  type: "preset";
+  label: string;
+  defaultVoiceId: string;
+  options: readonly NarrationVoiceOption[];
+  getOptionsForLanguage?: (language?: string) => readonly NarrationVoiceOption[];
+  getLanguageSettings?: (language?: string) => NarrationLanguageSettings;
+};
+
+type CustomVoiceSelection = {
+  type: "custom";
+  label: string;
+  placeholder?: string;
+  helperText?: string;
+};
+
+export type NarrationModelDefinition = {
+  id: NarrationModelType;
+  name: string;
+  provider: "minimax" | "elevenlabs";
+  supportsEmotion: boolean;
+  voiceSelection: PresetVoiceSelection | CustomVoiceSelection;
+};
+
+const NARRATION_MODEL_DEFINITIONS: Record<NarrationModelType, NarrationModelDefinition> = {
+  [NARRATION_MODELS.MINIMAX_SPEECH_02_HD]: {
     id: NARRATION_MODELS.MINIMAX_SPEECH_02_HD,
     name: "MiniMax Speech HD",
-    supportsEmotion: true
+    provider: "minimax",
+    supportsEmotion: true,
+    voiceSelection: {
+      type: "preset",
+      label: "Voice",
+      defaultVoiceId: MINIMAX_VOICES.MALE_ENGLISH_STORYTELLER,
+      options: minimaxVoiceOptions,
+      getOptionsForLanguage: getMinimaxVoiceOptionsForLanguage,
+      getLanguageSettings: getMinimaxLanguageSettings,
+    },
   },
-  {
+  [NARRATION_MODELS.ELEVEN_V3]: {
     id: NARRATION_MODELS.ELEVEN_V3,
     name: "ElevenLabs V3",
-    supportsEmotion: false
+    provider: "elevenlabs",
+    supportsEmotion: false,
+    voiceSelection: {
+      type: "custom",
+      label: "Voice ID",
+      placeholder: "Enter an ElevenLabs voice ID",
+      helperText: "Copy the voice ID from your ElevenLabs dashboard or presets.",
+    },
   },
-] as const;
+};
 
-// Helper function to check if a model is MiniMax
+export const narrationModelOptions: ReadonlyArray<{
+  id: NarrationModelType;
+  name: string;
+  supportsEmotion: boolean;
+}> = Object.values(NARRATION_MODEL_DEFINITIONS).map((definition) => ({
+  id: definition.id,
+  name: definition.name,
+  supportsEmotion: definition.supportsEmotion,
+}));
+
+export function getNarrationModelDefinition(modelId: string | null | undefined): NarrationModelDefinition | undefined {
+  if (!modelId) {
+    return undefined;
+  }
+
+  if (!(modelId in NARRATION_MODEL_DEFINITIONS)) {
+    return undefined;
+  }
+
+  return NARRATION_MODEL_DEFINITIONS[modelId as NarrationModelType];
+}
+
+export function getVoiceOptionsForNarrationModel(
+  modelId: string | null | undefined,
+  language?: string
+): readonly NarrationVoiceOption[] {
+  const definition = getNarrationModelDefinition(modelId);
+  if (!definition) {
+    return [];
+  }
+
+  const selection = definition.voiceSelection;
+  if (selection.type !== "preset") {
+    return [];
+  }
+
+  return selection.getOptionsForLanguage?.(language) ?? selection.options;
+}
+
+export function getDefaultVoiceForNarrationModel(modelId: string | null | undefined): string | undefined {
+  const definition = getNarrationModelDefinition(modelId);
+  if (!definition) {
+    return undefined;
+  }
+
+  const selection = definition.voiceSelection;
+  return selection.type === "preset" ? selection.defaultVoiceId : undefined;
+}
+
+export function getNarrationLanguageSettings(
+  modelId: string | null | undefined,
+  language?: string
+): NarrationLanguageSettings {
+  const definition = getNarrationModelDefinition(modelId);
+  if (!definition) {
+    return language ? { language } : {};
+  }
+
+  const selection = definition.voiceSelection;
+  if (selection.type !== "preset" || !selection.getLanguageSettings) {
+    return language ? { language } : {};
+  }
+
+  return selection.getLanguageSettings(language);
+}
+
 export function isMiniMaxModel(model: string): boolean {
-  return model === NARRATION_MODELS.MINIMAX_SPEECH_02_HD;
+  return getNarrationModelDefinition(model)?.provider === "minimax";
 }
 
 // ============================================================================
@@ -175,9 +404,11 @@ export const DEFAULT_SCRIPT_MODEL = LLM_MODELS.GPT_5;
 // DEFAULT VOICE CONFIGURATION
 // ============================================================================
 
+const DEFAULT_MINIMAX_VOICE = getDefaultVoiceForNarrationModel(DEFAULT_NARRATION_MODEL) ?? MINIMAX_VOICES.MALE_ENGLISH_STORYTELLER;
+
 // These can be overridden by environment variables
-export const DEFAULT_VOICE_ID = process.env.DEFAULT_VOICE_ID || "onwK4e9ZLuTAKqWW03F9";
-export const DEFAULT_VOICE_MODEL_ID = process.env.DEFAULT_VOICE_MODEL_ID || NARRATION_MODELS.ELEVEN_V3;
+export const DEFAULT_VOICE_ID = process.env.DEFAULT_VOICE_ID || DEFAULT_MINIMAX_VOICE;
+export const DEFAULT_VOICE_MODEL_ID = process.env.DEFAULT_VOICE_MODEL_ID || DEFAULT_NARRATION_MODEL;
 
 // ============================================================================
 // TYPE EXPORTS
@@ -188,4 +419,3 @@ export type MusicModelType = typeof musicModelValues[number];
 export type SoundEffectModelType = typeof soundEffectModelValues[number];
 export type VideoModelType = typeof videoModelValues[number];
 export type NarrationModelType = typeof NARRATION_MODELS[keyof typeof NARRATION_MODELS];
-export type MinimaxVoiceType = typeof MINIMAX_VOICES[keyof typeof MINIMAX_VOICES];

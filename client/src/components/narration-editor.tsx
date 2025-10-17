@@ -3,7 +3,11 @@
 import { useCallback, useEffect, useMemo } from "react";
 import { useLectureEditor } from "./lecture-editor-provider";
 import type { VoiceClip, NarrationSettings } from "@/types/types";
-import { DEFAULT_NARRATION_MODEL } from "@/lib/models";
+import {
+  DEFAULT_NARRATION_MODEL,
+  getDefaultVoiceForNarrationModel,
+  getNarrationModelDefinition,
+} from "@/lib/models";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import NarrationModelConfig from "./narration-model-config";
@@ -64,23 +68,43 @@ export default function NarrationEditor({
   );
 
   const defaultNarrationModel = projectSettings.narration.model || DEFAULT_NARRATION_MODEL;
-  const defaultVoice = projectSettings.narration.voice || "";
-  const defaultEmotion = projectSettings.narration.emotion || "";
+  const defaultModelDefinition = getNarrationModelDefinition(defaultNarrationModel);
+  const defaultVoice =
+    projectSettings.narration.voice ||
+    getDefaultVoiceForNarrationModel(defaultNarrationModel) ||
+    "";
+  const defaultEmotion =
+    defaultModelDefinition?.supportsEmotion ? projectSettings.narration.emotion || "" : "";
 
   const baseNarrationDraft = useMemo<NarrationDraftState>(
-    () => ({
-      script: narrationAsset?.finalScript || "",
-      model: narrationAsset?.model || defaultNarrationModel,
-      voice: narrationAsset?.voice || defaultVoice,
-      emotion: defaultEmotion,
-    }),
+    () => {
+      const model = narrationAsset?.model || defaultNarrationModel;
+      const modelDefinition = getNarrationModelDefinition(model);
+      const resolvedVoice =
+        narrationAsset?.voice ||
+        projectSettings.narration.voice ||
+        getDefaultVoiceForNarrationModel(model) ||
+        defaultVoice;
+
+      const resolvedEmotion =
+        modelDefinition?.supportsEmotion ? narrationAsset?.emotion || defaultEmotion : "";
+
+      return {
+        script: narrationAsset?.finalScript || "",
+        model,
+        voice: resolvedVoice,
+        emotion: resolvedEmotion,
+      };
+    },
     [
       narrationAsset?.finalScript,
       narrationAsset?.model,
       narrationAsset?.voice,
+      narrationAsset?.emotion,
       defaultNarrationModel,
       defaultVoice,
       defaultEmotion,
+      projectSettings.narration.voice,
     ]
   );
 
@@ -278,6 +302,7 @@ export default function NarrationEditor({
               model={draft.model}
               voice={draft.voice}
               emotion={draft.emotion}
+              language={projectSettings.general.language}
               onModelChange={(value) => setDraft((prev) => ({ ...prev, model: value }))}
               onVoiceChange={(value) => setDraft((prev) => ({ ...prev, voice: value }))}
               onEmotionChange={(value) => setDraft((prev) => ({ ...prev, emotion: value }))}

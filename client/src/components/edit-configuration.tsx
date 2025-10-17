@@ -157,6 +157,7 @@ export default function EditConfiguration({
               {activeSection === "narration" && (
                 <EditNarrationConfiguration
                   config={editedConfig.narration}
+                  language={editedConfig.general.language}
                   onChange={(narration: NarrationConfig) => setEditedConfig({ ...editedConfig, narration })}
                 />
               )}

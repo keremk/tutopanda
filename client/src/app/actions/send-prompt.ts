@@ -12,6 +12,7 @@ import {
   type ImageGenerationDefaults,
   type NarrationGenerationDefaults,
 } from "@/types/types";
+import { getDefaultVoiceForNarrationModel, getNarrationModelDefinition } from "@/lib/models";
 
 const inngest = getInngestApp();
 
@@ -50,7 +51,27 @@ export async function sendPromptAction({
     imagesPerSegment: projectSettings.image.imagesPerSegment,
   };
 
-  const narrationSettings = narrationDefaults ?? DEFAULT_NARRATION_GENERATION_DEFAULTS;
+  const resolvedNarrationModel =
+    narrationDefaults?.model ??
+    projectSettings.narration.model ??
+    DEFAULT_NARRATION_GENERATION_DEFAULTS.model;
+
+  const modelDefinition = getNarrationModelDefinition(resolvedNarrationModel);
+
+  const narrationSettings: NarrationGenerationDefaults =
+    narrationDefaults ?? {
+      model: resolvedNarrationModel,
+      voice:
+        projectSettings.narration.voice ??
+        getDefaultVoiceForNarrationModel(resolvedNarrationModel) ??
+        DEFAULT_NARRATION_GENERATION_DEFAULTS.voice,
+      language:
+        projectSettings.general.language ??
+        DEFAULT_NARRATION_GENERATION_DEFAULTS.language,
+      emotion: modelDefinition?.supportsEmotion
+        ? projectSettings.narration.emotion ?? DEFAULT_NARRATION_GENERATION_DEFAULTS.emotion
+        : undefined,
+    };
 
   await inngest.send({
     name: "app/start-lecture-creation",

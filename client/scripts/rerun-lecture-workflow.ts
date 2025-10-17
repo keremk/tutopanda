@@ -5,6 +5,7 @@ import { getInngestApp } from "@/inngest/client";
 import { LECTURE_WORKFLOW_TOTAL_STEPS } from "@/inngest/functions/workflow-utils";
 import { getLectureById } from "@/data/lecture/repository";
 import { getProjectSettings } from "@/data/project";
+import { getDefaultVoiceForNarrationModel, getNarrationModelDefinition } from "@/lib/models";
 import {
   createWorkflowRun,
   getWorkflowRun,
@@ -200,7 +201,23 @@ async function main() {
   // Fetch project settings for image defaults
   const projectSettings = await getProjectSettings(userId);
   const imageDefaults = deriveImageDefaults(projectSettings);
-  const narrationDefaults = { ...DEFAULT_NARRATION_GENERATION_DEFAULTS };
+  const narrationModel =
+    projectSettings.narration.model ??
+    DEFAULT_NARRATION_GENERATION_DEFAULTS.model;
+  const narrationDefinition = getNarrationModelDefinition(narrationModel);
+  const narrationDefaults = {
+    model: narrationModel,
+    voice:
+      projectSettings.narration.voice ??
+      getDefaultVoiceForNarrationModel(narrationModel) ??
+      DEFAULT_NARRATION_GENERATION_DEFAULTS.voice,
+    language:
+      projectSettings.general.language ??
+      DEFAULT_NARRATION_GENERATION_DEFAULTS.language,
+    emotion: narrationDefinition?.supportsEmotion
+      ? projectSettings.narration.emotion ?? DEFAULT_NARRATION_GENERATION_DEFAULTS.emotion
+      : undefined,
+  };
   const newRunId = randomUUID();
   const context = buildContext(
     baseRun?.context,

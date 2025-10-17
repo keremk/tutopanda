@@ -9,6 +9,7 @@ import { updateLectureContent } from "@/services/lecture/persist";
 import { getProjectById } from "@/data/project";
 import { getLectureById } from "@/data/lecture/repository";
 import { setupFileStorage } from "@/lib/storage-utils";
+import { getDefaultVoiceForNarrationModel, getNarrationModelDefinition } from "@/lib/models";
 import { audioProviderRegistry, ReplicateAudioProvider } from "@/services/media-generation/audio";
 import { FileStorageHandler } from "@/services/media-generation/core";
 import { generateLectureAudio } from "@/services/lecture/orchestrators";
@@ -122,8 +123,14 @@ export const generateNarration = inngest.createFunction(
       segments: script.segments?.slice(0, limit) || [],
     };
 
-    const defaultVoice = narrationToProcess[0]?.voice || defaultVoiceId;
-    const defaultModel = narrationToProcess[0]?.model || defaultModelId;
+    const selectedModel = narrationToProcess[0]?.model || defaultModelId;
+    const modelDefinition = getNarrationModelDefinition(selectedModel);
+    const selectedVoice =
+      narrationToProcess[0]?.voice ||
+      getDefaultVoiceForNarrationModel(selectedModel) ||
+      defaultVoiceId;
+    const selectedEmotion = modelDefinition?.supportsEmotion ? narrationToProcess[0]?.emotion : undefined;
+    const selectedLanguage = narrationToProcess[0]?.language;
 
     await publishStatus(
       `Generating narration for ${limitedScript.segments.length} segment${limitedScript.segments.length === 1 ? "" : "s"}`,
@@ -142,9 +149,11 @@ export const generateNarration = inngest.createFunction(
       return generateLectureAudio(
         {
           script: limitedScript,
-          voice: defaultVoice,
-          model: defaultModel,
+          voice: selectedVoice,
+          model: selectedModel,
           runId,
+          emotion: selectedEmotion,
+          language: selectedLanguage,
         },
         {
           userId,

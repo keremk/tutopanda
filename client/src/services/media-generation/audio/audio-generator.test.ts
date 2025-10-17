@@ -192,7 +192,8 @@ describe("generateAudio", () => {
       voice: "aura-asteria-en",
       model: "aura-asteria-en",
       emotion: "excited",
-      languageBoost: "en",
+      languageBoost: "Spanish",
+      englishNormalization: false,
     };
 
     // Spy on provider to ensure params are passed
@@ -206,8 +207,9 @@ describe("generateAudio", () => {
       text,
       voiceId: "aura-asteria-en",
       modelId: "aura-asteria-en",
-      emotion: undefined, // Not passed through in current implementation
-      languageBoost: undefined, // Not passed through in current implementation
+      emotion: "excited",
+      languageBoost: "Spanish",
+      englishNormalization: false,
     });
   });
 });

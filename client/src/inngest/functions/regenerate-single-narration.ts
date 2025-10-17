@@ -13,6 +13,7 @@ import { FileStorageHandler } from "@/services/media-generation/core";
 import { regenerateAudio } from "@/services/lecture/orchestrators";
 import { createLectureAssetStorage } from "@/services/lecture/storage";
 import { createWorkflowRun, updateWorkflowRun } from "@/data/workflow-runs";
+import { getNarrationModelDefinition } from "@/lib/models";
 
 const inngest = getInngestApp();
 
@@ -48,6 +49,8 @@ export const regenerateSingleNarration = inngest.createFunction(
       emotion,
       config,
     } = event.data as RegenerateSingleNarrationEvent;
+
+    const modelDefinition = getNarrationModelDefinition(model);
 
     const log = createLectureLogger(runId, logger);
     const { publishStatus, publishNarrationPreview, publishNarrationComplete } = createLectureProgressPublisher({
@@ -93,12 +96,18 @@ export const regenerateSingleNarration = inngest.createFunction(
         { storageHandler }
       );
 
+      const narrationLanguage = config.general.language;
+      const narrationEmotion =
+        modelDefinition?.supportsEmotion ? emotion ?? config.narration.emotion ?? undefined : undefined;
+
       const narration = await regenerateAudio(
         {
           text: script,
           voice,
           model,
           narrationId: narrationAssetId, // Use existing ID to maintain references
+          emotion: narrationEmotion,
+          language: narrationLanguage,
         },
         {
           userId,
@@ -186,6 +195,11 @@ export const regenerateSingleNarration = inngest.createFunction(
               voice: voice || narr.voice || generatedNarration.voice, // Update voice if provided
               sourceUrl: generatedNarration.sourceUrl,
               duration: generatedNarration.duration,
+              emotion:
+                modelDefinition?.supportsEmotion ?? false
+                  ? emotion ?? narr.emotion ?? generatedNarration.emotion
+                  : undefined,
+              language: config.general.language ?? narr.language ?? generatedNarration.language,
             }
           : narr
       );

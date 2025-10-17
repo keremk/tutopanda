@@ -8,10 +8,11 @@ import NarrationModelConfig from "@/components/narration-model-config";
 
 interface EditNarrationConfigurationProps {
   config: NarrationConfig;
+  language: string;
   onChange: (config: NarrationConfig) => void;
 }
 
-export function EditNarrationConfiguration({ config, onChange }: EditNarrationConfigurationProps) {
+export function EditNarrationConfiguration({ config, language, onChange }: EditNarrationConfigurationProps) {
   const segmentLengthValue =
     segmentLengthValues.find((value) => value === String(config.segmentLength)) ??
     segmentLengthValues[0];
@@ -47,6 +48,7 @@ export function EditNarrationConfiguration({ config, onChange }: EditNarrationCo
           model={config.model}
           voice={config.voice}
           emotion={config.emotion}
+          language={language}
           onModelChange={(model) => onChange({ ...config, model })}
           onVoiceChange={(voice) => onChange({ ...config, voice })}
           onEmotionChange={(emotion) => onChange({ ...config, emotion })}

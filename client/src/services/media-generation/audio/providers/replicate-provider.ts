@@ -34,14 +34,21 @@ export class ReplicateAudioProvider implements AudioProvider {
   }
 
   async generateAudio(params: AudioGenerationParams): Promise<AudioGenerationResult> {
-    const { text, voiceId, modelId = DEFAULT_NARRATION_MODEL, emotion = "neutral", languageBoost = "English" } = params;
+    const {
+      text,
+      voiceId,
+      modelId = DEFAULT_NARRATION_MODEL,
+      emotion = "neutral",
+      languageBoost = "English",
+      englishNormalization = true,
+    } = params;
 
     const input = {
       text,
       voice_id: voiceId,
       emotion,
       language_boost: languageBoost,
-      english_normalization: true,
+      english_normalization: englishNormalization,
     };
 
     // Ensure modelId is in the correct format (owner/model or owner/model:version)

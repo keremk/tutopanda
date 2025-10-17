@@ -7,6 +7,7 @@ import { generateMusic } from "@/inngest/functions/generate-music";
 import { generateTimeline } from "@/inngest/functions/generate-timeline";
 import type { ImageGenerationDefaults, NarrationGenerationDefaults, NarrationSettings } from "@/types/types";
 import { DEFAULT_NARRATION_GENERATION_DEFAULTS } from "@/types/types";
+import { getDefaultVoiceForNarrationModel, getNarrationModelDefinition } from "@/lib/models";
 import { getLectureById } from "@/data/lecture/repository";
 import { getProjectSettings } from "@/data/project";
 import { updateWorkflowRun } from "@/data/workflow-runs";
@@ -112,13 +113,45 @@ export const startLectureCreation = inngest.createFunction(
       throw new Error(`Lecture ${lectureId} not found`);
     }
 
-    const narrationConfig = narrationDefaults ?? DEFAULT_NARRATION_GENERATION_DEFAULTS;
+    const resolvedNarrationModel =
+      narrationDefaults?.model ??
+      projectSettings.narration.model ??
+      DEFAULT_NARRATION_GENERATION_DEFAULTS.model;
+
+    const narrationModelDefinition = getNarrationModelDefinition(resolvedNarrationModel);
+
+    const resolvedNarrationVoice =
+      narrationDefaults?.voice ??
+      projectSettings.narration.voice ??
+      getDefaultVoiceForNarrationModel(resolvedNarrationModel) ??
+      DEFAULT_NARRATION_GENERATION_DEFAULTS.voice;
+
+    const resolvedNarrationLanguage =
+      narrationDefaults?.language ??
+      projectSettings.general.language ??
+      DEFAULT_NARRATION_GENERATION_DEFAULTS.language;
+
+    const resolvedNarrationEmotion =
+      narrationModelDefinition?.supportsEmotion
+        ? narrationDefaults?.emotion ??
+          projectSettings.narration.emotion ??
+          DEFAULT_NARRATION_GENERATION_DEFAULTS.emotion
+        : undefined;
+
+    const narrationConfig: NarrationGenerationDefaults = {
+      model: resolvedNarrationModel,
+      voice: resolvedNarrationVoice,
+      language: resolvedNarrationLanguage,
+      emotion: resolvedNarrationEmotion,
+    };
 
     const narrationSettings: NarrationSettings[] = script.segments.map((_, index) => ({
       id: `narration-${index}`,
       label: `Segment ${index + 1}`,
       model: narrationConfig.model,
       voice: narrationConfig.voice,
+      emotion: narrationConfig.emotion,
+      language: narrationConfig.language,
     }));
 
     const generatedNarration = await step.invoke("generate-narration", {

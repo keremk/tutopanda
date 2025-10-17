@@ -121,6 +121,8 @@ export const narrationAssetSchema = baseAssetSchema
     finalScript: z.string().optional(),
     model: z.string().optional(),
     voice: z.string().optional(),
+    emotion: z.string().optional(),
+    language: z.string().optional(),
     duration: z.number().nonnegative().optional(),
     sourceUrl: z.string().optional(),
   })
@@ -392,11 +394,14 @@ export const DEFAULT_IMAGE_GENERATION_DEFAULTS: ImageGenerationDefaults = {
 export type NarrationGenerationDefaults = {
   model: string;
   voice: string;
+  language: string;
+  emotion?: string;
 };
 
 export const DEFAULT_NARRATION_GENERATION_DEFAULTS: NarrationGenerationDefaults = {
   model: DEFAULT_VOICE_MODEL_ID,
   voice: DEFAULT_VOICE_ID,
+  language: "en",
 };
 
 export type LectureConfig = z.infer<typeof lectureConfigSchema>;

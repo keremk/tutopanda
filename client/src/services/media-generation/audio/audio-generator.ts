@@ -36,19 +36,25 @@ export async function generateAudio(
 ): Promise<AudioResult> {
   const { provider: customProvider, logger } = options || {};
 
-  const model = config.model || NARRATION_MODELS.DEEPGRAM_AURA_ASTERIA;
+  const model = config.model || NARRATION_MODELS.MINIMAX_SPEECH_02_HD;
   const provider = customProvider || audioProviderRegistry.getProvider(model);
 
   logger?.info("Generating audio", {
     textLength: text.length,
     voice: config.voice,
     model,
+    emotion: config.emotion,
+    languageBoost: config.languageBoost,
+    englishNormalization: config.englishNormalization,
   });
 
   const params: AudioGenerationParams = {
     text,
     voiceId: config.voice,
     modelId: model,
+    emotion: config.emotion,
+    languageBoost: config.languageBoost,
+    englishNormalization: config.englishNormalization,
   };
 
   const result = await provider.generateAudio(params);

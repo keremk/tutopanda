@@ -20,6 +20,7 @@ export type AudioConfig = {
   model?: string;
   emotion?: string;
   languageBoost?: string;
+  englishNormalization?: boolean;
 };
 
 /**
@@ -31,6 +32,7 @@ export type AudioGenerationParams = {
   modelId: string;
   emotion?: string;
   languageBoost?: string;
+  englishNormalization?: boolean;
 };
 
 /**
