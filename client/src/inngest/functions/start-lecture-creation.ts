@@ -2,6 +2,7 @@ import { getInngestApp } from "@/inngest/client";
 import { createLectureLogger, createLectureProgressPublisher, LECTURE_WORKFLOW_TOTAL_STEPS } from "@/inngest/functions/workflow-utils";
 import { createLectureScript } from "@/inngest/functions/create-lecture-script";
 import { generateSegmentImages } from "@/inngest/functions/generate-segment-images";
+import { generateSegmentVideos } from "@/inngest/functions/generate-segment-videos";
 import { generateNarration } from "@/inngest/functions/generate-narration";
 import { generateMusic } from "@/inngest/functions/generate-music";
 import { generateTimeline } from "@/inngest/functions/generate-timeline";
@@ -90,20 +91,51 @@ export const startLectureCreation = inngest.createFunction(
       imagesPerSegment: projectSettings.image.imagesPerSegment,
     };
 
-    const generatedImages = await step.invoke("generate-segment-images", {
-      function: generateSegmentImages,
-      data: {
-        userId,
-        runId,
-        lectureId,
-        projectId: lecture.projectId,
-        script,
-        imageDefaults: imageSettings,
-        workflowStep: 3,
-        totalWorkflowSteps: LECTURE_WORKFLOW_TOTAL_STEPS,
-        context,
-      },
-    });
+    // Step 3: Generate either videos OR images (conditional)
+    if (projectSettings.general.useVideo) {
+      // Generate videos (includes starting images internally)
+      const generatedVideos = await step.invoke("generate-segment-videos", {
+        function: generateSegmentVideos,
+        data: {
+          userId,
+          runId,
+          lectureId,
+          projectId: lecture.projectId,
+          script,
+          lectureSummary: lecture.summary || "",
+          videoConfig: projectSettings.video,
+          imageConfig: imageSettings,
+          maxVideoSegments: 5, // Hard limit
+          workflowStep: 3,
+          totalWorkflowSteps: LECTURE_WORKFLOW_TOTAL_STEPS,
+          context,
+        },
+      });
+
+      log.info("Video generation complete", {
+        generatedVideos: generatedVideos?.videos?.length ?? 0,
+      });
+    } else {
+      // Generate images only (for Ken Burns effects)
+      const generatedImages = await step.invoke("generate-segment-images", {
+        function: generateSegmentImages,
+        data: {
+          userId,
+          runId,
+          lectureId,
+          projectId: lecture.projectId,
+          script,
+          imageDefaults: imageSettings,
+          workflowStep: 3,
+          totalWorkflowSteps: LECTURE_WORKFLOW_TOTAL_STEPS,
+          context,
+        },
+      });
+
+      log.info("Image generation complete", {
+        generatedImages: generatedImages?.images?.length ?? 0,
+      });
+    }
 
     const lectureAfterImages = await step.run("get-lecture-for-narration", async () => {
       return await getLectureById({ lectureId });
@@ -213,7 +245,6 @@ export const startLectureCreation = inngest.createFunction(
 
     log.info("Lecture workflow completed", {
       hasScript: Boolean(script),
-      generatedImages: generatedImages?.images?.length ?? 0,
       generatedNarration: generatedNarration?.narration?.length ?? 0,
       hasMusic: Boolean(generatedMusic?.music),
       hasTimeline: Boolean(timeline?.timeline),

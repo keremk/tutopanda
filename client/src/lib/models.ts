@@ -375,7 +375,7 @@ export const videoModelValues = [
 ] as const;
 
 export const videoModelOptions = [
-  { id: VIDEO_MODELS.BYTEDANCE_SEEDANCE_1_LITE, name: "Seadance 1 Lite" },
+  { id: VIDEO_MODELS.BYTEDANCE_SEEDANCE_1_LITE, name: "Seedance 1 Lite" },
 ] as const;
 
 export const DEFAULT_VIDEO_MODEL = VIDEO_MODELS.BYTEDANCE_SEEDANCE_1_LITE;

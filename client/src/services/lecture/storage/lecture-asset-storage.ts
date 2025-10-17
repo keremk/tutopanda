@@ -8,7 +8,7 @@ export type LectureAssetIdentifiers = {
   lectureId: number;
 };
 
-export type LectureAssetCategory = "images" | "music" | "narration";
+export type LectureAssetCategory = "images" | "music" | "narration" | "videos";
 
 export type LectureAssetStorageOptions = {
   storageHandler?: StorageHandler;
@@ -27,6 +27,11 @@ export type LectureAssetStorage = {
     imageId: string
   ) => Promise<string>;
   resolveImagePath: (imageId: string) => string;
+  saveVideo: (
+    content: Buffer | Uint8Array | ReadableStream,
+    videoId: string
+  ) => Promise<string>;
+  resolveVideoPath: (videoId: string) => string;
   saveNarration: (
     content: Buffer | Uint8Array | ReadableStream,
     narrationId: string
@@ -89,12 +94,22 @@ export function createLectureAssetStorage(
 
   const resolveMusicPath = (musicId: string) => resolveAssetPath("music", `${musicId}.mp3`);
 
+  const saveVideo = (
+    content: Buffer | Uint8Array | ReadableStream,
+    videoId: string
+  ) => saveAsset("videos", `${videoId}.mp4`, content);
+
+  const resolveVideoPath = (videoId: string) =>
+    resolveAssetPath("videos", `${videoId}.mp4`);
+
   return {
     basePath,
     resolveAssetPath,
     saveAsset,
     saveImage,
     resolveImagePath,
+    saveVideo,
+    resolveVideoPath,
     saveNarration,
     resolveNarrationPath,
     saveMusic,

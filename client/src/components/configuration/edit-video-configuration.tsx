@@ -9,7 +9,7 @@ import {
   videoDurationSegmentValues,
   videoDurationSegmentLabels,
 } from "@/types/types";
-import { videoModelOptions, DEFAULT_VIDEO_MODEL } from "@/lib/models";
+import { videoModelOptions } from "@/lib/models";
 
 interface EditVideoConfigurationProps {
   config: VideoConfig;
@@ -24,10 +24,6 @@ export function EditVideoConfiguration({ config, onChange }: EditVideoConfigurat
   const durationValue =
     videoDurationSegmentValues.find((value) => value === config.duration) ??
     videoDurationSegmentValues[0];
-
-  const modelValue =
-    videoModelOptions.find((model) => model.id === config.model)?.id ??
-    DEFAULT_VIDEO_MODEL;
 
   return (
     <div className="space-y-6">
@@ -79,7 +75,7 @@ export function EditVideoConfiguration({ config, onChange }: EditVideoConfigurat
         <div className="space-y-2">
           <Label htmlFor="videoModel">Model</Label>
           <Select
-            value={modelValue}
+            value={config.model}
             onValueChange={(value) => onChange({ ...config, model: value })}
           >
             <SelectTrigger id="videoModel">

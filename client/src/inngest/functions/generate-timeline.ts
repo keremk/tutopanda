@@ -58,6 +58,7 @@ export const generateTimeline = inngest.createFunction(
 
       log.info("Loaded lecture assets", {
         images: lecture.images?.length ?? 0,
+        videos: lecture.videos?.length ?? 0,
         narration: lecture.narration?.length ?? 0,
         music: lecture.music?.length ?? 0,
       });
@@ -120,6 +121,19 @@ export const generateTimeline = inngest.createFunction(
         }
       }
 
+      if (lecture.videos && lecture.videos.length > 0) {
+        const normalisedVideos = lecture.videos.map((item) => {
+          const nextStartingImage = normalizePath(item.startingImageUrl);
+          return nextStartingImage && nextStartingImage !== item.startingImageUrl
+            ? { ...item, startingImageUrl: nextStartingImage }
+            : item;
+        });
+
+        if (normalisedVideos.some((v, idx) => v !== lecture.videos![idx])) {
+          payload.videos = normalisedVideos;
+        }
+      }
+
       if (Object.keys(payload).length === 0) {
         return lecture;
       }
@@ -138,12 +152,14 @@ export const generateTimeline = inngest.createFunction(
 
     const timeline = await step.run("assemble-timeline", async () => {
       const images = preparedLecture.images ?? [];
+      const videos = preparedLecture.videos ?? [];
       const narration = preparedLecture.narration ?? [];
       const music = preparedLecture.music ?? [];
 
       // Assemble timeline using pure function
       const timeline = assembleTimeline({
         images,
+        videos,
         narration,
         music,
         runId,

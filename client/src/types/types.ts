@@ -171,8 +171,18 @@ export const kenBurnsClipSchema = timelineClipBaseSchema
   })
   .passthrough();
 
+export const videoClipSchema = timelineClipBaseSchema
+  .extend({
+    kind: z.literal("video"),
+    videoAssetId: z.string().optional(),
+    videoUrl: z.string().optional(),
+    volume: z.number().min(0).max(1).optional(),
+  })
+  .passthrough();
+
 export const visualClipSchema = z.discriminatedUnion("kind", [
   kenBurnsClipSchema,
+  videoClipSchema,
 ]);
 
 export const voiceClipSchema = timelineClipBaseSchema
@@ -237,7 +247,7 @@ export const audienceValues = [
 export const imageSizeValues = ["480", "720", "1080"] as const;
 export const imageFormatValues = ["JPG", "PNG"] as const;
 export const videoDurationSegmentValues = ["5", "10"] as const;
-export const videoResolutionValues = ["480", "720", "1080"] as const;
+export const videoResolutionValues = ["480p", "720p", "1080p"] as const;
 export const segmentLengthValues = ["10", "15"] as const;
 export const reasoningEffortValues = ["minimal", "low", "medium", "high"] as const;
 export const reasoningSummaryValues = ["auto", "concise", "detailed"] as const;
@@ -281,10 +291,22 @@ export const videoDurationSegmentLabels: Record<(typeof videoDurationSegmentValu
 };
 
 export const videoResolutionLabels: Record<(typeof videoResolutionValues)[number], string> = {
-  "480": "480p",
-  "720": "720p",
-  "1080": "1080p",
+  "480p": "480p",
+  "720p": "720p",
+  "1080p": "1080p",
 };
+
+export const videoAssetSchema = baseAssetSchema
+  .extend({
+    segmentStartImagePrompt: z.string(),
+    movieDirections: z.string(),
+    model: z.string().optional(),
+    resolution: z.enum(videoResolutionValues).optional(),
+    duration: z.number().nonnegative().optional(),
+    aspectRatio: z.enum(aspectRatioValues).optional(),
+    startingImageUrl: z.string().optional(),
+  })
+  .passthrough();
 
 export const generalConfigSchema = z.object({
   duration: z.enum(videoDurationValues),
@@ -348,6 +370,7 @@ export const lectureContentSchema = z.object({
     .nullable(),
   script: lectureScriptSchema.nullable(),
   images: z.array(imageAssetSchema).nullish(),
+  videos: z.array(videoAssetSchema).nullish(),
   narration: z.array(narrationAssetSchema).nullish(),
   music: z.array(musicAssetSchema).nullish(),
   effects: z.array(soundEffectAssetSchema).nullish(),
@@ -358,6 +381,7 @@ export type Timeline = z.infer<typeof timelineSchema>;
 export type TimelineTracks = z.infer<typeof timelineTracksSchema>;
 export type VisualClip = z.infer<typeof visualClipSchema>;
 export type KenBurnsClip = z.infer<typeof kenBurnsClipSchema>;
+export type VideoClip = z.infer<typeof videoClipSchema>;
 export type VoiceClip = z.infer<typeof voiceClipSchema>;
 export type MusicClip = z.infer<typeof musicClipSchema>;
 export type SoundFxClip = z.infer<typeof soundFxClipSchema>;
@@ -366,6 +390,7 @@ export type AnyTimelineClip = VisualClip | VoiceClip | MusicClip | SoundFxClip;
 
 export type LectureContent = z.infer<typeof lectureContentSchema>;
 export type ImageAsset = z.infer<typeof imageAssetSchema>;
+export type VideoAsset = z.infer<typeof videoAssetSchema>;
 export type NarrationSettings = z.infer<typeof narrationAssetSchema>;
 export type MusicSettings = z.infer<typeof musicAssetSchema>;
 export type EffectsSettings = z.infer<typeof soundEffectAssetSchema>;
@@ -436,7 +461,7 @@ export const DEFAULT_LECTURE_CONFIG: LectureConfig = {
   },
   video: {
     model: DEFAULT_VIDEO_MODEL,
-    resolution: "480",
+    resolution: "480p",
     duration: "10",
   },
   narration: {

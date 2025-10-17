@@ -4,6 +4,7 @@ import { helloWorld } from "@/inngest/functions/helloworld";
 import { startLectureCreation } from "@/inngest/functions/start-lecture-creation";
 import { createLectureScript } from "@/inngest/functions/create-lecture-script";
 import { generateSegmentImages } from "@/inngest/functions/generate-segment-images";
+import { generateSegmentVideos } from "@/inngest/functions/generate-segment-videos";
 import { generateNarration } from "@/inngest/functions/generate-narration";
 import { generateMusic } from "@/inngest/functions/generate-music";
 import { generateTimeline } from "@/inngest/functions/generate-timeline";
@@ -21,6 +22,7 @@ export const { GET, POST, PUT } = serve({
     startLectureCreation,
     createLectureScript,
     generateSegmentImages,
+    generateSegmentVideos,
     generateNarration,
     generateMusic,
     generateTimeline,

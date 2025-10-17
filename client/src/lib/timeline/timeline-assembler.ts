@@ -4,9 +4,12 @@ import type {
   Timeline,
   TimelineTracks,
   KenBurnsClip,
+  VideoClip,
+  VisualClip,
   VoiceClip,
   MusicClip,
   ImageAsset,
+  VideoAsset,
   NarrationSettings,
   MusicSettings,
 } from "@/types/types";
@@ -25,6 +28,7 @@ function ensurePositiveDuration(value?: number): number {
 
 export interface TimelineAssemblyInput {
   images: ImageAsset[];
+  videos?: VideoAsset[];
   narration: NarrationSettings[];
   music: MusicSettings[];
   runId: string;
@@ -51,57 +55,94 @@ export function groupImagesBySegment(
   return imagesBySegment;
 }
 
-// Build visual track with Ken Burns effects
+// Group videos by segment index extracted from video ID
+export function groupVideosBySegment(
+  videos: VideoAsset[]
+): Map<number, VideoAsset> {
+  const videosBySegment = new Map<number, VideoAsset>();
+
+  for (const video of videos) {
+    // Extract segment index from video ID (format: video-{runId}-{segmentIndex})
+    const parts = video.id.split("-");
+    const segmentIndex =
+      parts.length >= 3 ? parseInt(parts[parts.length - 1], 10) : 0;
+
+    videosBySegment.set(segmentIndex, video);
+  }
+
+  return videosBySegment;
+}
+
+// Build visual track with videos or Ken Burns effects
 export function buildVisualTrack(
   imagesBySegment: Map<number, ImageAsset[]>,
+  videosBySegment: Map<number, VideoAsset>,
   narration: NarrationSettings[],
   segmentDurations: number[]
-): KenBurnsClip[] {
-  const visualTrack: KenBurnsClip[] = [];
+): VisualClip[] {
+  const visualTrack: VisualClip[] = [];
   let accumulatedTime = 0;
   let previousEffectName: string | undefined;
 
   for (let segmentIndex = 0; segmentIndex < narration.length; segmentIndex++) {
-    const segmentImages = imagesBySegment.get(segmentIndex) || [];
     const narrationDuration =
       segmentDurations[segmentIndex] ?? ensurePositiveDuration();
-    const imageDuration =
-      segmentImages.length > 0
-        ? narrationDuration / segmentImages.length
-        : narrationDuration;
+    const video = videosBySegment.get(segmentIndex);
 
-    for (let imageIndex = 0; imageIndex < segmentImages.length; imageIndex++) {
-      const image = segmentImages[imageIndex];
-
-      // Select intelligent Ken Burns effect based on image content
-      const selectedEffect = selectKenBurnsEffect(
-        image.prompt,
-        previousEffectName
-      );
-      previousEffectName = selectedEffect.name;
-
-      const clip: KenBurnsClip = {
-        id: `visual-${segmentIndex}-${imageIndex}`,
-        name: `Segment ${segmentIndex + 1}${segmentImages.length > 1 ? ` Image ${imageIndex + 1}` : ""}`,
-        kind: "kenBurns",
-        effectName: selectedEffect.name,
-        imageAssetId: image.id,
+    // Prefer video if available
+    if (video) {
+      const clip: VideoClip = {
+        id: `visual-${segmentIndex}`,
+        name: `Segment ${segmentIndex + 1} Video`,
+        kind: "video",
+        videoAssetId: video.id,
         startTime: accumulatedTime,
-        duration: imageDuration,
-        startScale: selectedEffect.startScale,
-        endScale: selectedEffect.endScale,
-        startX: selectedEffect.startX,
-        startY: selectedEffect.startY,
-        endX: selectedEffect.endX,
-        endY: selectedEffect.endY,
+        duration: narrationDuration,
+        volume: 0, // Mute video since we have separate narration
       };
-
-      accumulatedTime += imageDuration;
-      visualTrack.push(clip);
-    }
-
-    if (segmentImages.length === 0) {
       accumulatedTime += narrationDuration;
+      visualTrack.push(clip);
+    } else {
+      // Fall back to images with Ken Burns effects
+      const segmentImages = imagesBySegment.get(segmentIndex) || [];
+      const imageDuration =
+        segmentImages.length > 0
+          ? narrationDuration / segmentImages.length
+          : narrationDuration;
+
+      for (let imageIndex = 0; imageIndex < segmentImages.length; imageIndex++) {
+        const image = segmentImages[imageIndex];
+
+        // Select intelligent Ken Burns effect based on image content
+        const selectedEffect = selectKenBurnsEffect(
+          image.prompt,
+          previousEffectName
+        );
+        previousEffectName = selectedEffect.name;
+
+        const clip: KenBurnsClip = {
+          id: `visual-${segmentIndex}-${imageIndex}`,
+          name: `Segment ${segmentIndex + 1}${segmentImages.length > 1 ? ` Image ${imageIndex + 1}` : ""}`,
+          kind: "kenBurns",
+          effectName: selectedEffect.name,
+          imageAssetId: image.id,
+          startTime: accumulatedTime,
+          duration: imageDuration,
+          startScale: selectedEffect.startScale,
+          endScale: selectedEffect.endScale,
+          startX: selectedEffect.startX,
+          startY: selectedEffect.startY,
+          endX: selectedEffect.endX,
+          endY: selectedEffect.endY,
+        };
+
+        accumulatedTime += imageDuration;
+        visualTrack.push(clip);
+      }
+
+      if (segmentImages.length === 0) {
+        accumulatedTime += narrationDuration;
+      }
     }
   }
 
@@ -161,11 +202,11 @@ export function calculateTotalDuration(
 export function assembleTimeline(
   input: TimelineAssemblyInput
 ): Timeline {
-  const { images, narration, music, runId } = input;
+  const { images, videos = [], narration, music, runId } = input;
 
   // Validate inputs
-  if (images.length === 0) {
-    throw new Error("No images available for timeline");
+  if (images.length === 0 && videos.length === 0) {
+    throw new Error("No images or videos available for timeline");
   }
 
   if (narration.length === 0) {
@@ -179,12 +220,14 @@ export function assembleTimeline(
   // Calculate total duration
   const totalDuration = calculateTotalDuration(segmentDurations);
 
-  // Group images by segment
+  // Group images and videos by segment
   const imagesBySegment = groupImagesBySegment(images);
+  const videosBySegment = groupVideosBySegment(videos);
 
   // Build all tracks
   const visualTrack = buildVisualTrack(
     imagesBySegment,
+    videosBySegment,
     narration,
     segmentDurations
   );

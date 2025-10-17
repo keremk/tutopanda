@@ -6,6 +6,7 @@ import type {
   NarrationSettings,
   MusicSettings,
   KenBurnsClip,
+  VisualClip,
 } from '@/types/types';
 import { KenBurnsComponent } from './KenBurns-component';
 
@@ -62,11 +63,11 @@ const buildAssetMaps = (
 };
 
 const resolveImageUrl = (
-  clip: KenBurnsClip,
+  clip: VisualClip,
   imageMap: Map<string, ImageAsset>,
   cacheKey?: number
 ) => {
-  if (!clip.imageAssetId) {
+  if (clip.kind !== 'kenBurns' || !clip.imageAssetId) {
     return undefined;
   }
   const asset = imageMap.get(clip.imageAssetId);
@@ -123,6 +124,7 @@ export const VideoComposition: React.FC<VideoCompositionProps> = ({
 
         switch (clip.kind) {
           case 'kenBurns':
+            if (!imageUrl) return null;
             return (
               <KenBurnsComponent
                 key={clip.id}
@@ -133,6 +135,10 @@ export const VideoComposition: React.FC<VideoCompositionProps> = ({
                 progress={progress}
               />
             );
+          case 'video':
+            // TODO: Implement video playback component
+            // For now, return null as UI was not requested in the implementation
+            return null;
           default:
             return null;
         }

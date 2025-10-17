@@ -5,6 +5,7 @@ import {
   AlertTriangleIcon,
   BrainIcon,
   ChevronDownIcon,
+  FilmIcon,
   ImageIcon,
   Loader2Icon,
   MicIcon,
@@ -35,6 +36,7 @@ import type {
   LectureStatusMessage,
   LectureConfigMessage,
   LectureImagePreviewMessage,
+  LectureVideoPreviewMessage,
   LectureNarrationPreviewMessage,
   LectureMusicPreviewMessage,
 } from "@/inngest/functions/workflow-utils";
@@ -67,6 +69,7 @@ type RunProgress = {
   result?: LectureResultMessage;
   config?: LectureConfigMessage;
   imagePreview?: LectureImagePreviewMessage;
+  videoPreview?: LectureVideoPreviewMessage;
   narrationPreview?: LectureNarrationPreviewMessage;
   musicPreview?: LectureMusicPreviewMessage;
   lastUpdated: number;
@@ -102,6 +105,10 @@ const isImageProgressMessage = (message: LectureStatusMessage) => {
 
 const isNarrationProgressMessage = (message: LectureStatusMessage) => {
   return /generated narration/i.test(message.message);
+};
+
+const isVideoProgressMessage = (message: LectureStatusMessage) => {
+  return /generated prompt|generated starting image|generated video/i.test(message.message);
 };
 
 export const AgentProgress = ({
@@ -330,7 +337,13 @@ export const AgentProgress = ({
           current.lastUpdated = Math.max(current.lastUpdated, getTimestamp(payload.timestamp));
           break;
         }
+        case "video-preview": {
+          current.videoPreview = payload;
+          current.lastUpdated = Math.max(current.lastUpdated, getTimestamp(payload.timestamp));
+          break;
+        }
         case "image-complete":
+        case "video-complete":
         case "narration-complete":
         case "music-complete": {
           // These are completion events, no need to store them in state
@@ -564,6 +577,15 @@ export const AgentProgress = ({
                 </div>
               ) : null}
 
+                  {run.videoPreview ? (
+                <div className="mt-3 rounded-md border border-border/60 bg-card/30 p-3">
+                  <h4 className="mb-2 text-sm font-medium text-foreground">Video Generated</h4>
+                  <p className="text-sm text-muted-foreground">
+                    A new video is ready. Review it from the Visuals editor to accept or reject this update.
+                  </p>
+                </div>
+              ) : null}
+
               <div className="mt-3 space-y-3">
                 {run.steps.map((step) => {
                   const latestMessage = step.messages[step.messages.length - 1];
@@ -608,18 +630,22 @@ export const AgentProgress = ({
 
                         {(() => {
                           // Filter messages based on type
+                          // Step 3 can be either images OR videos (conditional)
                           const isImageStep = step.step === 3;
-                          const isNarrationStep = step.step === 5;
+                          const isVideoStep = step.step === 3;
+                          const isNarrationStep = step.step === 4;
 
                           const progressMessages = step.messages.filter((msg) => {
-                            if (isImageStep) return isImageProgressMessage(msg);
-                            if (isNarrationStep) return isNarrationProgressMessage(msg);
+                            if (isImageStep && isImageProgressMessage(msg)) return true;
+                            if (isVideoStep && isVideoProgressMessage(msg)) return true;
+                            if (isNarrationStep && isNarrationProgressMessage(msg)) return true;
                             return false;
                           });
 
                           const regularMessages = step.messages.filter(
                             (msg) => !isAnalyzingMessage(msg) &&
                               !isImageProgressMessage(msg) &&
+                              !isVideoProgressMessage(msg) &&
                               !isNarrationProgressMessage(msg)
                           );
 
@@ -656,13 +682,19 @@ export const AgentProgress = ({
                               {progressMessages.length > 0 ? (
                                 <div className="mt-3 rounded-md border border-border/60 bg-muted/40 p-3">
                                   <div className="mb-2 flex items-center gap-2">
-                                    {isImageStep ? (
+                                    {progressMessages.some(msg => isVideoProgressMessage(msg)) ? (
+                                      <FilmIcon className="size-4 text-muted-foreground" />
+                                    ) : isImageStep ? (
                                       <ImageIcon className="size-4 text-muted-foreground" />
                                     ) : (
                                       <MicIcon className="size-4 text-muted-foreground" />
                                     )}
                                     <h4 className="text-sm font-medium text-foreground">
-                                      {isImageStep ? "Image Generation Progress" : "Narration Generation Progress"}
+                                      {progressMessages.some(msg => isVideoProgressMessage(msg))
+                                        ? "Video Generation Progress"
+                                        : isImageStep
+                                        ? "Image Generation Progress"
+                                        : "Narration Generation Progress"}
                                     </h4>
                                   </div>
                                   <div

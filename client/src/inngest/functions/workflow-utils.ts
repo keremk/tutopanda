@@ -1,9 +1,9 @@
 import { channel, topic } from "@inngest/realtime";
 
 import type { LectureScript } from "@/prompts/create-script";
-import type { LectureConfig, ImageAsset, NarrationSettings, MusicSettings } from "@/types/types";
+import type { LectureConfig, ImageAsset, NarrationSettings, MusicSettings, VideoAsset } from "@/types/types";
 
-export const LECTURE_WORKFLOW_TOTAL_STEPS = 6; // 0: config, 1: script, 2: images, 3: narration, 4: music, 5: timeline
+export const LECTURE_WORKFLOW_TOTAL_STEPS = 6; // 0: config, 1: script, 2: images/videos, 3: narration, 4: music, 5: timeline
 
 export type LectureRunStatus = "in-progress" | "complete" | "error";
 
@@ -94,6 +94,22 @@ export type LectureMusicCompleteMessage = {
   timestamp: string;
 };
 
+export type LectureVideoPreviewMessage = {
+  type: "video-preview";
+  runId: string;
+  videoAssetId: string;
+  videoAsset: VideoAsset;
+  timestamp: string;
+};
+
+export type LectureVideoCompleteMessage = {
+  type: "video-complete";
+  runId: string;
+  lectureId: number;
+  videoAssetId: string;
+  timestamp: string;
+};
+
 export type LectureProgressMessage =
   | LectureStatusMessage
   | LectureReasoningMessage
@@ -102,6 +118,8 @@ export type LectureProgressMessage =
   | LectureConfigMessage
   | LectureImagePreviewMessage
   | LectureImageCompleteMessage
+  | LectureVideoPreviewMessage
+  | LectureVideoCompleteMessage
   | LectureNarrationPreviewMessage
   | LectureNarrationCompleteMessage
   | LectureMusicPreviewMessage
@@ -295,6 +313,34 @@ export const createLectureProgressPublisher = <TPublish extends (event: any) => 
     log.info("Music completion published", { lectureId, musicAssetId });
   };
 
+  const publishVideoPreview = async (videoAssetId: string, videoAsset: VideoAsset) => {
+    await publish(
+      lectureProgressChannel(userId).progress({
+        type: "video-preview",
+        runId,
+        videoAssetId,
+        videoAsset,
+        timestamp: nowIso(),
+      })
+    );
+
+    log.info("Video preview published", { videoAssetId, videoAsset });
+  };
+
+  const publishVideoComplete = async (lectureId: number, videoAssetId: string) => {
+    await publish(
+      lectureProgressChannel(userId).progress({
+        type: "video-complete",
+        runId,
+        lectureId,
+        videoAssetId,
+        timestamp: nowIso(),
+      })
+    );
+
+    log.info("Video completion published", { lectureId, videoAssetId });
+  };
+
   return {
     publishStatus,
     publishReasoning,
@@ -302,6 +348,8 @@ export const createLectureProgressPublisher = <TPublish extends (event: any) => 
     publishConfig,
     publishImagePreview,
     publishImageComplete,
+    publishVideoPreview,
+    publishVideoComplete,
     publishNarrationPreview,
     publishNarrationComplete,
     publishMusicPreview,

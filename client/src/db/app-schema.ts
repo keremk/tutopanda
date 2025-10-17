@@ -36,6 +36,7 @@ export const videoLecturesTable = pgTable("video_lectures", {
   script: jsonb("script"),
   images: jsonb("images"),
   narration: jsonb("narration"),
+  videos: jsonb("videos"),
   music: jsonb("music"),
   effects: jsonb("effects"),
   timeline: jsonb("timeline"),
