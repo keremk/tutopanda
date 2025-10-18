@@ -123,9 +123,9 @@ export const generateTimeline = inngest.createFunction(
 
       if (lecture.videos && lecture.videos.length > 0) {
         const normalisedVideos = lecture.videos.map((item) => {
-          const nextStartingImage = normalizePath(item.startingImageUrl);
-          return nextStartingImage && nextStartingImage !== item.startingImageUrl
-            ? { ...item, startingImageUrl: nextStartingImage }
+          const nextVideoPath = normalizePath(item.videoPath);
+          return nextVideoPath && nextVideoPath !== item.videoPath
+            ? { ...item, videoPath: nextVideoPath }
             : item;
         });
 

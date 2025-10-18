@@ -5,6 +5,7 @@ import { resolve } from "node:path";
 
 import type { ImageGenerationParams } from "@/services/media-generation/image/types";
 import type { VideoGenerationParams } from "@/services/media-generation/video/types";
+import { DEFAULT_IMAGE_MODEL } from "@/lib/models";
 
 const fixturesDir = resolve(process.cwd(), "tests", "integration", "test-data");
 const seedImagePath = resolve(fixturesDir, "seed-image.jpg");
@@ -240,6 +241,7 @@ describe("generateSegmentVideos Inngest function (integration)", () => {
 
     const videoConfig = {
       model: targetVideoModel,
+      imageModel: DEFAULT_IMAGE_MODEL,
       resolution: "480p",
       duration: "10",
     };
@@ -251,6 +253,7 @@ describe("generateSegmentVideos Inngest function (integration)", () => {
       size: "1080",
       style: "Ghibli",
       imagesPerSegment: 1,
+      model: DEFAULT_IMAGE_MODEL,
     };
 
     const stepOrder: string[] = [];
@@ -319,9 +322,10 @@ describe("generateSegmentVideos Inngest function (integration)", () => {
       expect(videoAsset.duration).toBe(10);
       expect(videoAsset.segmentStartImagePrompt).toBe(`image-prompt-${index}`);
       expect(videoAsset.movieDirections).toBe(`movie-directions-${index}`);
-      expect(typeof videoAsset.startingImageUrl).toBe("string");
-      expect((videoAsset.startingImageUrl as string)).toContain(
-        `${userId}/${projectId}/${lectureId}/images/`
+      expect(videoAsset.startingImageModel).toBe(DEFAULT_IMAGE_MODEL);
+      expect(videoAsset.startingImageId).toBe(`video-img-${runId}-${index}`);
+      expect(videoAsset.videoPath).toBe(
+        `${userId}/${projectId}/${lectureId}/videos/video-${runId}-${index}.mp4`
       );
     });
 

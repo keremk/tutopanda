@@ -9,7 +9,7 @@ import {
   videoDurationSegmentValues,
   videoDurationSegmentLabels,
 } from "@/types/types";
-import { videoModelOptions } from "@/lib/models";
+import { videoModelOptions, imageModelOptions } from "@/lib/models";
 
 interface EditVideoConfigurationProps {
   config: VideoConfig;
@@ -73,7 +73,7 @@ export function EditVideoConfiguration({ config, onChange }: EditVideoConfigurat
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="videoModel">Model</Label>
+          <Label htmlFor="videoModel">Video Model</Label>
           <Select
             value={config.model}
             onValueChange={(value) => onChange({ ...config, model: value })}
@@ -89,6 +89,27 @@ export function EditVideoConfiguration({ config, onChange }: EditVideoConfigurat
               ))}
             </SelectContent>
           </Select>
+          <p className="text-xs text-muted-foreground">Used for generating motion in each video segment.</p>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="videoImageModel">Image Model</Label>
+          <Select
+            value={config.imageModel}
+            onValueChange={(value) => onChange({ ...config, imageModel: value })}
+          >
+            <SelectTrigger id="videoImageModel">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {imageModelOptions.map((model) => (
+                <SelectItem key={model.id} value={model.id}>
+                  {model.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground">Used for generating starting or ending images.</p>
         </div>
       </div>
     </div>

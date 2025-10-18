@@ -10,7 +10,7 @@ import { generateImage } from "@/services/media-generation/image/image-generator
 import { buildStyledVideoImagePrompt, buildStyledMovieDirections } from "@/prompts/create-video-prompt";
 import { batchWithConcurrency } from "@/services/media-generation/core";
 import type { Logger } from "@/services/media-generation/core";
-import { DEFAULT_VIDEO_MODEL } from "@/lib/models";
+import { DEFAULT_IMAGE_MODEL, DEFAULT_VIDEO_MODEL } from "@/lib/models";
 import type { LectureAssetStorage } from "@/services/lecture/storage";
 import { setupFileStorage } from "@/lib/storage-utils";
 
@@ -53,7 +53,6 @@ export type VideoSegmentPrompt = {
 export type VideoSegmentImage = {
   segmentIndex: number;
   imageId: string;
-  imageUrl: string;
 };
 
 type GenerateVideoSegmentPromptsOptions = {
@@ -162,15 +161,16 @@ export async function generateVideoStartingImages(
           size: imageConfig.size,
           width: imageConfig.width,
           height: imageConfig.height,
+          model: imageConfig.model,
         },
         { logger }
       );
 
       const imageId = `video-img-${runId}-${segmentIndex}`;
-      const imageUrl = await assetStorage.saveImage(imageBuffer, imageId);
+      const imagePath = await assetStorage.saveImage(imageBuffer, imageId);
 
       logger?.info(`Starting image saved for segment ${segmentIndex + 1}`, {
-        path: imageUrl,
+        path: imagePath,
       });
 
       completedImages += 1;
@@ -179,7 +179,6 @@ export async function generateVideoStartingImages(
       return {
         segmentIndex,
         imageId,
-        imageUrl,
       };
     },
     { maxConcurrency }
@@ -260,12 +259,12 @@ export async function generateVideoAssets(
       );
 
       const videoId = `video-${runId}-${segmentIndex}`;
-      const videoUrl = await assetStorage.saveVideo(videoBuffer, videoId);
+      const videoPath = await assetStorage.saveVideo(videoBuffer, videoId);
 
       logger?.info("Video saved", {
         id: videoId,
         segmentIndex,
-        path: videoUrl,
+        path: videoPath,
       });
 
       completedVideos += 1;
@@ -280,7 +279,9 @@ export async function generateVideoAssets(
         resolution: videoConfig.resolution,
         duration: Number.parseInt(videoConfig.duration || "10", 10),
         aspectRatio: imageConfig.aspectRatio,
-        startingImageUrl: imageData.imageUrl,
+        videoPath,
+        startingImageId: imageData.imageId,
+        startingImageModel: imageConfig.model || DEFAULT_IMAGE_MODEL,
       };
     },
     { maxConcurrency }

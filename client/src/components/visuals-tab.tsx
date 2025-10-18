@@ -1,6 +1,9 @@
+import { useMemo } from "react";
 import VisualsEditor from "./visuals-editor";
+import VideoSegmentEditor from "./video-segment-editor";
 import EditorLayout from "./editor-layout";
-import type { TimelineTrackKey } from "@/types/types";
+import type { TimelineTrackKey, VisualClip } from "@/types/types";
+import { useLectureEditor } from "./lecture-editor-provider";
 
 interface VisualsTabProps {
   currentTime: number;
@@ -27,6 +30,17 @@ export default function VisualsTab({
   onUpdateClip,
   selectedClipId,
 }: VisualsTabProps) {
+  const { timeline } = useLectureEditor();
+
+  const selectedClip = useMemo(() => {
+    if (!selectedClipId) return null;
+    return (timeline?.tracks.visual.find((clip) => clip.id === selectedClipId) as VisualClip | undefined) ?? null;
+  }, [timeline, selectedClipId]);
+
+  const isVideoClip = selectedClip?.kind === "video";
+  const kenBurnsClipId = isVideoClip ? null : selectedClipId;
+  const videoClipId = isVideoClip ? selectedClipId : null;
+
   return (
     <EditorLayout
       currentTime={currentTime}
@@ -37,7 +51,11 @@ export default function VisualsTab({
       onRemoveClip={onRemoveClip}
       onUpdateClip={onUpdateClip}
     >
-      <VisualsEditor selectedClipId={selectedClipId} />
+      {isVideoClip ? (
+        <VideoSegmentEditor selectedClipId={videoClipId} />
+      ) : (
+        <VisualsEditor selectedClipId={kenBurnsClipId} />
+      )}
     </EditorLayout>
   );
 }

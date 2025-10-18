@@ -7,7 +7,7 @@ import { generateNarration } from "@/inngest/functions/generate-narration";
 import { generateMusic } from "@/inngest/functions/generate-music";
 import { generateTimeline } from "@/inngest/functions/generate-timeline";
 import type { ImageGenerationDefaults, NarrationGenerationDefaults, NarrationSettings } from "@/types/types";
-import { DEFAULT_NARRATION_GENERATION_DEFAULTS } from "@/types/types";
+import { DEFAULT_IMAGE_GENERATION_DEFAULTS, DEFAULT_NARRATION_GENERATION_DEFAULTS } from "@/types/types";
 import { getDefaultVoiceForNarrationModel, getNarrationModelDefinition } from "@/lib/models";
 import { getLectureById } from "@/data/lecture/repository";
 import { getProjectSettings } from "@/data/project";
@@ -82,14 +82,15 @@ export const startLectureCreation = inngest.createFunction(
     }
 
     // Extract image settings from project settings
-    const imageSettings: ImageGenerationDefaults = {
-      width: 1024,
-      height: 576,
-      aspectRatio: projectSettings.image.aspectRatio,
-      size: projectSettings.image.size,
-      style: projectSettings.image.style,
-      imagesPerSegment: projectSettings.image.imagesPerSegment,
-    };
+  const imageSettings: ImageGenerationDefaults = {
+    width: 1024,
+    height: 576,
+    aspectRatio: projectSettings.image.aspectRatio,
+    size: projectSettings.image.size,
+    style: projectSettings.image.style,
+    imagesPerSegment: projectSettings.image.imagesPerSegment,
+    model: projectSettings.video.imageModel ?? projectSettings.image.model ?? DEFAULT_IMAGE_GENERATION_DEFAULTS.model,
+  };
 
     // Step 3: Generate either videos OR images (conditional)
     if (projectSettings.general.useVideo) {

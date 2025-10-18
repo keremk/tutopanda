@@ -304,7 +304,9 @@ export const videoAssetSchema = baseAssetSchema
     resolution: z.enum(videoResolutionValues).optional(),
     duration: z.number().nonnegative().optional(),
     aspectRatio: z.enum(aspectRatioValues).optional(),
-    startingImageUrl: z.string().optional(),
+    videoPath: z.string().optional(),
+    startingImageId: z.string().optional(),
+    startingImageModel: z.string().optional(),
   })
   .passthrough();
 
@@ -334,6 +336,7 @@ export const imageConfigSchema = z.object({
 
 export const videoConfigSchema = z.object({
   model: z.string(),
+  imageModel: z.string().default(DEFAULT_IMAGE_MODEL),
   resolution: z.enum(videoResolutionValues),
   duration: z.enum(videoDurationSegmentValues),
 });
@@ -405,6 +408,7 @@ export type ImageGenerationDefaults = {
   size: string;
   style?: typeof imageStyleValues[number];
   imagesPerSegment?: number;
+  model?: string;
 };
 
 export const DEFAULT_IMAGE_GENERATION_DEFAULTS: ImageGenerationDefaults = {
@@ -414,6 +418,7 @@ export const DEFAULT_IMAGE_GENERATION_DEFAULTS: ImageGenerationDefaults = {
   size: "1K",
   style: "Ghibli",
   imagesPerSegment: 1,
+  model: DEFAULT_IMAGE_MODEL,
 };
 
 export type NarrationGenerationDefaults = {
@@ -461,6 +466,7 @@ export const DEFAULT_LECTURE_CONFIG: LectureConfig = {
   },
   video: {
     model: DEFAULT_VIDEO_MODEL,
+    imageModel: DEFAULT_IMAGE_MODEL,
     resolution: "480p",
     duration: "10",
   },

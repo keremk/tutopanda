@@ -2,6 +2,7 @@ import { AbsoluteFill, useCurrentFrame, useVideoConfig, Audio, Sequence, Video }
 import { useMemo } from 'react';
 import type { Timeline, ImageAsset, NarrationSettings, MusicSettings, VisualClip, VideoAsset } from '@/types/types';
 import { KenBurnsComponent } from './KenBurns-component';
+import { buildVideoAssetUrl } from '@/lib/video-assets';
 
 interface VideoCompositionProps {
   timeline: Timeline;
@@ -85,34 +86,6 @@ const resolveAudioUrl = (
   return normalizeStorageUrl(asset?.sourceUrl ?? (asset as MusicSettings | undefined)?.audioUrl, cacheKey);
 };
 
-const stripApiPrefix = (path: string) =>
-  path.startsWith('/api/storage/') ? path.slice('/api/storage/'.length) : path.replace(/^\/+/, '');
-
-const stripQueryString = (path: string) => path.split('?')[0];
-
-const resolveVideoStoragePath = (video: VideoAsset): string | undefined => {
-  const startingImagePath = video.startingImageUrl;
-  if (!startingImagePath) {
-    return undefined;
-  }
-
-  if (startingImagePath.startsWith('http://') || startingImagePath.startsWith('https://')) {
-    // External URLs are not currently supported for deriving video paths.
-    return undefined;
-  }
-
-  const sanitizedPath = stripApiPrefix(stripQueryString(startingImagePath));
-  const marker = '/images/';
-  const markerIndex = sanitizedPath.lastIndexOf(marker);
-
-  if (markerIndex === -1) {
-    return undefined;
-  }
-
-  const basePath = sanitizedPath.slice(0, markerIndex);
-  return `${basePath}/videos/${video.id}.mp4`;
-};
-
 const resolveVideoUrl = (
   clip: VisualClip,
   videoMap: Map<string, VideoAsset>,
@@ -127,12 +100,7 @@ const resolveVideoUrl = (
     return undefined;
   }
 
-  const storagePath = resolveVideoStoragePath(asset);
-  if (!storagePath) {
-    return undefined;
-  }
-
-  return normalizeStorageUrl(storagePath, cacheKey);
+  return buildVideoAssetUrl(asset, { cacheKey }) ?? undefined;
 };
 
 export const VideoComposition: React.FC<VideoCompositionProps> = ({
