@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { LectureScript } from "@/types/types";
-import { buildStyledImagePrompt, type ImageStyleValue } from "@/lib/image-styles";
+import { buildStyledImagePrompt, getImageStyleMetadata, type ImageStyleValue } from "@/lib/image-styles";
 
 type LectureSegment = LectureScript["segments"][number];
 
@@ -76,7 +76,6 @@ export const buildStyledMovieDirections = ({
   // Prepend style information to movie directions
   if (!style) return baseDirections;
 
-  const { getImageStyleMetadata } = require("@/lib/image-styles");
   const styleMetadata = getImageStyleMetadata(style);
   if (!styleMetadata) return baseDirections;
 

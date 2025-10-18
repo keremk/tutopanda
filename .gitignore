@@ -53,3 +53,5 @@ next-env.d.ts
 
 # Local file storage
 local-storage/
+
+**/test-output/

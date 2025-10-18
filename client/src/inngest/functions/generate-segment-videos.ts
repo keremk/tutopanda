@@ -11,7 +11,11 @@ import { getLectureById } from "@/data/lecture/repository";
 import { setupFileStorage } from "@/lib/storage-utils";
 import { videoProviderRegistry, ReplicateVideoProvider } from "@/services/media-generation/video";
 import { FileStorageHandler } from "@/services/media-generation/core";
-import { generateLectureVideos } from "@/services/lecture/orchestrators/video-orchestrator";
+import {
+  generateVideoAssets,
+  generateVideoSegmentPrompts,
+  generateVideoStartingImages,
+} from "@/services/lecture/orchestrators/video-orchestrator";
 import { createLectureAssetStorage } from "@/services/lecture/storage";
 
 const inngest = getInngestApp();
@@ -110,59 +114,74 @@ export const generateSegmentVideos = inngest.createFunction(
     });
 
     const videosToGenerate = Math.min(segments.length, effectiveMaxSegments);
+    const limitedSegments = segments.slice(0, videosToGenerate);
+
+    const storage = setupFileStorage();
+    const storageHandler = new FileStorageHandler(storage);
+
+    const assetStorage = createLectureAssetStorage(
+      { userId, projectId, lectureId },
+      { storageHandler }
+    );
+
+    const maxConcurrency = 5;
 
     await publishStatus(
-      `Generating ${videosToGenerate} video${videosToGenerate > 1 ? "s" : ""} (batched pipeline)`,
+      `Generating prompts for ${limitedSegments.length} segment${limitedSegments.length === 1 ? "" : "s"}`,
       workflowStep
     );
 
-    const videoAssets = await step.run("generate-lecture-videos", async () => {
-      const storage = setupFileStorage();
-      const storageHandler = new FileStorageHandler(storage);
-
-      const assetStorage = createLectureAssetStorage(
-        { userId, projectId, lectureId },
-        { storageHandler }
-      );
-
-      return generateLectureVideos(
-        {
-          script,
-          lectureSummary,
-          videoConfig,
-          imageConfig,
-          maxVideoSegments: videosToGenerate,
-          runId,
+    const segmentPrompts = await step.run("generate-video-prompts", async () => {
+      return generateVideoSegmentPrompts(limitedSegments, {
+        style: imageConfig.style,
+        lectureSummary,
+        maxConcurrency,
+        logger: log,
+        onPromptProgress: async (current, total) => {
+          await publishStatus(
+            `Generated prompts for ${current}/${total} segments`,
+            workflowStep
+          );
         },
-        {
-          userId,
-          projectId,
-          lectureId,
-          maxConcurrency: 5, // Up to 5 concurrent operations per batch
+      });
+    });
+
+    await publishStatus("Generating starting images", workflowStep);
+
+    const segmentImages = await step.run("generate-starting-images", async () => {
+      return generateVideoStartingImages(segmentPrompts, {
+        imageConfig,
+        runId,
+        assetStorage,
+        maxConcurrency,
+        logger: log,
+        onImageProgress: async (current, total) => {
+          await publishStatus(
+            `Generated starting image ${current}/${total}`,
+            workflowStep
+          );
         },
-        {
-          assetStorage,
-          logger: log,
-          onPromptProgress: async (current, total) => {
-            await publishStatus(
-              `Generated prompts for ${current}/${total} segments`,
-              workflowStep
-            );
-          },
-          onImageProgress: async (current, total) => {
-            await publishStatus(
-              `Generated starting image ${current}/${total}`,
-              workflowStep
-            );
-          },
-          onVideoProgress: async (current, total) => {
-            await publishStatus(
-              `Generated video ${current}/${total}`,
-              workflowStep
-            );
-          },
-        }
-      );
+      });
+    });
+
+    await publishStatus("Generating segment videos", workflowStep);
+
+    const videoAssets = await step.run("generate-video-assets", async () => {
+      return generateVideoAssets(segmentPrompts, segmentImages, {
+        videoConfig,
+        imageConfig,
+        runId,
+        assetStorage,
+        maxConcurrency,
+        logger: log,
+        onVideoProgress: async (current, total) => {
+          await publishStatus(
+            `Generated video ${current}/${total}`,
+            workflowStep
+          );
+        },
+        loadImageFn: async (imagePath) => storage.readToBuffer(imagePath),
+      });
     });
 
     await publishStatus("Videos generated successfully", workflowStep, "complete");

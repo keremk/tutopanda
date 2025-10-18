@@ -1,18 +1,12 @@
-import { AbsoluteFill, useCurrentFrame, useVideoConfig, Audio, Sequence } from 'remotion';
+import { AbsoluteFill, useCurrentFrame, useVideoConfig, Audio, Sequence, Video } from 'remotion';
 import { useMemo } from 'react';
-import type {
-  Timeline,
-  ImageAsset,
-  NarrationSettings,
-  MusicSettings,
-  KenBurnsClip,
-  VisualClip,
-} from '@/types/types';
+import type { Timeline, ImageAsset, NarrationSettings, MusicSettings, VisualClip, VideoAsset } from '@/types/types';
 import { KenBurnsComponent } from './KenBurns-component';
 
 interface VideoCompositionProps {
   timeline: Timeline;
   images: ImageAsset[];
+  videos: VideoAsset[];
   narration: NarrationSettings[];
   music: MusicSettings[];
   cacheKey?: number;
@@ -42,15 +36,20 @@ const normalizeStorageUrl = (url: string | undefined, cacheKey?: number): string
 
 const buildAssetMaps = (
   images: ImageAsset[],
+  videos: VideoAsset[],
   narration: NarrationSettings[],
   music: MusicSettings[]
 ) => {
   const imageMap = new Map<string, ImageAsset>();
+  const videoMap = new Map<string, VideoAsset>();
   const narrationMap = new Map<string, NarrationSettings>();
   const musicMap = new Map<string, MusicSettings>();
 
   images.forEach((asset) => {
     imageMap.set(asset.id, asset);
+  });
+  videos.forEach((asset) => {
+    videoMap.set(asset.id, asset);
   });
   narration.forEach((asset) => {
     narrationMap.set(asset.id, asset);
@@ -59,7 +58,7 @@ const buildAssetMaps = (
     musicMap.set(asset.id, asset);
   });
 
-  return { imageMap, narrationMap, musicMap };
+  return { imageMap, videoMap, narrationMap, musicMap };
 };
 
 const resolveImageUrl = (
@@ -86,9 +85,60 @@ const resolveAudioUrl = (
   return normalizeStorageUrl(asset?.sourceUrl ?? (asset as MusicSettings | undefined)?.audioUrl, cacheKey);
 };
 
+const stripApiPrefix = (path: string) =>
+  path.startsWith('/api/storage/') ? path.slice('/api/storage/'.length) : path.replace(/^\/+/, '');
+
+const stripQueryString = (path: string) => path.split('?')[0];
+
+const resolveVideoStoragePath = (video: VideoAsset): string | undefined => {
+  const startingImagePath = video.startingImageUrl;
+  if (!startingImagePath) {
+    return undefined;
+  }
+
+  if (startingImagePath.startsWith('http://') || startingImagePath.startsWith('https://')) {
+    // External URLs are not currently supported for deriving video paths.
+    return undefined;
+  }
+
+  const sanitizedPath = stripApiPrefix(stripQueryString(startingImagePath));
+  const marker = '/images/';
+  const markerIndex = sanitizedPath.lastIndexOf(marker);
+
+  if (markerIndex === -1) {
+    return undefined;
+  }
+
+  const basePath = sanitizedPath.slice(0, markerIndex);
+  return `${basePath}/videos/${video.id}.mp4`;
+};
+
+const resolveVideoUrl = (
+  clip: VisualClip,
+  videoMap: Map<string, VideoAsset>,
+  cacheKey?: number
+) => {
+  if (clip.kind !== 'video' || !clip.videoAssetId) {
+    return undefined;
+  }
+
+  const asset = videoMap.get(clip.videoAssetId);
+  if (!asset) {
+    return undefined;
+  }
+
+  const storagePath = resolveVideoStoragePath(asset);
+  if (!storagePath) {
+    return undefined;
+  }
+
+  return normalizeStorageUrl(storagePath, cacheKey);
+};
+
 export const VideoComposition: React.FC<VideoCompositionProps> = ({
   timeline,
   images,
+  videos,
   narration,
   music,
   cacheKey,
@@ -96,17 +146,38 @@ export const VideoComposition: React.FC<VideoCompositionProps> = ({
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const currentTime = frame / fps;
-  const { imageMap, narrationMap, musicMap } = useMemo(
-    () => buildAssetMaps(images, narration, music),
-    [images, narration, music]
+  const { imageMap, videoMap, narrationMap, musicMap } = useMemo(
+    () => buildAssetMaps(images, videos, narration, music),
+    [images, videos, narration, music]
   );
 
   return (
     <AbsoluteFill style={{ backgroundColor: '#000' }}>
-      {/* Visual track - Ken Burns effects */}
+      {/* Visual track */}
       {(timeline.tracks?.visual ?? []).map((clip) => {
         if (!Number.isFinite(clip.duration) || clip.duration <= 0) {
           return null;
+        }
+
+        if (clip.kind === 'video') {
+          const videoUrl = resolveVideoUrl(clip, videoMap, cacheKey);
+          if (!videoUrl) {
+            return null;
+          }
+
+          const from = Math.round(clip.startTime * fps);
+          const durationInFrames = Math.round(clip.duration * fps);
+
+          return (
+            <Sequence key={clip.id} from={from} durationInFrames={durationInFrames}>
+              <Video
+                src={videoUrl}
+                muted={true}
+                volume={clip.volume ?? 0}
+                style={{ width: '100%', height: '100%' }}
+              />
+            </Sequence>
+          );
         }
 
         const isActive =
@@ -122,26 +193,20 @@ export const VideoComposition: React.FC<VideoCompositionProps> = ({
           return null;
         }
 
-        switch (clip.kind) {
-          case 'kenBurns':
-            if (!imageUrl) return null;
-            return (
-              <KenBurnsComponent
-                key={clip.id}
-                component={{
-                  ...clip,
-                  imageUrl,
-                }}
-                progress={progress}
-              />
-            );
-          case 'video':
-            // TODO: Implement video playback component
-            // For now, return null as UI was not requested in the implementation
-            return null;
-          default:
-            return null;
+        if (clip.kind !== 'kenBurns') {
+          return null;
         }
+
+        return (
+          <KenBurnsComponent
+            key={clip.id}
+            component={{
+              ...clip,
+              imageUrl,
+            }}
+            progress={progress}
+          />
+        );
       })}
 
       {/* Voice track - Narration audio */}

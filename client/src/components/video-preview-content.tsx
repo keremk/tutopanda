@@ -133,6 +133,7 @@ export default function VideoPreviewContent({ timeline, currentTime, isPlaying, 
         inputProps={{
           timeline,
           images: content.images ?? [],
+          videos: content.videos ?? [],
           narration: content.narration ?? [],
           music: content.music ?? [],
           cacheKey: updatedAt.getTime(),

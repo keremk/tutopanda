@@ -1,8 +1,5 @@
-// Timeline assembly tests
-// Note: Vitest is not yet configured. These tests will run once Vitest is set up.
-
 import { describe, it, expect } from "vitest";
-import type { ImageAsset, NarrationSettings, MusicSettings } from "@/types/types";
+import type { ImageAsset, NarrationSettings, MusicSettings, VideoAsset } from "@/types/types";
 import {
   groupImagesBySegment,
   buildVisualTrack,
@@ -88,6 +85,7 @@ describe("buildVisualTrack", () => {
         ],
       ],
     ]);
+    const videosBySegment = new Map<number, VideoAsset>();
 
     const narration: NarrationSettings[] = [
       {
@@ -99,7 +97,12 @@ describe("buildVisualTrack", () => {
     ];
 
     const segmentDurations = narration.map((n) => n.duration ?? 1);
-    const track = buildVisualTrack(imagesBySegment, narration, segmentDurations);
+    const track = buildVisualTrack(
+      imagesBySegment,
+      videosBySegment,
+      narration,
+      segmentDurations
+    );
 
     expect(track.length).toBe(1);
     expect(track[0].duration).toBe(10);
@@ -127,6 +130,7 @@ describe("buildVisualTrack", () => {
         ],
       ],
     ]);
+    const videosBySegment = new Map<number, VideoAsset>();
 
     const narration: NarrationSettings[] = [
       {
@@ -138,7 +142,12 @@ describe("buildVisualTrack", () => {
     ];
 
     const segmentDurations = narration.map((n) => n.duration ?? 1);
-    const track = buildVisualTrack(imagesBySegment, narration, segmentDurations);
+    const track = buildVisualTrack(
+      imagesBySegment,
+      videosBySegment,
+      narration,
+      segmentDurations
+    );
 
     expect(track.length).toBe(2);
     expect(track[0].duration).toBe(5); // 10 / 2
@@ -167,6 +176,7 @@ describe("buildVisualTrack", () => {
         ],
       ],
     ]);
+    const videosBySegment = new Map<number, VideoAsset>();
 
     const narration: NarrationSettings[] = [
       {
@@ -178,7 +188,12 @@ describe("buildVisualTrack", () => {
     ];
 
     const segmentDurations = narration.map((n) => n.duration ?? 1);
-    const track = buildVisualTrack(imagesBySegment, narration, segmentDurations);
+    const track = buildVisualTrack(
+      imagesBySegment,
+      videosBySegment,
+      narration,
+      segmentDurations
+    );
 
     // For portraits with only 2 effects, they should be different
     expect(track[0].startScale).not.toBe(track[1].startScale);
@@ -310,6 +325,7 @@ describe("assembleTimeline", () => {
   it("throws error when no images provided", () => {
     const input = {
       images: [],
+      videos: [],
       narration: [
         {
           id: "narr-0",
@@ -323,7 +339,7 @@ describe("assembleTimeline", () => {
     };
 
     expect(() => assembleTimeline(input)).toThrow(
-      "No images available for timeline"
+      "No images or videos available for timeline"
     );
   });
 

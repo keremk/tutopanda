@@ -363,6 +363,7 @@ const snapshotToContent = (
   summary: snapshot.summary,
   script: snapshot.script ?? null,
   images: snapshot.images ?? [],
+  videos: snapshot.videos ?? [],
   narration: snapshot.narration ?? [],
   music: snapshot.music ?? [],
   effects: snapshot.effects ?? [],
