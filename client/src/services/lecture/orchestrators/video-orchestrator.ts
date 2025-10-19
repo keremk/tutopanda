@@ -62,6 +62,7 @@ type GenerateVideoSegmentPromptsOptions = {
   generatePrompts?: typeof generateVideoPrompts;
   logger?: Logger;
   onPromptProgress?: (current: number, total: number) => void | Promise<void>;
+  imageModel?: string;
 };
 
 export async function generateVideoSegmentPrompts(
@@ -94,6 +95,7 @@ export async function generateVideoSegmentPrompts(
       const styledImagePrompt = buildStyledVideoImagePrompt({
         basePrompt: segmentStartImagePrompt,
         style,
+        model: options.imageModel,
       });
 
       const styledMovieDirections = buildStyledMovieDirections({

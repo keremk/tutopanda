@@ -37,6 +37,7 @@ import type {
   LectureConfigMessage,
   LectureImagePreviewMessage,
   LectureVideoPreviewMessage,
+  LectureVideoImagePreviewMessage,
   LectureNarrationPreviewMessage,
   LectureMusicPreviewMessage,
 } from "@/inngest/functions/workflow-utils";
@@ -70,6 +71,7 @@ type RunProgress = {
   config?: LectureConfigMessage;
   imagePreview?: LectureImagePreviewMessage;
   videoPreview?: LectureVideoPreviewMessage;
+  videoImagePreview?: LectureVideoImagePreviewMessage;
   narrationPreview?: LectureNarrationPreviewMessage;
   musicPreview?: LectureMusicPreviewMessage;
   lastUpdated: number;
@@ -342,8 +344,14 @@ export const AgentProgress = ({
           current.lastUpdated = Math.max(current.lastUpdated, getTimestamp(payload.timestamp));
           break;
         }
+        case "video-image-preview": {
+          current.videoImagePreview = payload;
+          current.lastUpdated = Math.max(current.lastUpdated, getTimestamp(payload.timestamp));
+          break;
+        }
         case "image-complete":
         case "video-complete":
+        case "video-image-complete":
         case "narration-complete":
         case "music-complete": {
           // These are completion events, no need to store them in state
@@ -555,6 +563,15 @@ export const AgentProgress = ({
                   <h4 className="mb-2 text-sm font-medium text-foreground">Image Generated</h4>
                   <p className="text-sm text-muted-foreground">
                     A new image is ready. Review it from the Visuals editor to accept or reject this update.
+                  </p>
+                </div>
+              ) : null}
+
+                  {run.videoImagePreview ? (
+                <div className="mt-3 rounded-md border border-border/60 bg-card/30 p-3">
+                  <h4 className="mb-2 text-sm font-medium text-foreground">Starting Image Generated</h4>
+                  <p className="text-sm text-muted-foreground">
+                    A new starting image for a video segment is ready. Review it from the Visuals editor to accept or reject this update.
                   </p>
                 </div>
               ) : null}

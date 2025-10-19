@@ -6,9 +6,9 @@ import { useInngestSubscription } from "@inngest/realtime/hooks";
 import { fetchLectureProgressSubscriptionToken } from "@/app/actions/get-subscribe-token";
 import type { LectureProgressMessage } from "@/inngest/functions/workflow-utils";
 import { useLectureEditor } from "@/components/lecture-editor-provider";
-import type { ImageAsset, MusicSettings, NarrationSettings } from "@/types/types";
+import type { ImageAsset, MusicSettings, NarrationSettings, VideoAsset } from "@/types/types";
 
-type AssetType = "image" | "narration" | "music";
+type AssetType = "image" | "narration" | "music" | "video";
 
 type PreviewExtractor<TPreview> = (
   message: LectureProgressMessage
@@ -29,9 +29,12 @@ export type UseAssetGenerationFlowOptions<TPreview> = {
   ) =>
     | Partial<ImageAsset>
     | Partial<NarrationSettings>
-    | Partial<MusicSettings>;
+    | Partial<MusicSettings>
+    | Partial<VideoAsset>;
   onPreviewAccepted?: (preview: TPreview) => void;
   onPreviewRejected?: () => void;
+  refreshOnAccept?: boolean;
+  refreshOnComplete?: boolean;
 };
 
 export type UseAssetGenerationFlowResult<TPreview> = {
@@ -63,6 +66,8 @@ export function useAssetGenerationFlow<TPreview>({
   mapPreviewToAssetUpdate,
   onPreviewAccepted,
   onPreviewRejected,
+  refreshOnAccept = true,
+  refreshOnComplete = false,
 }: UseAssetGenerationFlowOptions<TPreview>): UseAssetGenerationFlowResult<TPreview> {
   const { applyAssetUpdate, refreshLecture } = useLectureEditor();
   const [runId, setRunId] = useState<string | null>(null);
@@ -137,6 +142,9 @@ export function useAssetGenerationFlow<TPreview>({
         processedEventKeysRef.current.add(eventKey);
         setIsGenerating(false);
         setIsDecisionPending(false);
+        if (refreshOnComplete) {
+          refreshLecture({ debounce: false });
+        }
         break;
       }
 
@@ -188,7 +196,9 @@ export function useAssetGenerationFlow<TPreview>({
       const assetUpdate = mapPreviewToAssetUpdate(preview);
       applyAssetUpdate(assetType, previewAssetId, assetUpdate);
 
-      refreshLecture();
+      if (refreshOnAccept) {
+        refreshLecture();
+      }
       onPreviewAccepted?.(preview);
       reset();
     } catch (err) {

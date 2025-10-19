@@ -56,10 +56,13 @@ Generate the starting image prompt and movie directions for this 10-second segme
 export const buildStyledVideoImagePrompt = ({
   basePrompt,
   style,
+  model,
 }: {
   basePrompt: string;
   style?: ImageStyleValue | null;
+  model?: string;
 }) => {
+  void model;
   return buildStyledImagePrompt({ basePrompt, style });
 };
 

@@ -23,6 +23,7 @@ import type {
   ImageAsset,
   NarrationSettings,
   MusicSettings,
+  VideoAsset,
 } from "@/types/types";
 import { fetchLectureProgressSubscriptionToken } from "@/app/actions/get-subscribe-token";
 import type { LectureProgressMessage } from "@/inngest/functions/workflow-utils";
@@ -46,9 +47,13 @@ type LectureEditorContextValue = {
   updateTimeline: (updater: (timeline: Timeline | null) => Timeline | null) => void;
   saveNow: () => Promise<void>;
   applyAssetUpdate: (
-    type: "image" | "narration" | "music",
+    type: "image" | "narration" | "music" | "video",
     assetId: string,
-    payload: Partial<ImageAsset> | Partial<NarrationSettings> | Partial<MusicSettings>
+    payload:
+      | Partial<ImageAsset>
+      | Partial<NarrationSettings>
+      | Partial<MusicSettings>
+      | Partial<VideoAsset>
   ) => void;
   refreshLecture: (options?: { debounce?: boolean }) => Promise<void> | void;
 };
@@ -219,12 +224,14 @@ export function LectureEditorProvider({
     LectureEditorContextValue["applyAssetUpdate"]
   >((type, assetId, payload) => {
     setDraft((prev) => {
-      const key =
-        type === "image"
-          ? "images"
-          : type === "narration"
-            ? "narration"
-            : "music";
+    const key =
+      type === "image"
+        ? "images"
+        : type === "narration"
+          ? "narration"
+          : type === "music"
+            ? "music"
+            : "videos";
 
       const items = prev[key];
       if (!items) {

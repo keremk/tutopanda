@@ -11,6 +11,7 @@ import { generateTimeline } from "@/inngest/functions/generate-timeline";
 import { regenerateSingleImage } from "@/inngest/functions/regenerate-single-image";
 import { regenerateSingleNarration } from "@/inngest/functions/regenerate-single-narration";
 import { regenerateSingleMusic } from "@/inngest/functions/regenerate-single-music";
+import { regenerateVideoStartingImage } from "@/inngest/functions/regenerate-video-starting-image";
 
 const inngest = getInngestApp();
 
@@ -29,5 +30,6 @@ export const { GET, POST, PUT } = serve({
     regenerateSingleImage,
     regenerateSingleNarration,
     regenerateSingleMusic,
+    regenerateVideoStartingImage,
   ],
 });

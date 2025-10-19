@@ -137,6 +137,7 @@ export const generateSegmentVideos = inngest.createFunction(
         lectureSummary,
         maxConcurrency,
         logger: log,
+        imageModel: imageConfig.model,
         onPromptProgress: async (current, total) => {
           await publishStatus(
             `Generated prompts for ${current}/${total} segments`,

@@ -110,6 +110,22 @@ export type LectureVideoCompleteMessage = {
   timestamp: string;
 };
 
+export type LectureVideoImagePreviewMessage = {
+  type: "video-image-preview";
+  runId: string;
+  videoAssetId: string;
+  videoAsset: VideoAsset;
+  timestamp: string;
+};
+
+export type LectureVideoImageCompleteMessage = {
+  type: "video-image-complete";
+  runId: string;
+  lectureId: number;
+  videoAssetId: string;
+  timestamp: string;
+};
+
 export type LectureProgressMessage =
   | LectureStatusMessage
   | LectureReasoningMessage
@@ -120,6 +136,8 @@ export type LectureProgressMessage =
   | LectureImageCompleteMessage
   | LectureVideoPreviewMessage
   | LectureVideoCompleteMessage
+  | LectureVideoImagePreviewMessage
+  | LectureVideoImageCompleteMessage
   | LectureNarrationPreviewMessage
   | LectureNarrationCompleteMessage
   | LectureMusicPreviewMessage
@@ -341,6 +359,34 @@ export const createLectureProgressPublisher = <TPublish extends (event: any) => 
     log.info("Video completion published", { lectureId, videoAssetId });
   };
 
+  const publishVideoImagePreview = async (videoAssetId: string, videoAsset: VideoAsset) => {
+    await publish(
+      lectureProgressChannel(userId).progress({
+        type: "video-image-preview",
+        runId,
+        videoAssetId,
+        videoAsset,
+        timestamp: nowIso(),
+      })
+    );
+
+    log.info("Video starting image preview published", { videoAssetId, videoAsset });
+  };
+
+  const publishVideoImageComplete = async (lectureId: number, videoAssetId: string) => {
+    await publish(
+      lectureProgressChannel(userId).progress({
+        type: "video-image-complete",
+        runId,
+        lectureId,
+        videoAssetId,
+        timestamp: nowIso(),
+      })
+    );
+
+    log.info("Video starting image completion published", { lectureId, videoAssetId });
+  };
+
   return {
     publishStatus,
     publishReasoning,
@@ -350,6 +396,8 @@ export const createLectureProgressPublisher = <TPublish extends (event: any) => 
     publishImageComplete,
     publishVideoPreview,
     publishVideoComplete,
+    publishVideoImagePreview,
+    publishVideoImageComplete,
     publishNarrationPreview,
     publishNarrationComplete,
     publishMusicPreview,
