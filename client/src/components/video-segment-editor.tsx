@@ -18,10 +18,14 @@ import { videoModelOptions, imageModelOptions, DEFAULT_VIDEO_MODEL, DEFAULT_IMAG
 import { useAssetDraft } from "@/hooks/use-asset-draft";
 import { useAssetGenerationFlow } from "@/hooks/use-asset-generation-flow";
 import { buildVideoAssetUrl, buildStartingImageUrl } from "@/lib/video-assets";
+import { regenerateVideoSegmentAction } from "@/app/actions/regenerate-video-segment";
+import { acceptVideoAction } from "@/app/actions/accept-video";
+import { rejectVideoAction } from "@/app/actions/reject-video";
 import { regenerateVideoStartingImageAction } from "@/app/actions/regenerate-video-starting-image";
 import { acceptVideoStartingImageAction } from "@/app/actions/accept-video-starting-image";
 import { rejectVideoStartingImageAction } from "@/app/actions/reject-video-starting-image";
 import ImagePreviewModal from "@/components/image-preview-modal";
+import VideoPreviewModal from "@/components/video-preview-modal";
 import { DEFAULT_IMAGE_GENERATION_DEFAULTS } from "@/types/types";
 
 interface VideoSegmentEditorProps {
@@ -89,17 +93,17 @@ export default function VideoSegmentEditor({ selectedClipId }: VideoSegmentEdito
   });
 
   const {
-    isGenerating,
-    isReviewOpen,
-    isDecisionPending,
-    error: generationError,
-    preview,
-    previewVersion,
-    startGeneration,
-    openReview,
-    closeReview,
-    acceptPreview,
-    rejectPreview,
+    isGenerating: isImageGenerating,
+    isReviewOpen: isImageReviewOpen,
+    isDecisionPending: isImageDecisionPending,
+    error: imageGenerationError,
+    preview: imagePreview,
+    previewVersion: imagePreviewVersion,
+    startGeneration: startImageGeneration,
+    openReview: openImageReview,
+    closeReview: closeImageReview,
+    acceptPreview: acceptImagePreview,
+    rejectPreview: rejectImagePreview,
   } = useAssetGenerationFlow<VideoAsset>({
     assetType: "video",
     lectureId,
@@ -139,7 +143,59 @@ export default function VideoSegmentEditor({ selectedClipId }: VideoSegmentEdito
     refreshOnComplete: true,
   });
 
-  const videoUrl = useMemo(() => {
+  const {
+    isGenerating: isVideoGenerating,
+    isReviewOpen: isVideoReviewOpen,
+    isDecisionPending: isVideoDecisionPending,
+    error: videoGenerationError,
+    preview: videoPreview,
+    previewVersion: videoPreviewVersion,
+    startGeneration: startVideoGeneration,
+    openReview: openVideoReview,
+    closeReview: closeVideoReview,
+    acceptPreview: acceptVideoPreview,
+    rejectPreview: rejectVideoPreview,
+  } = useAssetGenerationFlow<VideoAsset>({
+    assetType: "video",
+    lectureId,
+    assetId: videoAsset?.id ?? null,
+    onRegenerate: async () =>
+      regenerateVideoSegmentAction({
+        lectureId,
+        videoAssetId: videoAsset!.id,
+        movieDirections: draft.movieDirections,
+        model: draft.model || undefined,
+      }),
+    onAccept: (runId, assetId) =>
+      acceptVideoAction({ runId, videoAssetId: assetId }).then(() => undefined),
+    onReject: (runId, assetId) =>
+      rejectVideoAction({ runId, videoAssetId: assetId }).then(() => undefined),
+    previewMessageType: "video-preview",
+    completeMessageType: "video-complete",
+    extractPreview: (message) =>
+      message.type === "video-preview"
+        ? { preview: message.videoAsset, assetId: message.videoAssetId }
+        : null,
+    mapPreviewToAssetUpdate: (videoAssetPreview) => ({
+      movieDirections: videoAssetPreview.movieDirections,
+      model: videoAssetPreview.model,
+      resolution: videoAssetPreview.resolution,
+      duration: videoAssetPreview.duration,
+      aspectRatio: videoAssetPreview.aspectRatio,
+      videoPath: videoAssetPreview.videoPath,
+    }),
+    onPreviewAccepted: (videoAssetPreview) => {
+      setDraft((prev) => ({
+        ...prev,
+        movieDirections: videoAssetPreview.movieDirections ?? prev.movieDirections,
+        model: videoAssetPreview.model ?? prev.model,
+      }));
+    },
+    refreshOnAccept: false,
+    refreshOnComplete: true,
+  });
+
+  const committedVideoUrl = useMemo(() => {
     if (!videoAsset) return undefined;
     return buildVideoAssetUrl(videoAsset, { updatedAt });
   }, [videoAsset, updatedAt]);
@@ -150,27 +206,41 @@ export default function VideoSegmentEditor({ selectedClipId }: VideoSegmentEdito
   }, [videoAsset, updatedAt]);
 
   const previewStartingImageUrl = useMemo(() => {
-    if (!preview) return "";
-    return buildStartingImageUrl(preview, { previewToken: previewVersion }) ?? "";
-  }, [preview, previewVersion]);
+    if (!imagePreview) return "";
+    return buildStartingImageUrl(imagePreview, { previewToken: imagePreviewVersion }) ?? "";
+  }, [imagePreview, imagePreviewVersion]);
 
   const previewImageAsset = useMemo(() => {
-    if (!preview) return null;
+    if (!imagePreview) return null;
     return {
-      id: preview.startingImageId ?? `${preview.id}-starting`,
-      prompt: preview.segmentStartImagePrompt ?? draft.segmentStartImagePrompt,
-      model: preview.startingImageModel ?? draft.startingImageModel ?? DEFAULT_IMAGE_MODEL,
+      id: imagePreview.startingImageId ?? `${imagePreview.id}-starting`,
+      prompt: imagePreview.segmentStartImagePrompt ?? draft.segmentStartImagePrompt,
+      model: imagePreview.startingImageModel ?? draft.startingImageModel ?? DEFAULT_IMAGE_MODEL,
       style: projectSettings.image.style ?? DEFAULT_IMAGE_GENERATION_DEFAULTS.style,
       sourceUrl: "",
-      label: preview.label ?? videoAsset?.label ?? "Starting Image",
+      label: imagePreview.label ?? videoAsset?.label ?? "Starting Image",
     } as ImageAsset;
   }, [
-    preview,
+    imagePreview,
     draft.segmentStartImagePrompt,
     draft.startingImageModel,
     projectSettings.image.style,
     videoAsset?.label,
   ]);
+
+  const previewVideoAsset = useMemo(() => {
+    if (!videoPreview) return null;
+    return {
+      ...videoPreview,
+      movieDirections: videoPreview.movieDirections ?? draft.movieDirections,
+      model: videoPreview.model ?? draft.model,
+    };
+  }, [videoPreview, draft.movieDirections, draft.model]);
+
+  const previewVideoUrl = useMemo(() => {
+    if (!videoPreview) return "";
+    return buildVideoAssetUrl(videoPreview, { previewToken: videoPreviewVersion }) ?? "";
+  }, [videoPreview, videoPreviewVersion]);
 
   const handleMovieDirectionsChange = (value: string) => {
     setDraft((prev) => ({ ...prev, movieDirections: value }));
@@ -188,30 +258,74 @@ export default function VideoSegmentEditor({ selectedClipId }: VideoSegmentEdito
     setDraft((prev) => ({ ...prev, startingImageModel: value }));
   };
 
-  const buttonLabel = useMemo(() => {
-    if (isGenerating) return "Generating...";
-    if (preview) return "Review Starting Image";
+  const imageButtonLabel = useMemo(() => {
+    if (isImageGenerating) return "Generating...";
+    if (imagePreview) return "Review Starting Image";
     return "Generate Starting Image";
-  }, [isGenerating, preview]);
+  }, [isImageGenerating, imagePreview]);
 
-  const buttonDisabled = useMemo(() => {
+  const imageButtonDisabled = useMemo(() => {
     if (!videoAsset) return true;
-    if (isGenerating || isDecisionPending) return true;
-    if (preview) return false;
+    if (isImageGenerating || isImageDecisionPending) return true;
+    if (imagePreview) return false;
     return draft.segmentStartImagePrompt.trim().length === 0;
-  }, [videoAsset, isGenerating, isDecisionPending, preview, draft.segmentStartImagePrompt]);
+  }, [
+    videoAsset,
+    isImageGenerating,
+    isImageDecisionPending,
+    imagePreview,
+    draft.segmentStartImagePrompt,
+  ]);
 
-  const helperText = useMemo(() => {
-    if (generationError) return generationError;
-    if (isDecisionPending) return "Finalizing your choice...";
-    if (isGenerating) return "Generating a new starting image with AI...";
-    if (preview) return "Review the generated starting image before accepting it.";
+  const imageHelperText = useMemo(() => {
+    if (imageGenerationError) return imageGenerationError;
+    if (isImageDecisionPending) return "Finalizing your choice...";
+    if (isImageGenerating) return "Generating a new starting image with AI...";
+    if (imagePreview) return "Review the generated starting image before accepting it.";
     return "Generate a new starting image to replace the current one.";
-  }, [generationError, isDecisionPending, isGenerating, preview]);
+  }, [imageGenerationError, isImageDecisionPending, isImageGenerating, imagePreview]);
 
-  const helperClassName = useMemo(
-    () => (generationError ? "text-xs text-destructive mt-2" : "text-xs text-muted-foreground mt-2"),
-    [generationError]
+  const imageHelperClassName = useMemo(
+    () =>
+      imageGenerationError
+        ? "text-xs text-destructive mt-2"
+        : "text-xs text-muted-foreground mt-2",
+    [imageGenerationError]
+  );
+
+  const videoButtonLabel = useMemo(() => {
+    if (isVideoGenerating) return "Generating...";
+    if (videoPreview) return "Review Video";
+    return "Regenerate Video";
+  }, [isVideoGenerating, videoPreview]);
+
+  const videoButtonDisabled = useMemo(() => {
+    if (!videoAsset) return true;
+    if (isVideoGenerating || isVideoDecisionPending) return true;
+    if (videoPreview) return false;
+    return draft.movieDirections.trim().length === 0;
+  }, [
+    videoAsset,
+    isVideoGenerating,
+    isVideoDecisionPending,
+    videoPreview,
+    draft.movieDirections,
+  ]);
+
+  const videoHelperText = useMemo(() => {
+    if (videoGenerationError) return videoGenerationError;
+    if (isVideoDecisionPending) return "Finalizing your choice...";
+    if (isVideoGenerating) return "Generating a new video segment with AI...";
+    if (videoPreview) return "Review the regenerated video before accepting it.";
+    return "Regenerate the video for this segment using the updated directions.";
+  }, [videoGenerationError, isVideoDecisionPending, isVideoGenerating, videoPreview]);
+
+  const videoHelperClassName = useMemo(
+    () =>
+      videoGenerationError
+        ? "text-xs text-destructive mt-2"
+        : "text-xs text-muted-foreground mt-2",
+    [videoGenerationError]
   );
 
   if (!selectedClipId || !selectedClip || !videoAsset) {
@@ -230,21 +344,30 @@ export default function VideoSegmentEditor({ selectedClipId }: VideoSegmentEdito
   return (
     <>
       <ImagePreviewModal
-        isOpen={isReviewOpen && !!preview}
+        isOpen={isImageReviewOpen && !!imagePreview}
         imageAsset={previewImageAsset}
         imageUrl={previewStartingImageUrl || committedStartingImageUrl}
-        onAccept={() => void acceptPreview()}
-        onReject={() => void rejectPreview()}
-        onClose={closeReview}
-        isDecisionPending={isDecisionPending}
+        onAccept={() => void acceptImagePreview()}
+        onReject={() => void rejectImagePreview()}
+        onClose={closeImageReview}
+        isDecisionPending={isImageDecisionPending}
+      />
+      <VideoPreviewModal
+        isOpen={isVideoReviewOpen && !!previewVideoAsset}
+        videoAsset={previewVideoAsset}
+        videoUrl={previewVideoUrl || committedVideoUrl || ""}
+        onAccept={() => void acceptVideoPreview()}
+        onReject={() => void rejectVideoPreview()}
+        onClose={closeVideoReview}
+        isDecisionPending={isVideoDecisionPending}
       />
       <div className="h-full flex gap-6 bg-background">
         <div className="flex-1 flex items-center justify-center bg-muted/30 rounded-lg border border-border overflow-hidden">
         {activeTab === "video" ? (
-          videoUrl ? (
+          committedVideoUrl ? (
             <video
-              key={videoUrl}
-              src={videoUrl}
+              key={committedVideoUrl}
+              src={committedVideoUrl}
               className="h-full w-full object-contain bg-black"
               autoPlay
               loop
@@ -325,12 +448,20 @@ export default function VideoSegmentEditor({ selectedClipId }: VideoSegmentEdito
               </div>
 
               <div className="pt-4">
-                <Button className="w-full" disabled>
-                  Regenerate Video (coming soon)
+                <Button
+                  className="w-full"
+                  disabled={videoButtonDisabled}
+                  onClick={() => {
+                    if (videoPreview) {
+                      openVideoReview();
+                    } else {
+                      void startVideoGeneration();
+                    }
+                  }}
+                >
+                  {videoButtonLabel}
                 </Button>
-                <p className="text-xs text-muted-foreground mt-2">
-                  Regeneration actions will be enabled in a future update.
-                </p>
+                <p className={videoHelperClassName}>{videoHelperText}</p>
               </div>
             </div>
           </TabsContent>
@@ -380,18 +511,18 @@ export default function VideoSegmentEditor({ selectedClipId }: VideoSegmentEdito
               <div className="pt-4">
                 <Button
                   className="w-full"
-                  disabled={buttonDisabled}
+                  disabled={imageButtonDisabled}
                   onClick={() => {
-                    if (preview) {
-                      openReview();
+                    if (imagePreview) {
+                      openImageReview();
                     } else {
-                      void startGeneration();
+                      void startImageGeneration();
                     }
                   }}
                 >
-                  {buttonLabel}
+                  {imageButtonLabel}
                 </Button>
-                <p className={helperClassName}>{helperText}</p>
+                <p className={imageHelperClassName}>{imageHelperText}</p>
               </div>
             </div>
           </TabsContent>
