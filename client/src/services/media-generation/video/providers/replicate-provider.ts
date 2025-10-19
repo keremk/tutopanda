@@ -1,6 +1,7 @@
 import Replicate from "replicate";
 import type { VideoProvider, VideoGenerationParams } from "../types";
 import { videoModelValues, DEFAULT_VIDEO_MODEL } from "@/lib/models";
+import { mapReplicateErrorToMediaError, createMediaGenerationError } from "@/services/media-generation/core";
 
 /**
  * Replicate video generation provider.
@@ -32,26 +33,45 @@ export class ReplicateVideoProvider implements VideoProvider {
       resolution: resolution || "480p",
     };
 
-    const output = (await this.replicate.run(model as `${string}/${string}`, {
-      input,
-    })) as unknown;
+    let output: unknown;
 
-    const videoBuffer = await this.resolveVideoOutput(output);
+    try {
+      output = await this.replicate.run(model as `${string}/${string}`, {
+        input,
+      });
+    } catch (error) {
+      throw mapReplicateErrorToMediaError({
+        error,
+        model,
+        provider: this.name,
+        context: "Replicate failed to generate video",
+        promptPreview: prompt.substring(0, 100),
+      });
+    }
+
+    const videoBuffer = await this.resolveVideoOutput(output, model, prompt);
 
     if (!videoBuffer) {
-      throw new Error(`Video generation failed for prompt: ${prompt.substring(0, 50)}...`);
+      throw createMediaGenerationError({
+        code: "PROVIDER_FAILURE",
+        provider: this.name,
+        model,
+        message: `Replicate returned no video output (prompt: "${prompt.substring(0, 50)}...")`,
+        isRetryable: false,
+        userActionRequired: false,
+      });
     }
 
     return videoBuffer;
   }
 
-  private async resolveVideoOutput(output: unknown): Promise<Buffer | null> {
+  private async resolveVideoOutput(output: unknown, model: string, prompt: string): Promise<Buffer | null> {
     if (!output) {
       return null;
     }
 
     if (typeof output === "string") {
-      return this.downloadVideo(output);
+      return this.downloadVideo(output, model, prompt);
     }
 
     if (output instanceof Uint8Array) {
@@ -69,7 +89,7 @@ export class ReplicateVideoProvider implements VideoProvider {
 
     if (Array.isArray(output)) {
       for (const item of output) {
-        const resolved = await this.resolveVideoOutput(item);
+        const resolved = await this.resolveVideoOutput(item, model, prompt);
         if (resolved) {
           return resolved;
         }
@@ -81,7 +101,7 @@ export class ReplicateVideoProvider implements VideoProvider {
       const record = output as Record<string, unknown>;
 
       if ("output" in record) {
-        const resolved = await this.resolveVideoOutput(record.output);
+        const resolved = await this.resolveVideoOutput(record.output, model, prompt);
         if (resolved) {
           return resolved;
         }
@@ -93,7 +113,7 @@ export class ReplicateVideoProvider implements VideoProvider {
           const awaited = urlResult instanceof Promise ? await urlResult : urlResult;
           const urlString = awaited instanceof URL ? awaited.toString() : awaited;
           if (typeof urlString === "string") {
-            return this.downloadVideo(urlString);
+            return this.downloadVideo(urlString, model, prompt);
           }
         } catch {
           // Ignore and continue trying other strategies
@@ -101,13 +121,13 @@ export class ReplicateVideoProvider implements VideoProvider {
       }
 
       if (typeof (record as { href?: unknown }).href === "string") {
-        return this.downloadVideo((record as { href: string }).href);
+        return this.downloadVideo((record as { href: string }).href, model, prompt);
       }
 
       if (typeof (record as { toString?: () => unknown }).toString === "function") {
         const stringValue = (record as { toString: () => unknown }).toString();
         if (typeof stringValue === "string" && stringValue.startsWith("http")) {
-          return this.downloadVideo(stringValue);
+          return this.downloadVideo(stringValue, model, prompt);
         }
       }
 
@@ -133,10 +153,17 @@ export class ReplicateVideoProvider implements VideoProvider {
     return null;
   }
 
-  private async downloadVideo(videoUrl: string): Promise<Buffer> {
+  private async downloadVideo(videoUrl: string, model: string, prompt: string): Promise<Buffer> {
     const response = await fetch(videoUrl);
     if (!response.ok) {
-      throw new Error(`Failed to download video: ${response.statusText}`);
+      throw createMediaGenerationError({
+        code: "PROVIDER_FAILURE",
+        provider: this.name,
+        model,
+        message: `Failed to download video (${response.statusText}) for prompt: "${prompt.substring(0, 50)}..."`,
+        isRetryable: false,
+        userActionRequired: false,
+      });
     }
 
     const arrayBuffer = await response.arrayBuffer();

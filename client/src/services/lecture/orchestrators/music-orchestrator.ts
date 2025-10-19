@@ -73,7 +73,7 @@ export async function generateLectureMusic(
   });
 
   // Step 2: Generate music
-  const [buffer] = await generateMusics(
+  const outcomes = await generateMusics(
     [
       {
         prompt,
@@ -85,30 +85,69 @@ export async function generateLectureMusic(
     ],
     { logger }
   );
-
-  // Step 3: Save music file
+  const [outcome] = outcomes;
   const id = `music-${runId}`;
-  const audioUrl = await assetStorage.saveMusic(buffer, id);
-
-  logger?.info("Music saved", {
-    id,
-    path: audioUrl,
-    bufferSize: buffer.length,
-  });
-
-  const musicAsset: MusicSettings = {
+  const baseAsset: MusicSettings = {
     id,
     label: "Background Score",
     prompt,
     duration: durationSeconds,
-    audioUrl,
   };
 
-  logger?.info("Lecture music generation complete", {
-    id,
-  });
+  if (outcome && outcome.ok) {
+    const audioUrl = await assetStorage.saveMusic(outcome.buffer, id);
 
-  return musicAsset;
+    logger?.info("Music saved", {
+      id,
+      path: audioUrl,
+      bufferSize: outcome.buffer.length,
+    });
+
+    const musicAsset: MusicSettings = {
+      ...baseAsset,
+      audioUrl,
+      status: "generated",
+    };
+
+    logger?.info("Lecture music generation complete", {
+      id,
+    });
+
+    return musicAsset;
+  }
+
+  const error = outcome?.error;
+
+  if (error) {
+    logger?.warn?.("Music generation flagged", {
+      id,
+      code: error.code,
+      message: error.message,
+      providerCode: error.providerCode,
+    });
+
+    return {
+      ...baseAsset,
+      status: error.userActionRequired ? "needs_prompt_update" : "failed",
+      error: {
+        code: error.code,
+        message: error.message,
+        provider: error.provider,
+        providerCode: error.providerCode,
+      },
+    } as MusicSettings;
+  }
+
+  logger?.error("Music generation returned no result", { id });
+
+  return {
+    ...baseAsset,
+    status: "failed",
+    error: {
+      code: "UNKNOWN",
+      message: "Music generation returned no result",
+    },
+  } as MusicSettings;
 }
 
 /**
@@ -145,7 +184,7 @@ export async function regenerateMusic(
   });
 
   // Generate music
-  const [buffer] = await generateMusics(
+  const [outcome] = await generateMusics(
     [
       {
         prompt,
@@ -158,20 +197,50 @@ export async function regenerateMusic(
     { logger }
   );
 
-  // Save music file
-  const audioUrl = await assetStorage.saveMusic(buffer, musicId);
+  if (!outcome) {
+    throw new Error("No music generation result received for regeneration");
+  }
 
-  logger?.info("Music regenerated and saved", {
-    musicId,
-    path: audioUrl,
-    bufferSize: buffer.length,
-  });
-
-  return {
+  const baseAsset: MusicSettings = {
     id: musicId,
     label: "Regenerated Music",
     prompt,
     duration: durationSeconds,
-    audioUrl,
   };
+
+  if (outcome.ok) {
+    const audioUrl = await assetStorage.saveMusic(outcome.buffer, musicId);
+
+    logger?.info("Music regenerated and saved", {
+      musicId,
+      path: audioUrl,
+      bufferSize: outcome.buffer.length,
+    });
+
+    return {
+      ...baseAsset,
+      audioUrl,
+      status: "generated",
+    } as MusicSettings;
+  }
+
+  const error = outcome.error;
+
+  logger?.warn?.("Music regeneration flagged", {
+    musicId,
+    code: error.code,
+    message: error.message,
+    providerCode: error.providerCode,
+  });
+
+  return {
+    ...baseAsset,
+    status: error.userActionRequired ? "needs_prompt_update" : "failed",
+    error: {
+      code: error.code,
+      message: error.message,
+      provider: error.provider,
+      providerCode: error.providerCode,
+    },
+  } as MusicSettings;
 }

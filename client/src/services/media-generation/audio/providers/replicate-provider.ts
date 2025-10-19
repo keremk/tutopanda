@@ -2,6 +2,7 @@ import Replicate from "replicate";
 import { Input, ALL_FORMATS, BlobSource } from "mediabunny";
 import type { AudioProvider, AudioGenerationParams, AudioGenerationResult } from "../types";
 import { NARRATION_MODELS, DEFAULT_NARRATION_MODEL } from "@/lib/models";
+import { mapReplicateErrorToMediaError, createMediaGenerationError } from "@/services/media-generation/core";
 
 /**
  * Extract audio duration from buffer using mediabunny
@@ -53,16 +54,42 @@ export class ReplicateAudioProvider implements AudioProvider {
 
     // Ensure modelId is in the correct format (owner/model or owner/model:version)
     const model = modelId as `${string}/${string}` | `${string}/${string}:${string}`;
-    const output = (await this.replicate.run(model, { input })) as { url: () => string };
+    let output: { url: () => string };
+
+    try {
+      output = (await this.replicate.run(model, { input })) as { url: () => string };
+    } catch (error) {
+      throw mapReplicateErrorToMediaError({
+        error,
+        model: modelId,
+        provider: this.name,
+        context: "Replicate failed to generate audio",
+        promptPreview: text.substring(0, 100),
+      });
+    }
 
     if (!output) {
-      throw new Error("Audio generation failed - no output returned");
+      throw createMediaGenerationError({
+        code: "PROVIDER_FAILURE",
+        provider: this.name,
+        model: modelId,
+        message: "Replicate returned no audio output",
+        isRetryable: false,
+        userActionRequired: false,
+      });
     }
 
     // Fetch the audio file from the URL
     const response = await fetch(output.url());
     if (!response.ok) {
-      throw new Error(`Failed to download audio: ${response.statusText}`);
+      throw createMediaGenerationError({
+        code: "PROVIDER_FAILURE",
+        provider: this.name,
+        model: modelId,
+        message: `Failed to download audio (${response.statusText})`,
+        isRetryable: false,
+        userActionRequired: false,
+      });
     }
 
     const arrayBuffer = await response.arrayBuffer();

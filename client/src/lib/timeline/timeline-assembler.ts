@@ -88,9 +88,10 @@ export function buildVisualTrack(
     const narrationDuration =
       segmentDurations[segmentIndex] ?? ensurePositiveDuration();
     const video = videosBySegment.get(segmentIndex);
+    const videoIsGenerated =
+      !!(video && (video.status === undefined || video.status === "generated") && video.videoPath);
 
-    // Prefer video if available
-    if (video) {
+    if (video && videoIsGenerated) {
       const clip: VideoClip = {
         id: `visual-${segmentIndex}`,
         name: `Segment ${segmentIndex + 1} Video`,
@@ -98,50 +99,82 @@ export function buildVisualTrack(
         videoAssetId: video.id,
         startTime: accumulatedTime,
         duration: narrationDuration,
-        volume: 0, // Mute video since we have separate narration
+        volume: 0,
+        status: video.status,
+        error: video.error,
       };
       accumulatedTime += narrationDuration;
       visualTrack.push(clip);
     } else {
-      // Fall back to images with Ken Burns effects
       const segmentImages = imagesBySegment.get(segmentIndex) || [];
-      const imageDuration =
-        segmentImages.length > 0
-          ? narrationDuration / segmentImages.length
-          : narrationDuration;
+      const generatedImages = segmentImages.filter(
+        (image) => image.status === undefined || image.status === "generated"
+      );
 
-      for (let imageIndex = 0; imageIndex < segmentImages.length; imageIndex++) {
-        const image = segmentImages[imageIndex];
+      if (generatedImages.length > 0) {
+        const imageDuration = narrationDuration / generatedImages.length;
 
-        // Select intelligent Ken Burns effect based on image content
-        const selectedEffect = selectKenBurnsEffect(
-          image.prompt,
-          previousEffectName
-        );
+        for (let imageIndex = 0; imageIndex < generatedImages.length; imageIndex++) {
+          const image = generatedImages[imageIndex];
+          const selectedEffect = selectKenBurnsEffect(image.prompt, previousEffectName);
+          previousEffectName = selectedEffect.name;
+
+          const clip: KenBurnsClip = {
+            id: `visual-${segmentIndex}-${imageIndex}`,
+            name: `Segment ${segmentIndex + 1}${generatedImages.length > 1 ? ` Image ${imageIndex + 1}` : ""}`,
+            kind: "kenBurns",
+            effectName: selectedEffect.name,
+            imageAssetId: image.id,
+            startTime: accumulatedTime,
+            duration: imageDuration,
+            startScale: selectedEffect.startScale,
+            endScale: selectedEffect.endScale,
+            startX: selectedEffect.startX,
+            startY: selectedEffect.startY,
+            endX: selectedEffect.endX,
+            endY: selectedEffect.endY,
+            status: image.status,
+            error: image.error,
+          };
+
+          accumulatedTime += imageDuration;
+          visualTrack.push(clip);
+        }
+      } else {
+        const failureSource = video ?? segmentImages[0];
+        const status = failureSource?.status ?? "failed";
+        const error = failureSource?.error;
+        const prompt =
+          failureSource && "prompt" in failureSource
+            ? ((failureSource as ImageAsset).prompt ?? "")
+            : "";
+
+        const selectedEffect = selectKenBurnsEffect(prompt, previousEffectName);
         previousEffectName = selectedEffect.name;
 
-        const clip: KenBurnsClip = {
-          id: `visual-${segmentIndex}-${imageIndex}`,
-          name: `Segment ${segmentIndex + 1}${segmentImages.length > 1 ? ` Image ${imageIndex + 1}` : ""}`,
+        const placeholderClip: KenBurnsClip = {
+          id: `visual-${segmentIndex}-placeholder`,
+          name: `Segment ${segmentIndex + 1} Placeholder`,
           kind: "kenBurns",
           effectName: selectedEffect.name,
-          imageAssetId: image.id,
           startTime: accumulatedTime,
-          duration: imageDuration,
+          duration: narrationDuration,
           startScale: selectedEffect.startScale,
           endScale: selectedEffect.endScale,
           startX: selectedEffect.startX,
           startY: selectedEffect.startY,
           endX: selectedEffect.endX,
           endY: selectedEffect.endY,
+          status,
+          error,
         };
 
-        accumulatedTime += imageDuration;
-        visualTrack.push(clip);
+        accumulatedTime += narrationDuration;
+        visualTrack.push(placeholderClip);
       }
 
-      if (segmentImages.length === 0) {
-        accumulatedTime += narrationDuration;
+      if (generatedImages.length > 0) {
+        // accumulatedTime already updated inside loop
       }
     }
   }
@@ -166,6 +199,8 @@ export function buildVoiceTrack(
       startTime: accumulatedTime,
       duration,
       volume: 1.0,
+      status: narrationAsset.status,
+      error: narrationAsset.error,
     };
     accumulatedTime += duration;
     return clip;
@@ -188,6 +223,8 @@ export function buildMusicTrack(
     volume: 0.3,
     fadeInDuration: 2,
     fadeOutDuration: 3,
+    status: musicAsset.status,
+    error: musicAsset.error,
   }));
 }
 

@@ -1,5 +1,5 @@
 import type { NarrationSettings } from "@/types/types";
-import type { MediaProvider } from "../core";
+import type { MediaProvider, MediaGenerationError } from "../core";
 
 /**
  * Input for generating audio for a single narration
@@ -42,6 +42,18 @@ export type AudioGenerationResult = {
   buffer: Buffer;
   duration: number;
 };
+
+export type AudioGenerationSuccess = {
+  ok: true;
+  audio: AudioGenerationResult;
+};
+
+export type AudioGenerationFailure = {
+  ok: false;
+  error: MediaGenerationError;
+};
+
+export type AudioGenerationOutcome = AudioGenerationSuccess | AudioGenerationFailure;
 
 /**
  * Provider interface for audio/TTS generation

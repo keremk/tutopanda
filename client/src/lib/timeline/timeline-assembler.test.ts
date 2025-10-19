@@ -198,6 +198,59 @@ describe("buildVisualTrack", () => {
     // For portraits with only 2 effects, they should be different
     expect(track[0].startScale).not.toBe(track[1].startScale);
   });
+
+  it("builds placeholder clip when both video and images fail", () => {
+    const imagesBySegment = new Map<number, ImageAsset[]>([
+      [
+        0,
+        [
+          {
+            id: "img-run123-0-0",
+            label: "Image 1",
+            prompt: "test",
+            status: "failed",
+            error: {
+              code: "SENSITIVE_CONTENT",
+              message: "Flagged",
+            },
+          },
+        ],
+      ],
+    ]);
+    const videosBySegment = new Map<number, VideoAsset>([
+      [
+        0,
+        {
+          id: "video-run123-0",
+          label: "Video",
+          segmentStartImagePrompt: "start",
+          movieDirections: "dir",
+          status: "needs_prompt_update",
+          error: {
+            code: "SENSITIVE_CONTENT",
+            message: "Flagged",
+          },
+        } as VideoAsset,
+      ],
+    ]);
+
+    const narration: NarrationSettings[] = [
+      {
+        id: "narr-0",
+        label: "Narration 1",
+        duration: 10,
+        sourceUrl: "audio.mp3",
+      },
+    ];
+
+    const segmentDurations = narration.map((n) => n.duration ?? 1);
+    const track = buildVisualTrack(imagesBySegment, videosBySegment, narration, segmentDurations);
+
+    expect(track).toHaveLength(1);
+    expect(track[0].status).toBe("needs_prompt_update");
+    expect(track[0].error?.code).toBe("SENSITIVE_CONTENT");
+    expect(track[0].duration).toBe(10);
+  });
 });
 
 describe("buildVoiceTrack", () => {

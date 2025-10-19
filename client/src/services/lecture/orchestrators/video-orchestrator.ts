@@ -8,8 +8,12 @@ import { generateVideoPrompts } from "@/services/media-generation/video/prompt-g
 import { generateVideo } from "@/services/media-generation/video/video-generator";
 import { generateImage } from "@/services/media-generation/image/image-generator";
 import { buildStyledVideoImagePrompt, buildStyledMovieDirections } from "@/prompts/create-video-prompt";
-import { batchWithConcurrency } from "@/services/media-generation/core";
-import type { Logger } from "@/services/media-generation/core";
+import {
+  batchWithConcurrency,
+  createMediaGenerationError,
+  isMediaGenerationError,
+} from "@/services/media-generation/core";
+import type { Logger, MediaGenerationError } from "@/services/media-generation/core";
 import { DEFAULT_IMAGE_MODEL, DEFAULT_VIDEO_MODEL } from "@/lib/models";
 import type { LectureAssetStorage } from "@/services/lecture/storage";
 import { setupFileStorage } from "@/lib/storage-utils";
@@ -50,10 +54,15 @@ export type VideoSegmentPrompt = {
   styledMovieDirections: string;
 };
 
-export type VideoSegmentImage = {
+export type VideoSegmentImageSuccess = {
   segmentIndex: number;
   imageId: string;
+  ok: true;
 };
+
+export type VideoSegmentImageResult =
+  | VideoSegmentImageSuccess
+  | { segmentIndex: number; ok: false; error: MediaGenerationError };
 
 type GenerateVideoSegmentPromptsOptions = {
   style?: ImageGenerationDefaults["style"];
@@ -137,7 +146,7 @@ type GenerateVideoStartingImagesOptions = {
 export async function generateVideoStartingImages(
   segmentPrompts: VideoSegmentPrompt[],
   options: GenerateVideoStartingImagesOptions
-): Promise<VideoSegmentImage[]> {
+): Promise<VideoSegmentImageResult[]> {
   const {
     imageConfig,
     runId,
@@ -151,43 +160,82 @@ export async function generateVideoStartingImages(
   logger?.info("Stage 2: Generating starting images for all segments");
 
   let completedImages = 0;
-  const segmentImages: VideoSegmentImage[] = await batchWithConcurrency(
+  const segmentImages: VideoSegmentImageResult[] = await batchWithConcurrency(
     segmentPrompts,
     async ({ segmentIndex, styledImagePrompt }) => {
       logger?.info(`Generating starting image for segment ${segmentIndex + 1}`);
+      try {
+        const imageBuffer = await generateImageFn(
+          styledImagePrompt,
+          {
+            aspectRatio: imageConfig.aspectRatio,
+            size: imageConfig.size,
+            width: imageConfig.width,
+            height: imageConfig.height,
+            model: imageConfig.model,
+          },
+          { logger }
+        );
 
-      const imageBuffer = await generateImageFn(
-        styledImagePrompt,
-        {
-          aspectRatio: imageConfig.aspectRatio,
-          size: imageConfig.size,
-          width: imageConfig.width,
-          height: imageConfig.height,
-          model: imageConfig.model,
-        },
-        { logger }
-      );
+        const imageId = `video-img-${runId}-${segmentIndex}`;
+        const imagePath = await assetStorage.saveImage(imageBuffer, imageId);
 
-      const imageId = `video-img-${runId}-${segmentIndex}`;
-      const imagePath = await assetStorage.saveImage(imageBuffer, imageId);
+        logger?.info(`Starting image saved for segment ${segmentIndex + 1}`, {
+          path: imagePath,
+        });
 
-      logger?.info(`Starting image saved for segment ${segmentIndex + 1}`, {
-        path: imagePath,
-      });
+        completedImages += 1;
+        await onImageProgress?.(completedImages, segmentPrompts.length);
 
-      completedImages += 1;
-      await onImageProgress?.(completedImages, segmentPrompts.length);
+        return {
+          segmentIndex,
+          imageId,
+          ok: true,
+        } as VideoSegmentImageResult;
+      } catch (error) {
+        let mediaError: MediaGenerationError;
 
-      return {
-        segmentIndex,
-        imageId,
-      };
+        if (isMediaGenerationError(error)) {
+          mediaError = error;
+        } else {
+          mediaError = createMediaGenerationError({
+            code: "UNKNOWN",
+            provider: "image",
+            model: imageConfig.model || DEFAULT_IMAGE_MODEL,
+            message: "Unexpected error during starting image generation",
+            isRetryable: false,
+            userActionRequired: false,
+            cause: error,
+          });
+        }
+
+        logger?.warn?.("Starting image generation failed", {
+          segmentIndex,
+          code: mediaError.code,
+          message: mediaError.message,
+          providerCode: mediaError.providerCode,
+        });
+
+        completedImages += 1;
+        await onImageProgress?.(completedImages, segmentPrompts.length);
+
+        return {
+          segmentIndex,
+          ok: false,
+          error: mediaError,
+        } as VideoSegmentImageResult;
+      }
     },
     { maxConcurrency }
   );
 
-  logger?.info("Stage 2 complete: All starting images generated", {
-    totalImages: segmentImages.length,
+  const successfulImages = segmentImages.filter((image) => image.ok).length;
+  const failedImages = segmentImages.length - successfulImages;
+
+  logger?.info("Stage 2 complete: Starting images processed", {
+    totalSegments: segmentImages.length,
+    successfulImages,
+    failedImages,
   });
 
   return segmentImages;
@@ -207,7 +255,7 @@ type GenerateVideoAssetsOptions = {
 
 export async function generateVideoAssets(
   segmentPrompts: VideoSegmentPrompt[],
-  segmentImages: VideoSegmentImage[],
+  segmentImages: VideoSegmentImageResult[],
   options: GenerateVideoAssetsOptions
 ): Promise<VideoAsset[]> {
   const {
@@ -228,7 +276,11 @@ export async function generateVideoAssets(
   const storage = loadImageFn ? null : setupFileStorage();
   const loadImage = loadImageFn ?? (async (imagePath: string) => storage!.readToBuffer(imagePath));
 
-  let completedVideos = 0;
+  let processedVideos = 0;
+  let successfulVideos = 0;
+  let failedVideos = 0;
+  let blockedByImage = 0;
+
   const videoAssets: VideoAsset[] = await batchWithConcurrency(
     segmentPrompts,
     async ({
@@ -237,42 +289,9 @@ export async function generateVideoAssets(
       movieDirections,
       styledMovieDirections,
     }) => {
-      const imageData = imageMap.get(segmentIndex);
-
-      if (!imageData) {
-        throw new Error(`Image not found for segment ${segmentIndex}`);
-      }
-
-      const imagePath = assetStorage.resolveImagePath(imageData.imageId);
-      const startingImageBuffer = await loadImage(imagePath);
-
-      logger?.info(`Generating video for segment ${segmentIndex + 1}`);
-
-      const videoBuffer = await generateVideoFn(
-        styledMovieDirections,
-        startingImageBuffer,
-        {
-          aspectRatio: imageConfig.aspectRatio,
-          resolution: videoConfig.resolution,
-          duration: videoConfig.duration,
-          model: videoConfig.model,
-        },
-        { logger }
-      );
-
+      const imageResult = imageMap.get(segmentIndex);
       const videoId = `video-${runId}-${segmentIndex}`;
-      const videoPath = await assetStorage.saveVideo(videoBuffer, videoId);
-
-      logger?.info("Video saved", {
-        id: videoId,
-        segmentIndex,
-        path: videoPath,
-      });
-
-      completedVideos += 1;
-      await onVideoProgress?.(completedVideos, segmentPrompts.length);
-
-      return {
+      const baseAsset: VideoAsset = {
         id: videoId,
         label: `Segment ${segmentIndex + 1} Video`,
         segmentStartImagePrompt,
@@ -281,16 +300,124 @@ export async function generateVideoAssets(
         resolution: videoConfig.resolution,
         duration: Number.parseInt(videoConfig.duration || "10", 10),
         aspectRatio: imageConfig.aspectRatio,
-        videoPath,
-        startingImageId: imageData.imageId,
+        startingImageId: imageResult && imageResult.ok ? imageResult.imageId : undefined,
         startingImageModel: imageConfig.model || DEFAULT_IMAGE_MODEL,
       };
+
+      try {
+        if (!imageResult || !imageResult.ok) {
+          const mediaError = imageResult?.error ??
+            createMediaGenerationError({
+              code: "PROVIDER_FAILURE",
+              provider: "image",
+              model: imageConfig.model || DEFAULT_IMAGE_MODEL,
+              message: "Starting image unavailable for video generation",
+              isRetryable: false,
+              userActionRequired: true,
+            });
+
+          logger?.warn?.("Video generation blocked by image failure", {
+            segmentIndex,
+            code: mediaError.code,
+            message: mediaError.message,
+            providerCode: mediaError.providerCode,
+          });
+
+          blockedByImage += 1;
+
+          return {
+            ...baseAsset,
+            status: mediaError.userActionRequired ? "needs_prompt_update" : "failed",
+            error: {
+              code: mediaError.code,
+              message: mediaError.message,
+              provider: mediaError.provider,
+              providerCode: mediaError.providerCode,
+            },
+          } as VideoAsset;
+        }
+
+        const imagePath = assetStorage.resolveImagePath(imageResult.imageId);
+        const startingImageBuffer = await loadImage(imagePath);
+
+        logger?.info(`Generating video for segment ${segmentIndex + 1}`);
+
+        const videoBuffer = await generateVideoFn(
+          styledMovieDirections,
+          startingImageBuffer,
+          {
+            aspectRatio: imageConfig.aspectRatio,
+            resolution: videoConfig.resolution,
+            duration: videoConfig.duration,
+            model: videoConfig.model,
+          },
+          { logger }
+        );
+
+        const videoPath = await assetStorage.saveVideo(videoBuffer, videoId);
+
+        logger?.info("Video saved", {
+          id: videoId,
+          segmentIndex,
+          path: videoPath,
+        });
+
+        successfulVideos += 1;
+
+        return {
+          ...baseAsset,
+          videoPath,
+          status: "generated",
+        } as VideoAsset;
+      } catch (error) {
+        let mediaError: MediaGenerationError;
+
+        if (isMediaGenerationError(error)) {
+          mediaError = error;
+        } else {
+          mediaError = createMediaGenerationError({
+            code: "UNKNOWN",
+            provider: "video",
+            model: videoConfig.model || DEFAULT_VIDEO_MODEL,
+            message: "Unexpected error during video generation",
+            isRetryable: false,
+            userActionRequired: false,
+            cause: error,
+          });
+        }
+
+        failedVideos += 1;
+
+        logger?.warn?.("Video generation failed", {
+          segmentIndex,
+          code: mediaError.code,
+          message: mediaError.message,
+          providerCode: mediaError.providerCode,
+        });
+
+        return {
+          ...baseAsset,
+          status: mediaError.userActionRequired ? "needs_prompt_update" : "failed",
+          error: {
+            code: mediaError.code,
+            message: mediaError.message,
+            provider: mediaError.provider,
+            providerCode: mediaError.providerCode,
+          },
+        } as VideoAsset;
+      } finally {
+        processedVideos += 1;
+        await onVideoProgress?.(processedVideos, segmentPrompts.length);
+      }
     },
     { maxConcurrency }
   );
 
-  logger?.info("Stage 3 complete: All videos generated", {
-    totalVideos: videoAssets.length,
+  logger?.info("Stage 3 complete: Video segments processed", {
+    totalSegments: videoAssets.length,
+    successfulVideos,
+    failedVideos,
+    blockedByImage,
   });
 
   return videoAssets;
@@ -366,8 +493,15 @@ export async function generateLectureVideos(
     onVideoProgress,
     loadImageFn,
   });
+  const generatedCount = videoAssets.filter((asset) => asset.videoPath).length;
+  const needsPromptUpdateCount = videoAssets.filter((asset) => asset.status === "needs_prompt_update").length;
+  const failedCount = videoAssets.filter((asset) => asset.status === "failed").length;
+
   logger?.info("Lecture video generation complete (batched pipeline)", {
     totalVideos: videoAssets.length,
+    generatedCount,
+    needsPromptUpdateCount,
+    failedCount,
   });
 
   return videoAssets;

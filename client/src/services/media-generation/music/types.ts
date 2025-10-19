@@ -1,5 +1,5 @@
 import type { LectureScript, MusicSettings } from "@/types/types";
-import type { MediaProvider } from "../core";
+import type { MediaProvider, MediaGenerationError } from "../core";
 
 /**
  * Input for generating music for a lecture
@@ -38,3 +38,15 @@ export interface MusicProvider extends MediaProvider {
    */
   generateMusic(params: MusicGenerationParams): Promise<Buffer>;
 }
+
+export type MusicGenerationSuccess = {
+  ok: true;
+  buffer: Buffer;
+};
+
+export type MusicGenerationFailure = {
+  ok: false;
+  error: MediaGenerationError;
+};
+
+export type MusicGenerationOutcome = MusicGenerationSuccess | MusicGenerationFailure;

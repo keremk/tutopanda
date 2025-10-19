@@ -43,7 +43,9 @@ describe("generateLectureMusic", () => {
     const assetStorage = buildAssetStorage(context, mockStorage);
 
     const mockGeneratePrompt = vi.fn(async () => "Upbeat background music with piano");
-    const mockGenerateMusics = vi.fn(async () => [Buffer.from("fake-music-data")]);
+    const mockGenerateMusics = vi.fn(async () => [
+      { ok: true, buffer: Buffer.from("fake-music-data") },
+    ]);
 
     const deps: MusicOrchestratorDeps = {
       generatePrompt: mockGeneratePrompt,
@@ -60,6 +62,7 @@ describe("generateLectureMusic", () => {
       prompt: "Upbeat background music with piano",
       duration: 60,
       audioUrl: "user-1/42/4/music/music-test-run-music-123.mp3",
+      status: "generated",
     });
 
     expect(mockGeneratePrompt).toHaveBeenCalledTimes(1);
@@ -83,7 +86,9 @@ describe("generateLectureMusic", () => {
     const mockStorage = new MockStorageHandler();
     const assetStorage = buildAssetStorage(context, mockStorage);
     const mockGeneratePrompt = vi.fn(async () => "Test prompt");
-    const mockGenerateMusics = vi.fn(async () => [Buffer.from("music")]);
+    const mockGenerateMusics = vi.fn(async () => [
+      { ok: true, buffer: Buffer.from("music") },
+    ]);
 
     const deps: MusicOrchestratorDeps = {
       generatePrompt: mockGeneratePrompt,
@@ -115,7 +120,9 @@ describe("generateLectureMusic", () => {
     const mockStorage = new MockStorageHandler();
     const assetStorage = buildAssetStorage(context, mockStorage);
     const mockGeneratePrompt = vi.fn(async () => "Test prompt");
-    const mockGenerateMusics = vi.fn(async () => [Buffer.from("music")]);
+    const mockGenerateMusics = vi.fn(async () => [
+      { ok: true, buffer: Buffer.from("music") },
+    ]);
 
     const deps: MusicOrchestratorDeps = {
       generatePrompt: mockGeneratePrompt,
@@ -129,6 +136,48 @@ describe("generateLectureMusic", () => {
     expect(mockLogger.findLog("Starting lecture music generation")).toBe(true);
     expect(mockLogger.findLog("Music prompt generated")).toBe(true);
     expect(mockLogger.findLog("Lecture music generation complete")).toBe(true);
+  });
+
+  it("marks music asset as needing prompt update on sensitive content", async () => {
+    const request: GenerateLectureMusicRequest = {
+      script: createMockLectureScript(1),
+      durationSeconds: 30,
+      runId: "test-run-music-sensitive",
+    };
+
+    const context: MusicGenerationContext = {
+      userId: "user-1",
+      projectId: 42,
+      lectureId: 24,
+    };
+
+    const mockStorage = new MockStorageHandler();
+    const assetStorage = buildAssetStorage(context, mockStorage);
+    const mockGeneratePrompt = vi.fn(async () => "Test prompt");
+    const mockGenerateMusics = vi.fn(async () => [
+      {
+        ok: false as const,
+        error: {
+          provider: "replicate",
+          model: "stability-ai/stable-audio-2.5",
+          message: "Sensitive content",
+          code: "SENSITIVE_CONTENT",
+          providerCode: "E005",
+          isRetryable: false,
+          userActionRequired: true,
+        },
+      },
+    ]);
+
+    const result = await generateLectureMusic(request, context, {
+      generatePrompt: mockGeneratePrompt,
+      generateMusics: mockGenerateMusics,
+      assetStorage,
+    });
+
+    expect(result.status).toBe("needs_prompt_update");
+    expect(result.error).toMatchObject({ code: "SENSITIVE_CONTENT", providerCode: "E005" });
+    expect(mockStorage.savedFiles.size).toBe(0);
   });
 
   it("uses default model when not specified", async () => {
@@ -148,7 +197,9 @@ describe("generateLectureMusic", () => {
     const mockStorage = new MockStorageHandler();
     const assetStorage = buildAssetStorage(context, mockStorage);
     const mockGeneratePrompt = vi.fn(async () => "Test prompt");
-    const mockGenerateMusics = vi.fn(async () => [Buffer.from("music")]);
+    const mockGenerateMusics = vi.fn(async () => [
+      { ok: true, buffer: Buffer.from("music") },
+    ]);
 
     const deps: MusicOrchestratorDeps = {
       generatePrompt: mockGeneratePrompt,
@@ -188,7 +239,9 @@ describe("generateLectureMusic", () => {
       expect(receivedDuration).toBe(90);
       return "Generated prompt";
     });
-    const mockGenerateMusics = vi.fn(async () => [Buffer.from("music")]);
+    const mockGenerateMusics = vi.fn(async () => [
+      { ok: true, buffer: Buffer.from("music") },
+    ]);
 
     const deps: MusicOrchestratorDeps = {
       generatePrompt: mockGeneratePrompt,
@@ -220,7 +273,9 @@ describe("regenerateMusic", () => {
     const mockLogger = new MockLogger();
     const mockStorage = new MockStorageHandler();
     const assetStorage = buildAssetStorage(context, mockStorage);
-    const mockGenerateMusics = vi.fn(async () => [Buffer.from("new-music")]);
+    const mockGenerateMusics = vi.fn(async () => [
+      { ok: true, buffer: Buffer.from("new-music") },
+    ]);
 
     const deps: MusicOrchestratorDeps = {
       generateMusics: mockGenerateMusics,
@@ -236,6 +291,7 @@ describe("regenerateMusic", () => {
       prompt: "New orchestral music with strings",
       duration: 45,
       audioUrl: "user-1/42/35/music/music-regen-123.mp3",
+      status: "generated",
     });
 
     expect(mockGenerateMusics).toHaveBeenCalledTimes(1);
@@ -257,7 +313,9 @@ describe("regenerateMusic", () => {
 
     const mockStorage = new MockStorageHandler();
     const assetStorage = buildAssetStorage(context, mockStorage);
-    const mockGenerateMusics = vi.fn(async () => [Buffer.from("music")]);
+    const mockGenerateMusics = vi.fn(async () => [
+      { ok: true, buffer: Buffer.from("music") },
+    ]);
 
     const deps: MusicOrchestratorDeps = {
       generateMusics: mockGenerateMusics,
@@ -287,7 +345,9 @@ describe("regenerateMusic", () => {
     const mockLogger = new MockLogger();
     const mockStorage = new MockStorageHandler();
     const assetStorage = buildAssetStorage(context, mockStorage);
-    const mockGenerateMusics = vi.fn(async () => [Buffer.from("music")]);
+    const mockGenerateMusics = vi.fn(async () => [
+      { ok: true, buffer: Buffer.from("music") },
+    ]);
 
     const deps: MusicOrchestratorDeps = {
       generateMusics: mockGenerateMusics,
@@ -317,7 +377,9 @@ describe("regenerateMusic", () => {
     const mockLogger = new MockLogger();
     const mockStorage = new MockStorageHandler();
     const assetStorage = buildAssetStorage(context, mockStorage);
-    const mockGenerateMusics = vi.fn(async () => [Buffer.from("music")]);
+    const mockGenerateMusics = vi.fn(async () => [
+      { ok: true, buffer: Buffer.from("music") },
+    ]);
 
     const deps: MusicOrchestratorDeps = {
       generateMusics: mockGenerateMusics,

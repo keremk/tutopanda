@@ -1,4 +1,4 @@
-import { ProviderRegistry } from "../core";
+import { ProviderRegistry, isMediaGenerationError, createMediaGenerationError } from "../core";
 import type { AudioProvider, AudioGenerationParams, AudioConfig } from "./types";
 import type { Logger } from "../core";
 import { NARRATION_MODELS } from "@/lib/models";
@@ -57,12 +57,44 @@ export async function generateAudio(
     englishNormalization: config.englishNormalization,
   };
 
-  const result = await provider.generateAudio(params);
+  try {
+    const result = await provider.generateAudio(params);
 
-  logger?.info("Audio generated", {
-    duration: result.duration,
-    bufferSize: result.buffer.length,
-  });
+    logger?.info("Audio generated", {
+      duration: result.duration,
+      bufferSize: result.buffer.length,
+    });
 
-  return result;
+    return result;
+  } catch (error) {
+    if (isMediaGenerationError(error)) {
+      logger?.error("Audio generation failed", {
+        provider: error.provider,
+        model: error.model,
+        code: error.code,
+        message: error.message,
+        providerCode: error.providerCode,
+      });
+      throw error;
+    }
+
+    const wrapped = createMediaGenerationError({
+      code: "UNKNOWN",
+      provider: provider.name,
+      model,
+      message: "Unexpected error during audio generation",
+      isRetryable: false,
+      userActionRequired: false,
+      cause: error,
+    });
+
+    logger?.error("Audio generation failed", {
+      provider: wrapped.provider,
+      model: wrapped.model,
+      code: wrapped.code,
+      message: wrapped.message,
+    });
+
+    throw wrapped;
+  }
 }

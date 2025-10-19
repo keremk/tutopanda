@@ -46,8 +46,11 @@ describe("generateLectureAudio", () => {
     // Mock audio generation - returns buffer + duration
     const mockGenerateAudios = vi.fn(async (requests) => {
       return requests.map(() => ({
-        buffer: Buffer.from("fake-audio"),
-        duration: 5.5,
+        ok: true as const,
+        audio: {
+          buffer: Buffer.from("fake-audio"),
+          duration: 5.5,
+        },
       }));
     });
 
@@ -71,7 +74,53 @@ describe("generateLectureAudio", () => {
       voice: "aura-asteria-en",
       duration: 5.5,
       sourceUrl: "user-1/42/5/narration/narration-test-run-audio-123-0.mp3",
+      status: "generated",
     });
+  });
+
+  it("marks segments that need prompt updates when provider rejects content", async () => {
+    const request: GenerateLectureAudioRequest = {
+      script: createMockLectureScript(1),
+      voice: "aura-asteria-en",
+      model: "aura-asteria-en",
+      runId: "test-run-audio-sensitive",
+    };
+
+    const context: AudioGenerationContext = {
+      userId: "user-1",
+      projectId: 42,
+      lectureId: 6,
+    };
+
+    const mockStorage = new MockStorageHandler();
+    const assetStorage = buildAssetStorage(context, mockStorage);
+    const mockGenerateAudios = vi.fn(async () => [
+      {
+        ok: false as const,
+        error: {
+          provider: "replicate",
+          model: "aura-asteria-en",
+          message: "Sensitive content",
+          code: "SENSITIVE_CONTENT",
+          providerCode: "E005",
+          isRetryable: false,
+          userActionRequired: true,
+        },
+      },
+    ]);
+
+    const results = await generateLectureAudio(request, context, {
+      generateAudios: mockGenerateAudios,
+      assetStorage,
+    });
+
+    expect(results).toHaveLength(1);
+    expect(results[0].status).toBe("needs_prompt_update");
+    expect(results[0].error).toMatchObject({
+      code: "SENSITIVE_CONTENT",
+      providerCode: "E005",
+    });
+    expect(mockStorage.savedFiles.size).toBe(0);
   });
 
   it("saves files to correct paths", async () => {
@@ -91,8 +140,8 @@ describe("generateLectureAudio", () => {
     const mockStorage = new MockStorageHandler();
     const assetStorage = buildAssetStorage(context, mockStorage);
     const mockGenerateAudios = vi.fn(async () => [
-      { buffer: Buffer.from("audio-1"), duration: 5.0 },
-      { buffer: Buffer.from("audio-2"), duration: 6.0 },
+      { ok: true, audio: { buffer: Buffer.from("audio-1"), duration: 5.0 } },
+      { ok: true, audio: { buffer: Buffer.from("audio-2"), duration: 6.0 } },
     ]);
 
     const deps: AudioOrchestratorDeps = {
@@ -126,8 +175,8 @@ describe("generateLectureAudio", () => {
     const mockStorage = new MockStorageHandler();
     const assetStorage = buildAssetStorage(context, mockStorage);
     const mockGenerateAudios = vi.fn(async () => [
-      { buffer: Buffer.from("audio"), duration: 5.0 },
-      { buffer: Buffer.from("audio"), duration: 5.0 },
+      { ok: true, audio: { buffer: Buffer.from("audio"), duration: 5.0 } },
+      { ok: true, audio: { buffer: Buffer.from("audio"), duration: 5.0 } },
     ]);
 
     const deps: AudioOrchestratorDeps = {
@@ -162,8 +211,8 @@ describe("generateLectureAudio", () => {
     const mockGenerateAudios = vi.fn(async (_requests, options) => {
       expect(options?.maxConcurrency).toBe(3);
       return [
-        { buffer: Buffer.from("audio"), duration: 5.0 },
-        { buffer: Buffer.from("audio"), duration: 5.0 },
+        { ok: true, audio: { buffer: Buffer.from("audio"), duration: 5.0 } },
+        { ok: true, audio: { buffer: Buffer.from("audio"), duration: 5.0 } },
       ];
     });
 
@@ -194,8 +243,8 @@ describe("generateLectureAudio", () => {
     const mockStorage = new MockStorageHandler();
     const assetStorage = buildAssetStorage(context, mockStorage);
     const mockGenerateAudios = vi.fn(async () => [
-      { buffer: Buffer.from("audio-1"), duration: 7.5 },
-      { buffer: Buffer.from("audio-2"), duration: 10.2 },
+      { ok: true, audio: { buffer: Buffer.from("audio-1"), duration: 7.5 } },
+      { ok: true, audio: { buffer: Buffer.from("audio-2"), duration: 10.2 } },
     ]);
 
     const deps: AudioOrchestratorDeps = {
@@ -229,7 +278,7 @@ describe("regenerateAudio", () => {
     const mockStorage = new MockStorageHandler();
     const assetStorage = buildAssetStorage(context, mockStorage);
     const mockGenerateAudios = vi.fn(async () => {
-      return [{ buffer: Buffer.from("new-audio"), duration: 8.5 }];
+      return [{ ok: true, audio: { buffer: Buffer.from("new-audio"), duration: 8.5 } }];
     });
 
     const deps: AudioOrchestratorDeps = {
@@ -248,6 +297,7 @@ describe("regenerateAudio", () => {
       voice: "aura-orpheus-en",
       duration: 8.5,
       sourceUrl: "user-1/42/21/narration/narration-regen-123.mp3",
+      status: "generated",
     });
 
     expect(mockGenerateAudios).toHaveBeenCalledTimes(1);
@@ -271,7 +321,7 @@ describe("regenerateAudio", () => {
     const mockStorage = new MockStorageHandler();
     const assetStorage = buildAssetStorage(context, mockStorage);
     const mockGenerateAudios = vi.fn(async () => [
-      { buffer: Buffer.from("audio"), duration: 5.0 },
+      { ok: true, audio: { buffer: Buffer.from("audio"), duration: 5.0 } },
     ]);
 
     const deps: AudioOrchestratorDeps = {
@@ -304,7 +354,7 @@ describe("regenerateAudio", () => {
     const mockStorage = new MockStorageHandler();
     const assetStorage = buildAssetStorage(context, mockStorage);
     const mockGenerateAudios = vi.fn(async () => [
-      { buffer: Buffer.from("audio"), duration: 5.0 },
+      { ok: true, audio: { buffer: Buffer.from("audio"), duration: 5.0 } },
     ]);
 
     const deps: AudioOrchestratorDeps = {

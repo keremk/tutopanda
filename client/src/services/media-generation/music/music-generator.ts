@@ -1,4 +1,4 @@
-import { ProviderRegistry } from "../core";
+import { ProviderRegistry, isMediaGenerationError, createMediaGenerationError } from "../core";
 import type { MusicProvider, MusicGenerationParams, MusicConfig } from "./types";
 import type { Logger } from "../core";
 import { DEFAULT_MUSIC_MODEL } from "@/lib/models";
@@ -43,11 +43,43 @@ export async function generateMusic(
     model: config.model,
   };
 
-  const buffer = await provider.generateMusic(params);
+  try {
+    const buffer = await provider.generateMusic(params);
 
-  logger?.info("Music generated", {
-    bufferSize: buffer.length,
-  });
+    logger?.info("Music generated", {
+      bufferSize: buffer.length,
+    });
 
-  return buffer;
+    return buffer;
+  } catch (error) {
+    if (isMediaGenerationError(error)) {
+      logger?.error("Music generation failed", {
+        provider: error.provider,
+        model: error.model,
+        code: error.code,
+        message: error.message,
+        providerCode: error.providerCode,
+      });
+      throw error;
+    }
+
+    const wrapped = createMediaGenerationError({
+      code: "UNKNOWN",
+      provider: provider.name,
+      model,
+      message: "Unexpected error during music generation",
+      isRetryable: false,
+      userActionRequired: false,
+      cause: error,
+    });
+
+    logger?.error("Music generation failed", {
+      provider: wrapped.provider,
+      model: wrapped.model,
+      code: wrapped.code,
+      message: wrapped.message,
+    });
+
+    throw wrapped;
+  }
 }

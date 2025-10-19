@@ -103,6 +103,17 @@ const baseAssetSchema = z.object({
   label: z.string().optional(),
 });
 
+export const assetStatusValues = ["generated", "needs_prompt_update", "failed"] as const;
+
+const assetErrorSchema = z
+  .object({
+    code: z.string(),
+    message: z.string(),
+    provider: z.string().optional(),
+    providerCode: z.string().optional(),
+  })
+  .passthrough();
+
 export const imageAssetSchema = baseAssetSchema
   .extend({
     prompt: z.string(),
@@ -113,6 +124,8 @@ export const imageAssetSchema = baseAssetSchema
     size: z.string().optional(),
     style: z.enum(imageStyleValues).optional(),
     sourceUrl: z.string().optional(),
+    status: z.enum(assetStatusValues).optional(),
+    error: assetErrorSchema.optional(),
   })
   .passthrough();
 
@@ -125,6 +138,8 @@ export const narrationAssetSchema = baseAssetSchema
     language: z.string().optional(),
     duration: z.number().nonnegative().optional(),
     sourceUrl: z.string().optional(),
+    status: z.enum(assetStatusValues).optional(),
+    error: assetErrorSchema.optional(),
   })
   .passthrough();
 
@@ -136,6 +151,8 @@ export const musicAssetSchema = baseAssetSchema
     audioUrl: z.string().optional(),
     bpm: z.number().optional(),
     key: z.string().optional(),
+    status: z.enum(assetStatusValues).optional(),
+    error: assetErrorSchema.optional(),
   })
   .passthrough();
 
@@ -154,6 +171,8 @@ const timelineClipBaseSchema = z.object({
   name: z.string(),
   startTime: z.number().nonnegative(),
   duration: z.number().positive(),
+  status: z.enum(assetStatusValues).optional(),
+  error: assetErrorSchema.optional(),
 });
 
 export const kenBurnsClipSchema = timelineClipBaseSchema
@@ -307,6 +326,8 @@ export const videoAssetSchema = baseAssetSchema
     videoPath: z.string().optional(),
     startingImageId: z.string().optional(),
     startingImageModel: z.string().optional(),
+    status: z.enum(assetStatusValues).optional(),
+    error: assetErrorSchema.optional(),
   })
   .passthrough();
 

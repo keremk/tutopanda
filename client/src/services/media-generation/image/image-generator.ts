@@ -1,4 +1,4 @@
-import { ProviderRegistry } from "../core";
+import { ProviderRegistry, isMediaGenerationError, createMediaGenerationError } from "../core";
 import type { ImageProvider, ImageGenerationParams, ImageConfig } from "./types";
 import type { Logger } from "../core";
 import { DEFAULT_IMAGE_MODEL } from "@/lib/models";
@@ -48,18 +48,48 @@ export async function generateImage(
     model: config.model,
   };
 
-  const result = await provider.generateImage(params);
+  try {
+    const result = await provider.generateImage(params);
 
-  // Ensure we always return a Buffer
-  if (typeof result === "string") {
-    // If provider returns URL, we need to fetch it
-    const response = await fetch(result);
-    if (!response.ok) {
-      throw new Error(`Failed to fetch image from URL: ${response.statusText}`);
+    if (typeof result === "string") {
+      const response = await fetch(result);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch image from URL: ${response.statusText}`);
+      }
+      const arrayBuffer = await response.arrayBuffer();
+      return Buffer.from(arrayBuffer);
     }
-    const arrayBuffer = await response.arrayBuffer();
-    return Buffer.from(arrayBuffer);
-  }
 
-  return result;
+    return result;
+  } catch (error) {
+    if (isMediaGenerationError(error)) {
+      logger?.error("Image generation failed", {
+        provider: error.provider,
+        model: error.model,
+        code: error.code,
+        message: error.message,
+        providerCode: error.providerCode,
+      });
+      throw error;
+    }
+
+    const wrapped = createMediaGenerationError({
+      code: "UNKNOWN",
+      provider: provider.name,
+      model,
+      message: "Unexpected error during image generation",
+      isRetryable: false,
+      userActionRequired: false,
+      cause: error,
+    });
+
+    logger?.error("Image generation failed", {
+      provider: wrapped.provider,
+      model: wrapped.model,
+      code: wrapped.code,
+      message: wrapped.message,
+    });
+
+    throw wrapped;
+  }
 }

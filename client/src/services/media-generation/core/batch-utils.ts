@@ -1,10 +1,12 @@
 import { generateImage } from "../image/image-generator";
-import { generateAudio, type AudioResult } from "../audio/audio-generator";
+import { generateAudio } from "../audio/audio-generator";
 import { generateMusic } from "../music/music-generator";
-import type { ImageConfig } from "../image/types";
-import type { AudioConfig } from "../audio/types";
-import type { MusicConfig } from "../music/types";
+import type { ImageConfig, ImageGenerationResult } from "../image/types";
+import type { AudioConfig, AudioGenerationOutcome } from "../audio/types";
+import type { MusicConfig, MusicGenerationOutcome } from "../music/types";
 import type { Logger } from "./types";
+import { isMediaGenerationError, createMediaGenerationError } from "./types";
+import { DEFAULT_IMAGE_MODEL, DEFAULT_MUSIC_MODEL } from "@/lib/models";
 
 /**
  * Options for batch processing with concurrency control
@@ -79,14 +81,46 @@ export type ImageGenerationRequest = {
 export async function generateImagesThrottled(
   requests: ImageGenerationRequest[],
   options?: BatchOptions & { logger?: Logger }
-): Promise<Buffer[]> {
+): Promise<ImageGenerationResult[]> {
   const { logger, ...batchOptions } = options || {};
 
   return batchWithConcurrency(
     requests,
     async (request, index) => {
       logger?.info(`Generating image ${index + 1}/${requests.length}`);
-      return generateImage(request.prompt, request.config, { logger });
+      try {
+        const buffer = await generateImage(request.prompt, request.config, { logger });
+        return { ok: true, buffer } as ImageGenerationResult;
+      } catch (error) {
+        if (isMediaGenerationError(error)) {
+          logger?.warn?.("Image generation skipped", {
+            index,
+            total: requests.length,
+            code: error.code,
+            message: error.message,
+            providerCode: error.providerCode,
+          });
+          return { ok: false, error } as ImageGenerationResult;
+        }
+
+        const wrapped = createMediaGenerationError({
+          code: "UNKNOWN",
+          provider: "image",
+          model: request.config.model || DEFAULT_IMAGE_MODEL,
+          message: "Unexpected error during image generation",
+          isRetryable: false,
+          userActionRequired: false,
+          cause: error,
+        });
+
+        logger?.error("Image generation failed", {
+          index,
+          total: requests.length,
+          message: wrapped.message,
+        });
+
+        return { ok: false, error: wrapped } as ImageGenerationResult;
+      }
     },
     batchOptions
   );
@@ -111,14 +145,46 @@ export type AudioGenerationRequest = {
 export async function generateAudiosThrottled(
   requests: AudioGenerationRequest[],
   options?: BatchOptions & { logger?: Logger }
-): Promise<AudioResult[]> {
+): Promise<AudioGenerationOutcome[]> {
   const { logger, ...batchOptions } = options || {};
 
   return batchWithConcurrency(
     requests,
     async (request, index) => {
       logger?.info(`Generating audio ${index + 1}/${requests.length}`);
-      return generateAudio(request.text, request.config, { logger });
+      try {
+        const audio = await generateAudio(request.text, request.config, { logger });
+        return { ok: true, audio } as AudioGenerationOutcome;
+      } catch (error) {
+        if (isMediaGenerationError(error)) {
+          logger?.warn?.("Audio generation skipped", {
+            index,
+            total: requests.length,
+            code: error.code,
+            message: error.message,
+            providerCode: error.providerCode,
+          });
+          return { ok: false, error } as AudioGenerationOutcome;
+        }
+
+        const wrapped = createMediaGenerationError({
+          code: "UNKNOWN",
+          provider: "audio",
+          model: request.config.model || "unknown",
+          message: "Unexpected error during audio generation",
+          isRetryable: false,
+          userActionRequired: false,
+          cause: error,
+        });
+
+        logger?.error("Audio generation failed", {
+          index,
+          total: requests.length,
+          message: wrapped.message,
+        });
+
+        return { ok: false, error: wrapped } as AudioGenerationOutcome;
+      }
     },
     batchOptions
   );
@@ -143,14 +209,46 @@ export type MusicGenerationRequest = {
 export async function generateMusicsThrottled(
   requests: MusicGenerationRequest[],
   options?: BatchOptions & { logger?: Logger }
-): Promise<Buffer[]> {
+): Promise<MusicGenerationOutcome[]> {
   const { logger, ...batchOptions } = options || {};
 
   return batchWithConcurrency(
     requests,
     async (request, index) => {
       logger?.info(`Generating music ${index + 1}/${requests.length}`);
-      return generateMusic(request.prompt, request.config, { logger });
+      try {
+        const buffer = await generateMusic(request.prompt, request.config, { logger });
+        return { ok: true, buffer } as MusicGenerationOutcome;
+      } catch (error) {
+        if (isMediaGenerationError(error)) {
+          logger?.warn?.("Music generation skipped", {
+            index,
+            total: requests.length,
+            code: error.code,
+            message: error.message,
+            providerCode: error.providerCode,
+          });
+          return { ok: false, error } as MusicGenerationOutcome;
+        }
+
+        const wrapped = createMediaGenerationError({
+          code: "UNKNOWN",
+          provider: "music",
+          model: request.config.model || "unknown",
+          message: "Unexpected error during music generation",
+          isRetryable: false,
+          userActionRequired: false,
+          cause: error,
+        });
+
+        logger?.error("Music generation failed", {
+          index,
+          total: requests.length,
+          message: wrapped.message,
+        });
+
+        return { ok: false, error: wrapped } as MusicGenerationOutcome;
+      }
     },
     batchOptions
   );

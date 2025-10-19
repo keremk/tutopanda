@@ -31,3 +31,48 @@ export type ProviderError = {
   message: string;
   cause?: unknown;
 };
+
+export type MediaGenerationErrorCode =
+  | "SENSITIVE_CONTENT"
+  | "PROVIDER_FAILURE"
+  | "RATE_LIMITED"
+  | "TRANSIENT_PROVIDER_ERROR"
+  | "UNKNOWN";
+
+export interface MediaGenerationError extends ProviderError {
+  code: MediaGenerationErrorCode;
+  providerCode?: string;
+  isRetryable: boolean;
+  userActionRequired?: boolean;
+  retryAfterMs?: number;
+}
+
+export function isMediaGenerationError(error: unknown): error is MediaGenerationError {
+  if (!error || typeof error !== "object") {
+    return false;
+  }
+
+  const candidate = error as Partial<MediaGenerationError>;
+
+  return (
+    typeof candidate.provider === "string" &&
+    typeof candidate.model === "string" &&
+    typeof candidate.message === "string" &&
+    typeof candidate.code === "string" &&
+    typeof candidate.isRetryable === "boolean"
+  );
+}
+
+export function createMediaGenerationError(
+  overrides: Partial<MediaGenerationError> &
+    Pick<MediaGenerationError, "code" | "provider" | "model" | "message">
+): MediaGenerationError {
+  return {
+    providerCode: undefined,
+    isRetryable: false,
+    userActionRequired: false,
+    cause: undefined,
+    retryAfterMs: undefined,
+    ...overrides,
+  };
+}

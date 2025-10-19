@@ -11,6 +11,7 @@ import {
   generateImagesThrottled,
   type ImageGenerationRequest,
 } from "@/services/media-generation/core";
+import type { ImageGenerationResult } from "@/services/media-generation/image/types";
 import type { Logger } from "@/services/media-generation/core";
 import { DEFAULT_IMAGE_MODEL } from "@/lib/models";
 import type { LectureAssetStorage } from "@/services/lecture/storage";
@@ -166,7 +167,7 @@ export async function generateLectureImages(
   });
 
   // Step 3: Generate images with throttling
-  const buffers = await generateImages(imageRequests, {
+  const imageResults = await generateImages(imageRequests, {
     maxConcurrency,
     logger,
     onBatchComplete: (batchIndex, totalBatches) => {
@@ -179,21 +180,16 @@ export async function generateLectureImages(
 
   // Step 4: Save images and build assets
   const imageAssets: ImageAsset[] = await Promise.all(
-    buffers.map(async (buffer, index) => {
+    imageResults.map(async (result, index) => {
       const { segmentIndex, imageIndex, basePrompt } = allPrompts[index];
       const id = `img-${runId}-${segmentIndex}-${imageIndex}`;
-      const sourceUrl = await assetStorage.saveImage(buffer, id);
+      const label = `Segment ${segmentIndex + 1}${
+        imagesPerSegment > 1 ? ` Image ${imageIndex + 1}` : ""
+      }`;
 
-      logger?.info("Image saved", {
+      const baseAsset: ImageAsset = {
         id,
-        segmentIndex,
-        imageIndex,
-        path: sourceUrl,
-      });
-
-      return {
-        id,
-        label: `Segment ${segmentIndex + 1}${imagesPerSegment > 1 ? ` Image ${imageIndex + 1}` : ""}`,
+        label,
         prompt: basePrompt,
         style: appliedStyle,
         aspectRatio: config.aspectRatio,
@@ -201,13 +197,58 @@ export async function generateLectureImages(
         height: computedHeight,
         size: config.size,
         model: DEFAULT_IMAGE_MODEL,
-        sourceUrl,
       };
+
+      if (result.ok) {
+        const sourceUrl = await assetStorage.saveImage(result.buffer, id);
+
+        logger?.info("Image saved", {
+          id,
+          segmentIndex,
+          imageIndex,
+          path: sourceUrl,
+        });
+
+        return {
+          ...baseAsset,
+          sourceUrl,
+          status: "generated",
+        } as ImageAsset;
+      }
+
+      const error = result.error;
+
+      logger?.warn?.("Image generation flagged", {
+        id,
+        segmentIndex,
+        imageIndex,
+        code: error.code,
+        message: error.message,
+        providerCode: error.providerCode,
+      });
+
+      return {
+        ...baseAsset,
+        status: error.userActionRequired ? "needs_prompt_update" : "failed",
+        error: {
+          code: error.code,
+          message: error.message,
+          provider: error.provider,
+          providerCode: error.providerCode,
+        },
+      } as ImageAsset;
     })
   );
 
+  const generatedCount = imageAssets.filter((asset) => asset.sourceUrl).length;
+  const needsPromptUpdateCount = imageAssets.filter((asset) => asset.status === "needs_prompt_update").length;
+  const failedCount = imageAssets.filter((asset) => asset.status === "failed").length;
+
   logger?.info("Lecture image generation complete", {
     totalImages: imageAssets.length,
+    generatedCount,
+    needsPromptUpdateCount,
+    failedCount,
   });
 
   return imageAssets;
@@ -263,7 +304,7 @@ export async function regenerateImage(
       : config.height;
 
   // Generate single image
-  const [buffer] = await generateImages(
+  const [outcome] = await generateImages(
     [
       {
         prompt: styledPrompt,
@@ -279,15 +320,11 @@ export async function regenerateImage(
     { logger }
   );
 
-  // Save image
-  const sourceUrl = await assetStorage.saveImage(buffer, imageId);
+  if (!outcome) {
+    throw new Error("No image generation result received for regeneration");
+  }
 
-  logger?.info("Image regenerated and saved", {
-    imageId,
-    path: sourceUrl,
-  });
-
-  return {
+  const baseAsset: ImageAsset = {
     id: imageId,
     label: "Regenerated Image",
     prompt: basePrompt,
@@ -297,6 +334,40 @@ export async function regenerateImage(
     height: computedHeight,
     size: config.size,
     model: DEFAULT_IMAGE_MODEL,
-    sourceUrl,
   };
+
+  if (outcome.ok) {
+    const sourceUrl = await assetStorage.saveImage(outcome.buffer, imageId);
+
+    logger?.info("Image regenerated and saved", {
+      imageId,
+      path: sourceUrl,
+    });
+
+    return {
+      ...baseAsset,
+      sourceUrl,
+      status: "generated",
+    } as ImageAsset;
+  }
+
+  const error = outcome.error;
+
+  logger?.warn?.("Image regeneration flagged", {
+    imageId,
+    code: error.code,
+    message: error.message,
+    providerCode: error.providerCode,
+  });
+
+  return {
+    ...baseAsset,
+    status: error.userActionRequired ? "needs_prompt_update" : "failed",
+    error: {
+      code: error.code,
+      message: error.message,
+      provider: error.provider,
+      providerCode: error.providerCode,
+    },
+  } as ImageAsset;
 }

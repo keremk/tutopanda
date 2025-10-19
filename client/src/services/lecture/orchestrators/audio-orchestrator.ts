@@ -96,31 +96,68 @@ export async function generateLectureAudio(
   const narrationAssets: NarrationSettings[] = await Promise.all(
     audioResults.map(async (result, segmentIndex) => {
       const id = `narration-${runId}-${segmentIndex}`;
-      const sourceUrl = await assetStorage.saveNarration(result.buffer, id);
-
-      logger?.info("Audio saved", {
+      const label = `Segment ${segmentIndex + 1}`;
+      const baseAsset: NarrationSettings = {
         id,
-        segmentIndex,
-        duration: result.duration,
-        path: sourceUrl,
-      });
-
-      return {
-        id,
-        label: `Segment ${segmentIndex + 1}`,
+        label,
         finalScript: segments[segmentIndex].narration,
         model,
         voice,
         emotion,
         language: languageSettings.language ?? language,
-        duration: result.duration,
-        sourceUrl,
       };
+
+      if (result.ok) {
+        const { audio } = result;
+        const sourceUrl = await assetStorage.saveNarration(audio.buffer, id);
+
+        logger?.info("Audio saved", {
+          id,
+          segmentIndex,
+          duration: audio.duration,
+          path: sourceUrl,
+        });
+
+        return {
+          ...baseAsset,
+          duration: audio.duration,
+          sourceUrl,
+          status: "generated",
+        } as NarrationSettings;
+      }
+
+      const error = result.error;
+
+      logger?.warn?.("Audio generation flagged", {
+        id,
+        segmentIndex,
+        code: error.code,
+        message: error.message,
+        providerCode: error.providerCode,
+      });
+
+      return {
+        ...baseAsset,
+        status: error.userActionRequired ? "needs_prompt_update" : "failed",
+        error: {
+          code: error.code,
+          message: error.message,
+          provider: error.provider,
+          providerCode: error.providerCode,
+        },
+      } as NarrationSettings;
     })
   );
 
+  const generatedCount = narrationAssets.filter((asset) => asset.sourceUrl).length;
+  const needsPromptUpdateCount = narrationAssets.filter((asset) => asset.status === "needs_prompt_update").length;
+  const failedCount = narrationAssets.filter((asset) => asset.status === "failed").length;
+
   logger?.info("Lecture audio generation complete", {
     totalNarrations: narrationAssets.length,
+    generatedCount,
+    needsPromptUpdateCount,
+    failedCount,
   });
 
   return narrationAssets;
@@ -166,7 +203,7 @@ export async function regenerateAudio(
   });
 
   // Generate single audio
-  const [result] = await generateAudios(
+  const [outcome] = await generateAudios(
     [
       {
         text,
@@ -182,16 +219,11 @@ export async function regenerateAudio(
     { logger }
   );
 
-  // Save audio
-  const sourceUrl = await assetStorage.saveNarration(result.buffer, narrationId);
+  if (!outcome) {
+    throw new Error("No audio generation result received for regeneration");
+  }
 
-  logger?.info("Audio regenerated and saved", {
-    narrationId,
-    duration: result.duration,
-    path: sourceUrl,
-  });
-
-  return {
+  const baseAsset: NarrationSettings = {
     id: narrationId,
     label: "Regenerated Narration",
     finalScript: text,
@@ -199,7 +231,43 @@ export async function regenerateAudio(
     voice,
     emotion,
     language: languageSettings.language ?? language,
-    duration: result.duration,
-    sourceUrl,
   };
+
+  if (outcome.ok) {
+    const { audio } = outcome;
+    const sourceUrl = await assetStorage.saveNarration(audio.buffer, narrationId);
+
+    logger?.info("Audio regenerated and saved", {
+      narrationId,
+      duration: audio.duration,
+      path: sourceUrl,
+    });
+
+    return {
+      ...baseAsset,
+      duration: audio.duration,
+      sourceUrl,
+      status: "generated",
+    } as NarrationSettings;
+  }
+
+  const error = outcome.error;
+
+  logger?.warn?.("Audio regeneration flagged", {
+    narrationId,
+    code: error.code,
+    message: error.message,
+    providerCode: error.providerCode,
+  });
+
+  return {
+    ...baseAsset,
+    status: error.userActionRequired ? "needs_prompt_update" : "failed",
+    error: {
+      code: error.code,
+      message: error.message,
+      provider: error.provider,
+      providerCode: error.providerCode,
+    },
+  } as NarrationSettings;
 }

@@ -51,9 +51,9 @@ describe("generateLectureImages", () => {
     // Mock image generation
     const mockGenerateImages = vi.fn(async () => {
       return [
-        Buffer.from("fake-image-1"),
-        Buffer.from("fake-image-2"),
-        Buffer.from("fake-image-3"),
+        { ok: true, buffer: Buffer.from("fake-image-1") },
+        { ok: true, buffer: Buffer.from("fake-image-2") },
+        { ok: true, buffer: Buffer.from("fake-image-3") },
       ];
     });
 
@@ -70,6 +70,7 @@ describe("generateLectureImages", () => {
     expect(mockGeneratePrompts).toHaveBeenCalledTimes(3);
     expect(mockGenerateImages).toHaveBeenCalledTimes(1);
     expect(mockStorage.savedFiles.size).toBe(3);
+    expect(results.every((image) => image.status === "generated")).toBe(true);
 
     // Verify first result structure
     expect(results[0]).toMatchObject({
@@ -81,6 +82,7 @@ describe("generateLectureImages", () => {
       width: 1024,
       model: "bytedance/seedream-4",
       sourceUrl: "user-1/42/7/images/img-test-run-123-0-0.jpg",
+      status: "generated",
     });
 
     const imageRequests = mockGenerateImages.mock.calls[0]?.[0];
@@ -112,10 +114,10 @@ describe("generateLectureImages", () => {
 
     const mockGenerateImages = vi.fn(async () => {
       return [
-        Buffer.from("img-1"),
-        Buffer.from("img-2"),
-        Buffer.from("img-3"),
-        Buffer.from("img-4"),
+        { ok: true, buffer: Buffer.from("img-1") },
+        { ok: true, buffer: Buffer.from("img-2") },
+        { ok: true, buffer: Buffer.from("img-3") },
+        { ok: true, buffer: Buffer.from("img-4") },
       ];
     });
 
@@ -137,6 +139,7 @@ describe("generateLectureImages", () => {
     expect(results[2].label).toBe("Segment 2 Image 1");
     expect(results[3].label).toBe("Segment 2 Image 2");
     expect(results.every((image) => image.style === config.style)).toBe(true);
+    expect(results.every((image) => image.status === "generated")).toBe(true);
   });
 
   it("saves files to correct paths", async () => {
@@ -156,8 +159,8 @@ describe("generateLectureImages", () => {
     const assetStorage = buildAssetStorage(context, mockStorage);
     const mockGeneratePrompts = vi.fn(async () => ["Prompt"]);
     const mockGenerateImages = vi.fn(async () => [
-      Buffer.from("img-1"),
-      Buffer.from("img-2"),
+      { ok: true, buffer: Buffer.from("img-1") },
+      { ok: true, buffer: Buffer.from("img-2") },
     ]);
 
     const deps: ImageOrchestratorDeps = {
@@ -192,8 +195,8 @@ describe("generateLectureImages", () => {
     const assetStorage = buildAssetStorage(context, mockStorage);
     const mockGeneratePrompts = vi.fn(async () => ["Prompt"]);
     const mockGenerateImages = vi.fn(async () => [
-      Buffer.from("img-1"),
-      Buffer.from("img-2"),
+      { ok: true, buffer: Buffer.from("img-1") },
+      { ok: true, buffer: Buffer.from("img-2") },
     ]);
 
     const deps: ImageOrchestratorDeps = {
@@ -230,7 +233,10 @@ describe("generateLectureImages", () => {
     const mockGenerateImages = vi.fn(async (_requests, options) => {
       // Verify maxConcurrency is passed
       expect(options?.maxConcurrency).toBe(3);
-      return [Buffer.from("img-1"), Buffer.from("img-2")];
+      return [
+        { ok: true, buffer: Buffer.from("img-1") },
+        { ok: true, buffer: Buffer.from("img-2") },
+      ];
     });
 
     const deps: ImageOrchestratorDeps = {
@@ -276,7 +282,11 @@ describe("generateLectureImages", () => {
 
     const mockGenerateImages = vi.fn(async (requests) => {
       expect(requests).toHaveLength(3);
-      return [Buffer.from("img-1"), Buffer.from("img-2"), Buffer.from("img-3")];
+      return [
+        { ok: true, buffer: Buffer.from("img-1") },
+        { ok: true, buffer: Buffer.from("img-2") },
+        { ok: true, buffer: Buffer.from("img-3") },
+      ];
     });
 
     const deps: ImageOrchestratorDeps = {
@@ -324,6 +334,49 @@ describe("generateLectureImages", () => {
     expect(results).toHaveLength(0);
     expect(mockGeneratePrompts).not.toHaveBeenCalled();
   });
+
+  it("marks image asset as needing prompt update on provider rejection", async () => {
+    const request: GenerateLectureImagesRequest = {
+      script: createMockLectureScript(1),
+      config: createMockImageConfig(),
+      runId: "test-run-sensitive",
+    };
+
+    const context: ImageGenerationContext = {
+      userId: "user-1",
+      projectId: 42,
+      lectureId: 77,
+    };
+
+    const mockStorage = new MockStorageHandler();
+    const assetStorage = buildAssetStorage(context, mockStorage);
+    const mockGeneratePrompts = vi.fn(async () => ["Prompt"]);
+    const mockGenerateImages = vi.fn(async () => [
+      {
+        ok: false as const,
+        error: {
+          provider: "replicate",
+          model: "bytedance/seedream-4",
+          message: "Sensitive content",
+          code: "SENSITIVE_CONTENT",
+          providerCode: "E005",
+          isRetryable: false,
+          userActionRequired: true,
+        },
+      },
+    ]);
+
+    const results = await generateLectureImages(request, context, {
+      generatePrompts: mockGeneratePrompts,
+      generateImages: mockGenerateImages,
+      assetStorage,
+    });
+
+    expect(results).toHaveLength(1);
+    expect(results[0].status).toBe("needs_prompt_update");
+    expect(results[0].error).toMatchObject({ code: "SENSITIVE_CONTENT", providerCode: "E005" });
+    expect(mockStorage.savedFiles.size).toBe(0);
+  });
 });
 
 describe("regenerateImage", () => {
@@ -345,7 +398,7 @@ describe("regenerateImage", () => {
     const mockStorage = new MockStorageHandler();
     const assetStorage = buildAssetStorage(context, mockStorage);
     const mockGenerateImages = vi.fn(async () => {
-      return [Buffer.from("new-image")];
+      return [{ ok: true, buffer: Buffer.from("new-image") }];
     });
 
     const deps: ImageOrchestratorDeps = {
@@ -364,6 +417,7 @@ describe("regenerateImage", () => {
       aspectRatio: "16:9",
       model: "bytedance/seedream-4",
       sourceUrl: "user-1/42/88/images/img-regen-123.jpg",
+      status: "generated",
     });
 
     expect(mockGenerateImages).toHaveBeenCalledTimes(1);
@@ -388,7 +442,7 @@ describe("regenerateImage", () => {
 
     const mockStorage = new MockStorageHandler();
     const assetStorage = buildAssetStorage(context, mockStorage);
-    const mockGenerateImages = vi.fn(async () => [Buffer.from("image")]);
+    const mockGenerateImages = vi.fn(async () => [{ ok: true, buffer: Buffer.from("image") }]);
 
     const deps: ImageOrchestratorDeps = {
       generateImages: mockGenerateImages,
@@ -418,7 +472,7 @@ describe("regenerateImage", () => {
     const mockLogger = new MockLogger();
     const mockStorage = new MockStorageHandler();
     const assetStorage = buildAssetStorage(context, mockStorage);
-    const mockGenerateImages = vi.fn(async () => [Buffer.from("image")]);
+    const mockGenerateImages = vi.fn(async () => [{ ok: true, buffer: Buffer.from("image") }]);
 
     const deps: ImageOrchestratorDeps = {
       generateImages: mockGenerateImages,
@@ -451,7 +505,7 @@ describe("regenerateImage", () => {
 
     const mockStorage = new MockStorageHandler();
     const assetStorage = buildAssetStorage(context, mockStorage);
-    const mockGenerateImages = vi.fn(async () => [Buffer.from("image")]);
+    const mockGenerateImages = vi.fn(async () => [{ ok: true, buffer: Buffer.from("image") }]);
 
     const deps: ImageOrchestratorDeps = {
       generateImages: mockGenerateImages,

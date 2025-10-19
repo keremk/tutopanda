@@ -1,5 +1,5 @@
 import type { LectureScript, ImageGenerationDefaults } from "@/types/types";
-import type { MediaProvider } from "../core";
+import type { MediaProvider, MediaGenerationError } from "../core";
 
 type LectureSegment = LectureScript["segments"][number];
 
@@ -46,6 +46,18 @@ export interface ImageProvider extends MediaProvider {
    */
   generateImage(params: ImageGenerationParams): Promise<string | Buffer>;
 }
+
+export type ImageGenerationSuccess = {
+  ok: true;
+  buffer: Buffer;
+};
+
+export type ImageGenerationFailure = {
+  ok: false;
+  error: MediaGenerationError;
+};
+
+export type ImageGenerationResult = ImageGenerationSuccess | ImageGenerationFailure;
 
 /**
  * Options for prompt generation
