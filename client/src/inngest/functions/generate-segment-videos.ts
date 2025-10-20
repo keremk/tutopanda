@@ -17,6 +17,7 @@ import {
   generateVideoStartingImages,
 } from "@/services/lecture/orchestrators/video-orchestrator";
 import { createLectureAssetStorage } from "@/services/lecture/storage";
+import { summarizeAssets, formatSummaryMessage } from "./utils/generation-summary";
 
 const inngest = getInngestApp();
 
@@ -185,11 +186,17 @@ export const generateSegmentVideos = inngest.createFunction(
       });
     });
 
-    await publishStatus("Videos generated successfully", workflowStep, "complete");
+    const summary = summarizeAssets(videoAssets);
+    const summaryMessage = `Video generation complete: ${formatSummaryMessage(summary, "video segment")}`;
+
+    await publishStatus(summaryMessage, workflowStep, "complete");
 
     log.info("Video generation complete", {
-      generatedVideos: videoAssets.length,
-      segments: videosToGenerate,
+      totalSegments: summary.total,
+      generatedCount: summary.generated,
+      needsPromptUpdateCount: summary.needsPromptUpdate,
+      failedCount: summary.failed,
+      requestedSegments: videosToGenerate,
     });
 
     await step.run("save-generated-videos", async () => {

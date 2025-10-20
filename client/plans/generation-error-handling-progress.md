@@ -33,24 +33,19 @@ _Last updated: (pending build)_
    - Added new tests for audio/music/image orchestrators covering sensitive-content failures.
    - Added new video orchestrator helper tests (success, image-blocked, provider failure) and extended timeline assembler tests.
    - Added unit tests for provider error mapping and generator fallback wrapping (`replicate-error.test.ts`, `generator-fallback.test.ts`).
+8. **Inngest Functions**
+   - Updated generation functions to summarize partial successes/failures, publish informative status messages, and log structured counts without aborting the workflow.
 
 ## Still To-Do
 
-1. **Inngest Functions**
-   - Update `generate-segment-images`, `generate-narration`, `generate-music`, `generate-segment-videos` to:
-     - Wrap per-asset work in `step.run` with retry policies.
-     - Emit `RetryAfterError` / `NonRetriableError` as appropriate.
-     - Persist structured status/error results to lecture content.
-     - Publish progress events reflecting retries and failures.
-
-2. **Schema Consumers**
+1. **Schema Consumers**
    - Review `updateLectureContent` callers (and any data mappers) to ensure new `status`/`error` fields flow end-to-end without stripping.
 
-3. **Testing Strategy Follow-up**
+2. **Testing Strategy Follow-up**
    - Implement integration tests (or targeted harness tests) simulating Inngest retries/failures once functions are updated.
    - Since vitest CLI currently fails in this environment, plan to run the suite locally after changes (documented in final notes).
 
-4. **Documentation & QA**
+3. **Documentation & QA**
    - Once all orchestrators and Inngest flows are updated, refresh the testing checklist and document the new error-handling behavior for internal stakeholders.
 
 ## Notes

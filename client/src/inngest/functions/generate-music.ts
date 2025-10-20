@@ -13,6 +13,7 @@ import { musicProviderRegistry, ReplicateMusicProvider } from "@/services/media-
 import { FileStorageHandler } from "@/services/media-generation/core";
 import { generateLectureMusic } from "@/services/lecture/orchestrators";
 import { createLectureAssetStorage } from "@/services/lecture/storage";
+import { summarizeAssets, formatSummaryMessage } from "./utils/generation-summary";
 
 const inngest = getInngestApp();
 
@@ -115,10 +116,17 @@ export const generateMusic = inngest.createFunction(
       );
     });
 
-    await publishStatus("Background music generated successfully", workflowStep, "complete");
+    const summary = summarizeAssets([musicAsset]);
+    const summaryMessage = `Background music generation complete: ${formatSummaryMessage(summary, "music track")}`;
+
+    await publishStatus(summaryMessage, workflowStep, "complete");
 
     log.info("Music generation complete", {
+      status: musicAsset.status ?? "generated",
       audioUrl: musicAsset.audioUrl,
+      generatedCount: summary.generated,
+      needsPromptUpdateCount: summary.needsPromptUpdate,
+      failedCount: summary.failed,
     });
 
     await step.run("save-music-metadata", async () => {

@@ -14,6 +14,7 @@ import { audioProviderRegistry, ReplicateAudioProvider } from "@/services/media-
 import { FileStorageHandler } from "@/services/media-generation/core";
 import { generateLectureAudio } from "@/services/lecture/orchestrators";
 import { createLectureAssetStorage } from "@/services/lecture/storage";
+import { summarizeAssets, formatSummaryMessage } from "./utils/generation-summary";
 
 const inngest = getInngestApp();
 
@@ -174,10 +175,16 @@ export const generateNarration = inngest.createFunction(
       );
     });
 
-    await publishStatus("Narration generated successfully", workflowStep, "complete");
+    const summary = summarizeAssets(updatedNarration);
+    const summaryMessage = `Narration generation complete: ${formatSummaryMessage(summary, "narration")}`;
+
+    await publishStatus(summaryMessage, workflowStep, "complete");
 
     log.info("Narration generation complete", {
-      generatedNarrations: updatedNarration.length,
+      totalNarrations: summary.total,
+      generatedCount: summary.generated,
+      needsPromptUpdateCount: summary.needsPromptUpdate,
+      failedCount: summary.failed,
       totalDuration: updatedNarration.reduce((sum, n) => sum + (n.duration || 0), 0),
     });
 

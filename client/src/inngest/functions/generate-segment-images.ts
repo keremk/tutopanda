@@ -13,6 +13,7 @@ import { imageProviderRegistry, ReplicateImageProvider } from "@/services/media-
 import { FileStorageHandler } from "@/services/media-generation/core";
 import { generateLectureImages } from "@/services/lecture/orchestrators";
 import { createLectureAssetStorage } from "@/services/lecture/storage";
+import { summarizeAssets, formatSummaryMessage } from "./utils/generation-summary";
 
 const inngest = getInngestApp();
 
@@ -159,10 +160,16 @@ export const generateSegmentImages = inngest.createFunction(
       );
     });
 
-    await publishStatus("Images generated successfully", workflowStep, "complete");
+    const summary = summarizeAssets(flattenedImages);
+    const summaryMessage = `Image generation complete: ${formatSummaryMessage(summary, "image")}`;
+
+    await publishStatus(summaryMessage, workflowStep, "complete");
 
     log.info("Image generation complete", {
-      generatedImages: flattenedImages.length,
+      totalImages: summary.total,
+      generatedCount: summary.generated,
+      needsPromptUpdateCount: summary.needsPromptUpdate,
+      failedCount: summary.failed,
       segments: limitedScript.segments.length,
     });
 
