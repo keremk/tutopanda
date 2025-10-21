@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import {
   generateVideoStartingImages,
   generateVideoAssets,
+  generateLectureVideos,
   type VideoSegmentPrompt,
   type VideoSegmentImageResult,
 } from "./video-orchestrator";
@@ -10,6 +11,7 @@ import { createLectureAssetStorage } from "@/services/lecture/storage";
 import { MockLogger, MockStorageHandler } from "@/services/media-generation/__test-utils__/mocks";
 import { createMediaGenerationError } from "@/services/media-generation/core";
 import { DEFAULT_IMAGE_GENERATION_DEFAULTS } from "@/types/types";
+import { createMockLectureScript } from "@/services/media-generation/__test-utils__/mocks";
 
 function buildAssetStorage(context: VideoGenerationContext, storage: MockStorageHandler) {
   return createLectureAssetStorage(
@@ -123,6 +125,7 @@ describe("video orchestrator helpers", () => {
           duration: "10",
           resolution: "480p",
           model: "video-model",
+          imageModel: "image-model",
         },
         imageConfig: DEFAULT_IMAGE_GENERATION_DEFAULTS,
         runId: "run-123",
@@ -158,6 +161,8 @@ describe("video orchestrator helpers", () => {
         videoConfig: {
           duration: "10",
           resolution: "480p",
+          model: "video-model",
+          imageModel: "image-model",
         },
         imageConfig: DEFAULT_IMAGE_GENERATION_DEFAULTS,
         runId: "run-123",
@@ -194,6 +199,8 @@ describe("video orchestrator helpers", () => {
         videoConfig: {
           duration: "10",
           resolution: "480p",
+          model: "video-model",
+          imageModel: "image-model",
         },
         imageConfig: DEFAULT_IMAGE_GENERATION_DEFAULTS,
         runId: "run-123",
@@ -211,5 +218,75 @@ describe("video orchestrator helpers", () => {
       expect(asset.error?.code).toBe("PROVIDER_FAILURE");
       expect(asset.videoPath).toBeUndefined();
     });
+  });
+
+  it("returns videos with mixed statuses when some segments fail", async () => {
+    const script = createMockLectureScript(2);
+
+    const mockGeneratePrompts = vi.fn(async (_segment, _summary, index) => ({
+      segmentStartImagePrompt: index === 1 ? "base-fail" : "base-success",
+      movieDirections: `movie-${index}`,
+    }));
+
+    const storage = new MockStorageHandler();
+    const assetStorage = buildAssetStorage(baseContext, storage);
+
+    const sensitiveError = createMediaGenerationError({
+      code: "SENSITIVE_CONTENT",
+      provider: "replicate",
+      model: "image-model",
+      message: "Sensitive content",
+      isRetryable: false,
+      userActionRequired: true,
+    });
+
+    const generateImageFn = vi.fn(async (styledPrompt: string) => {
+      if (styledPrompt.includes("fail")) {
+        throw sensitiveError;
+      }
+      return Buffer.from("image-success");
+    });
+
+    const generateVideoFn = vi.fn(async () => Buffer.from("video-success"));
+
+    const results = await generateLectureVideos(
+      {
+        script,
+        lectureSummary: "summary",
+        videoConfig: {
+          model: "video-model",
+          imageModel: "image-model",
+          resolution: "480p",
+          duration: "10",
+        },
+        imageConfig: { ...DEFAULT_IMAGE_GENERATION_DEFAULTS },
+        maxVideoSegments: 2,
+        runId: "run-456",
+      },
+      baseContext,
+      {
+        generatePrompts: mockGeneratePrompts,
+        generateImageFn,
+        generateVideoFn,
+        assetStorage,
+        logger: new MockLogger(),
+        loadImageFn: async (imagePath: string) => {
+          const file = storage.getFile(imagePath);
+          if (!file) {
+            throw new Error("image not found");
+          }
+          return file;
+        },
+      }
+    );
+
+    expect(results).toHaveLength(2);
+    expect(results[0].status).toBe("generated");
+    expect(results[1].status).toBe("needs_prompt_update");
+    const savedVideos = storage
+      .getSavedPaths()
+      .filter((path) => path.includes("/videos/"));
+    expect(savedVideos).toHaveLength(1);
+    expect(generateVideoFn).toHaveBeenCalledTimes(1);
   });
 });

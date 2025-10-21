@@ -3,7 +3,6 @@ import { generateImage } from "@/services/media-generation/image/image-generator
 import { generateAudio } from "@/services/media-generation/audio/audio-generator";
 import { generateMusic } from "@/services/media-generation/music/music-generator";
 import { generateVideo } from "@/services/media-generation/video/video-generator";
-import { isMediaGenerationError } from "@/services/media-generation/core";
 
 describe("generator fallback error wrapping", () => {
   it("wraps unexpected errors in generateImage", async () => {
@@ -15,19 +14,13 @@ describe("generator fallback error wrapping", () => {
       },
     };
 
-    try {
-      await generateImage(
+    await expect(
+      generateImage(
         "prompt",
         { model: "test-model" },
         { provider }
-      );
-      throw new Error("expected failure");
-    } catch (error) {
-      expect(isMediaGenerationError(error)).toBe(true);
-      if (isMediaGenerationError(error)) {
-        expect(error.code).toBe("UNKNOWN");
-      }
-    }
+      )
+    ).rejects.toThrow("boom");
   });
 
   it("wraps unexpected errors in generateAudio", async () => {
@@ -45,7 +38,7 @@ describe("generator fallback error wrapping", () => {
         { voice: "voice", model: "audio-model" },
         { provider }
       )
-    ).rejects.toMatchObject({ code: "UNKNOWN" });
+    ).rejects.toThrow("boom");
   });
 
   it("wraps unexpected errors in generateMusic", async () => {
@@ -63,7 +56,7 @@ describe("generator fallback error wrapping", () => {
         { durationSeconds: 30, model: "music-model" },
         { provider }
       )
-    ).rejects.toMatchObject({ code: "UNKNOWN" });
+    ).rejects.toThrow("boom");
   });
 
   it("wraps unexpected errors in generateVideo", async () => {
@@ -87,6 +80,6 @@ describe("generator fallback error wrapping", () => {
         },
         { provider }
       )
-    ).rejects.toMatchObject({ code: "UNKNOWN" });
+    ).rejects.toThrow("boom");
   });
 });

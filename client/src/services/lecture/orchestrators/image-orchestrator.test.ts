@@ -12,6 +12,13 @@ import {
   MockLogger,
   MockStorageHandler,
 } from "@/services/media-generation/__test-utils__/mocks";
+import type { MediaGenerationError, ImageGenerationRequest } from "@/services/media-generation/core";
+import type { ImageGenerationResult } from "@/services/media-generation/image/types";
+
+const createImageSuccess = (buffer: Buffer): ImageGenerationResult => ({
+  ok: true,
+  buffer,
+});
 
 function buildAssetStorage(context: ImageGenerationContext, storage: MockStorageHandler) {
   return createLectureAssetStorage(
@@ -50,11 +57,12 @@ describe("generateLectureImages", () => {
 
     // Mock image generation
     const mockGenerateImages = vi.fn(async () => {
-      return [
-        { ok: true, buffer: Buffer.from("fake-image-1") },
-        { ok: true, buffer: Buffer.from("fake-image-2") },
-        { ok: true, buffer: Buffer.from("fake-image-3") },
+      const outcomes: ImageGenerationResult[] = [
+        createImageSuccess(Buffer.from("fake-image-1")),
+        createImageSuccess(Buffer.from("fake-image-2")),
+        createImageSuccess(Buffer.from("fake-image-3")),
       ];
+      return outcomes;
     });
 
     const deps: ImageOrchestratorDeps = {
@@ -85,9 +93,14 @@ describe("generateLectureImages", () => {
       status: "generated",
     });
 
-    const imageRequests = mockGenerateImages.mock.calls[0]?.[0];
+    const firstCall = mockGenerateImages.mock.calls[0] as unknown as
+      | [ImageGenerationRequest[], unknown]
+      | undefined;
+    expect(firstCall).toBeDefined();
+    const imageRequests = firstCall![0];
     expect(Array.isArray(imageRequests)).toBe(true);
-    expect(imageRequests?.[0]?.prompt).toContain("photorealistic cinematic shot");
+    expect(imageRequests[0]).toBeDefined();
+    expect(imageRequests[0].prompt).toContain("photorealistic cinematic shot");
   });
 
   it("handles multiple images per segment", async () => {
@@ -113,12 +126,13 @@ describe("generateLectureImages", () => {
     });
 
     const mockGenerateImages = vi.fn(async () => {
-      return [
-        { ok: true, buffer: Buffer.from("img-1") },
-        { ok: true, buffer: Buffer.from("img-2") },
-        { ok: true, buffer: Buffer.from("img-3") },
-        { ok: true, buffer: Buffer.from("img-4") },
+      const outcomes: ImageGenerationResult[] = [
+        createImageSuccess(Buffer.from("img-1")),
+        createImageSuccess(Buffer.from("img-2")),
+        createImageSuccess(Buffer.from("img-3")),
+        createImageSuccess(Buffer.from("img-4")),
       ];
+      return outcomes;
     });
 
     const deps: ImageOrchestratorDeps = {
@@ -159,8 +173,8 @@ describe("generateLectureImages", () => {
     const assetStorage = buildAssetStorage(context, mockStorage);
     const mockGeneratePrompts = vi.fn(async () => ["Prompt"]);
     const mockGenerateImages = vi.fn(async () => [
-      { ok: true, buffer: Buffer.from("img-1") },
-      { ok: true, buffer: Buffer.from("img-2") },
+      createImageSuccess(Buffer.from("img-1")),
+      createImageSuccess(Buffer.from("img-2")),
     ]);
 
     const deps: ImageOrchestratorDeps = {
@@ -195,8 +209,8 @@ describe("generateLectureImages", () => {
     const assetStorage = buildAssetStorage(context, mockStorage);
     const mockGeneratePrompts = vi.fn(async () => ["Prompt"]);
     const mockGenerateImages = vi.fn(async () => [
-      { ok: true, buffer: Buffer.from("img-1") },
-      { ok: true, buffer: Buffer.from("img-2") },
+      createImageSuccess(Buffer.from("img-1")),
+      createImageSuccess(Buffer.from("img-2")),
     ]);
 
     const deps: ImageOrchestratorDeps = {
@@ -233,10 +247,11 @@ describe("generateLectureImages", () => {
     const mockGenerateImages = vi.fn(async (_requests, options) => {
       // Verify maxConcurrency is passed
       expect(options?.maxConcurrency).toBe(3);
-      return [
-        { ok: true, buffer: Buffer.from("img-1") },
-        { ok: true, buffer: Buffer.from("img-2") },
+      const outcomes: ImageGenerationResult[] = [
+        createImageSuccess(Buffer.from("img-1")),
+        createImageSuccess(Buffer.from("img-2")),
       ];
+      return outcomes;
     });
 
     const deps: ImageOrchestratorDeps = {
@@ -282,11 +297,12 @@ describe("generateLectureImages", () => {
 
     const mockGenerateImages = vi.fn(async (requests) => {
       expect(requests).toHaveLength(3);
-      return [
-        { ok: true, buffer: Buffer.from("img-1") },
-        { ok: true, buffer: Buffer.from("img-2") },
-        { ok: true, buffer: Buffer.from("img-3") },
+      const outcomes: ImageGenerationResult[] = [
+        createImageSuccess(Buffer.from("img-1")),
+        createImageSuccess(Buffer.from("img-2")),
+        createImageSuccess(Buffer.from("img-3")),
       ];
+      return outcomes;
     });
 
     const deps: ImageOrchestratorDeps = {
@@ -351,20 +367,19 @@ describe("generateLectureImages", () => {
     const mockStorage = new MockStorageHandler();
     const assetStorage = buildAssetStorage(context, mockStorage);
     const mockGeneratePrompts = vi.fn(async () => ["Prompt"]);
-    const mockGenerateImages = vi.fn(async () => [
-      {
-        ok: false as const,
-        error: {
-          provider: "replicate",
-          model: "bytedance/seedream-4",
-          message: "Sensitive content",
-          code: "SENSITIVE_CONTENT",
-          providerCode: "E005",
-          isRetryable: false,
-          userActionRequired: true,
-        },
-      },
-    ]);
+    const sensitiveError: MediaGenerationError = {
+      provider: "replicate",
+      model: "bytedance/seedream-4",
+      message: "Sensitive content",
+      code: "SENSITIVE_CONTENT",
+      providerCode: "E005",
+      isRetryable: false,
+      userActionRequired: true,
+    };
+    const mockGenerateImages = vi.fn(async () => {
+      const outcomes: ImageGenerationResult[] = [{ ok: false as const, error: sensitiveError }];
+      return outcomes;
+    });
 
     const results = await generateLectureImages(request, context, {
       generatePrompts: mockGeneratePrompts,
@@ -383,7 +398,7 @@ describe("regenerateImage", () => {
   it("regenerates a single image", async () => {
     const request = {
       basePrompt: "New updated prompt",
-      style: "Anime",
+      style: "Anime" as const,
       config: createMockImageConfig(),
       imageId: "img-regen-123",
     };
@@ -398,7 +413,8 @@ describe("regenerateImage", () => {
     const mockStorage = new MockStorageHandler();
     const assetStorage = buildAssetStorage(context, mockStorage);
     const mockGenerateImages = vi.fn(async () => {
-      return [{ ok: true, buffer: Buffer.from("new-image") }];
+      const outcomes: ImageGenerationResult[] = [createImageSuccess(Buffer.from("new-image"))];
+      return outcomes;
     });
 
     const deps: ImageOrchestratorDeps = {
@@ -413,7 +429,7 @@ describe("regenerateImage", () => {
       id: "img-regen-123",
       label: "Regenerated Image",
       prompt: "New updated prompt",
-      style: "Anime",
+      style: "Anime" as const,
       aspectRatio: "16:9",
       model: "bytedance/seedream-4",
       sourceUrl: "user-1/42/88/images/img-regen-123.jpg",
@@ -423,8 +439,13 @@ describe("regenerateImage", () => {
     expect(mockGenerateImages).toHaveBeenCalledTimes(1);
     expect(mockStorage.savedFiles.size).toBe(1);
 
-    const imageRequests = mockGenerateImages.mock.calls[0]?.[0];
-    expect(imageRequests?.[0]?.prompt).toContain("modern anime illustration");
+    const firstCall = mockGenerateImages.mock.calls[0] as unknown as
+      | [ImageGenerationRequest[], unknown]
+      | undefined;
+    expect(firstCall).toBeDefined();
+    const imageRequests = firstCall![0];
+    expect(imageRequests[0]).toBeDefined();
+    expect(imageRequests[0].prompt).toContain("modern anime illustration");
   });
 
   it("saves to correct path", async () => {
@@ -442,7 +463,10 @@ describe("regenerateImage", () => {
 
     const mockStorage = new MockStorageHandler();
     const assetStorage = buildAssetStorage(context, mockStorage);
-    const mockGenerateImages = vi.fn(async () => [{ ok: true, buffer: Buffer.from("image") }]);
+    const mockGenerateImages = vi.fn(async () => {
+      const outcomes: ImageGenerationResult[] = [createImageSuccess(Buffer.from("image"))];
+      return outcomes;
+    });
 
     const deps: ImageOrchestratorDeps = {
       generateImages: mockGenerateImages,
@@ -472,7 +496,10 @@ describe("regenerateImage", () => {
     const mockLogger = new MockLogger();
     const mockStorage = new MockStorageHandler();
     const assetStorage = buildAssetStorage(context, mockStorage);
-    const mockGenerateImages = vi.fn(async () => [{ ok: true, buffer: Buffer.from("image") }]);
+    const mockGenerateImages = vi.fn(async () => {
+      const outcomes: ImageGenerationResult[] = [createImageSuccess(Buffer.from("image"))];
+      return outcomes;
+    });
 
     const deps: ImageOrchestratorDeps = {
       generateImages: mockGenerateImages,
@@ -505,7 +532,10 @@ describe("regenerateImage", () => {
 
     const mockStorage = new MockStorageHandler();
     const assetStorage = buildAssetStorage(context, mockStorage);
-    const mockGenerateImages = vi.fn(async () => [{ ok: true, buffer: Buffer.from("image") }]);
+    const mockGenerateImages = vi.fn(async () => {
+      const outcomes: ImageGenerationResult[] = [createImageSuccess(Buffer.from("image"))];
+      return outcomes;
+    });
 
     const deps: ImageOrchestratorDeps = {
       generateImages: mockGenerateImages,

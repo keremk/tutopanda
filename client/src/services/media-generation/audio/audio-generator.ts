@@ -75,26 +75,20 @@ export async function generateAudio(
         message: error.message,
         providerCode: error.providerCode,
       });
-      throw error;
+      throw new Error(error.message);
     }
 
-    const wrapped = createMediaGenerationError({
-      code: "UNKNOWN",
-      provider: provider.name,
-      model,
-      message: "Unexpected error during audio generation",
-      isRetryable: false,
-      userActionRequired: false,
-      cause: error,
-    });
+    const message = error instanceof Error && error.message
+      ? error.message
+      : "Unexpected error during audio generation";
 
     logger?.error("Audio generation failed", {
-      provider: wrapped.provider,
-      model: wrapped.model,
-      code: wrapped.code,
-      message: wrapped.message,
+      provider: provider.name,
+      model,
+      code: "UNKNOWN",
+      message,
     });
 
-    throw wrapped;
+    throw new Error(message);
   }
 }

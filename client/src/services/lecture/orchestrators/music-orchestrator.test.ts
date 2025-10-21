@@ -11,6 +11,13 @@ import {
   MockLogger,
   MockStorageHandler,
 } from "@/services/media-generation/__test-utils__/mocks";
+import type { MediaGenerationError } from "@/services/media-generation/core";
+import type { MusicGenerationOutcome } from "@/services/media-generation/music/types";
+
+const createMusicSuccess = (buffer: Buffer): MusicGenerationOutcome => ({
+  ok: true,
+  buffer,
+});
 
 function buildAssetStorage(context: MusicGenerationContext, storage: MockStorageHandler) {
   return createLectureAssetStorage(
@@ -43,9 +50,12 @@ describe("generateLectureMusic", () => {
     const assetStorage = buildAssetStorage(context, mockStorage);
 
     const mockGeneratePrompt = vi.fn(async () => "Upbeat background music with piano");
-    const mockGenerateMusics = vi.fn(async () => [
-      { ok: true, buffer: Buffer.from("fake-music-data") },
-    ]);
+    const mockGenerateMusics = vi.fn(async () => {
+      const outcomes: MusicGenerationOutcome[] = [
+        createMusicSuccess(Buffer.from("fake-music-data")),
+      ];
+      return outcomes;
+    });
 
     const deps: MusicOrchestratorDeps = {
       generatePrompt: mockGeneratePrompt,
@@ -86,9 +96,12 @@ describe("generateLectureMusic", () => {
     const mockStorage = new MockStorageHandler();
     const assetStorage = buildAssetStorage(context, mockStorage);
     const mockGeneratePrompt = vi.fn(async () => "Test prompt");
-    const mockGenerateMusics = vi.fn(async () => [
-      { ok: true, buffer: Buffer.from("music") },
-    ]);
+    const mockGenerateMusics = vi.fn(async () => {
+      const outcomes: MusicGenerationOutcome[] = [
+        createMusicSuccess(Buffer.from("music")),
+      ];
+      return outcomes;
+    });
 
     const deps: MusicOrchestratorDeps = {
       generatePrompt: mockGeneratePrompt,
@@ -120,9 +133,12 @@ describe("generateLectureMusic", () => {
     const mockStorage = new MockStorageHandler();
     const assetStorage = buildAssetStorage(context, mockStorage);
     const mockGeneratePrompt = vi.fn(async () => "Test prompt");
-    const mockGenerateMusics = vi.fn(async () => [
-      { ok: true, buffer: Buffer.from("music") },
-    ]);
+    const mockGenerateMusics = vi.fn(async () => {
+      const outcomes: MusicGenerationOutcome[] = [
+        createMusicSuccess(Buffer.from("music")),
+      ];
+      return outcomes;
+    });
 
     const deps: MusicOrchestratorDeps = {
       generatePrompt: mockGeneratePrompt,
@@ -154,20 +170,19 @@ describe("generateLectureMusic", () => {
     const mockStorage = new MockStorageHandler();
     const assetStorage = buildAssetStorage(context, mockStorage);
     const mockGeneratePrompt = vi.fn(async () => "Test prompt");
-    const mockGenerateMusics = vi.fn(async () => [
-      {
-        ok: false as const,
-        error: {
-          provider: "replicate",
-          model: "stability-ai/stable-audio-2.5",
-          message: "Sensitive content",
-          code: "SENSITIVE_CONTENT",
-          providerCode: "E005",
-          isRetryable: false,
-          userActionRequired: true,
-        },
-      },
-    ]);
+    const sensitiveError: MediaGenerationError = {
+      provider: "replicate",
+      model: "stability-ai/stable-audio-2.5",
+      message: "Sensitive content",
+      code: "SENSITIVE_CONTENT",
+      providerCode: "E005",
+      isRetryable: false,
+      userActionRequired: true,
+    };
+    const mockGenerateMusics = vi.fn(async () => {
+      const outcomes: MusicGenerationOutcome[] = [{ ok: false as const, error: sensitiveError }];
+      return outcomes;
+    });
 
     const result = await generateLectureMusic(request, context, {
       generatePrompt: mockGeneratePrompt,
@@ -197,9 +212,10 @@ describe("generateLectureMusic", () => {
     const mockStorage = new MockStorageHandler();
     const assetStorage = buildAssetStorage(context, mockStorage);
     const mockGeneratePrompt = vi.fn(async () => "Test prompt");
-    const mockGenerateMusics = vi.fn(async () => [
-      { ok: true, buffer: Buffer.from("music") },
-    ]);
+    const mockGenerateMusics = vi.fn(async () => {
+      const outcomes: MusicGenerationOutcome[] = [createMusicSuccess(Buffer.from("music"))];
+      return outcomes;
+    });
 
     const deps: MusicOrchestratorDeps = {
       generatePrompt: mockGeneratePrompt,
@@ -239,9 +255,10 @@ describe("generateLectureMusic", () => {
       expect(receivedDuration).toBe(90);
       return "Generated prompt";
     });
-    const mockGenerateMusics = vi.fn(async () => [
-      { ok: true, buffer: Buffer.from("music") },
-    ]);
+    const mockGenerateMusics = vi.fn(async () => {
+      const outcomes: MusicGenerationOutcome[] = [createMusicSuccess(Buffer.from("music"))];
+      return outcomes;
+    });
 
     const deps: MusicOrchestratorDeps = {
       generatePrompt: mockGeneratePrompt,
@@ -273,9 +290,10 @@ describe("regenerateMusic", () => {
     const mockLogger = new MockLogger();
     const mockStorage = new MockStorageHandler();
     const assetStorage = buildAssetStorage(context, mockStorage);
-    const mockGenerateMusics = vi.fn(async () => [
-      { ok: true, buffer: Buffer.from("new-music") },
-    ]);
+    const mockGenerateMusics = vi.fn(async () => {
+      const outcomes: MusicGenerationOutcome[] = [createMusicSuccess(Buffer.from("new-music"))];
+      return outcomes;
+    });
 
     const deps: MusicOrchestratorDeps = {
       generateMusics: mockGenerateMusics,
@@ -313,9 +331,10 @@ describe("regenerateMusic", () => {
 
     const mockStorage = new MockStorageHandler();
     const assetStorage = buildAssetStorage(context, mockStorage);
-    const mockGenerateMusics = vi.fn(async () => [
-      { ok: true, buffer: Buffer.from("music") },
-    ]);
+    const mockGenerateMusics = vi.fn(async () => {
+      const outcomes: MusicGenerationOutcome[] = [createMusicSuccess(Buffer.from("music"))];
+      return outcomes;
+    });
 
     const deps: MusicOrchestratorDeps = {
       generateMusics: mockGenerateMusics,
@@ -345,9 +364,10 @@ describe("regenerateMusic", () => {
     const mockLogger = new MockLogger();
     const mockStorage = new MockStorageHandler();
     const assetStorage = buildAssetStorage(context, mockStorage);
-    const mockGenerateMusics = vi.fn(async () => [
-      { ok: true, buffer: Buffer.from("music") },
-    ]);
+    const mockGenerateMusics = vi.fn(async () => {
+      const outcomes: MusicGenerationOutcome[] = [createMusicSuccess(Buffer.from("music"))];
+      return outcomes;
+    });
 
     const deps: MusicOrchestratorDeps = {
       generateMusics: mockGenerateMusics,
@@ -359,6 +379,50 @@ describe("regenerateMusic", () => {
 
     expect(mockLogger.findLog("Regenerating music")).toBe(true);
     expect(mockLogger.findLog("Music regenerated and saved")).toBe(true);
+  });
+
+  it("marks regenerateMusic result when provider rejects content", async () => {
+    const request = {
+      prompt: "Sensitive music prompt",
+      durationSeconds: 30,
+      model: "stability-ai/stable-audio-2.5",
+      musicId: "music-sensitive",
+    };
+
+    const context: MusicGenerationContext = {
+      userId: "user-1",
+      projectId: 42,
+      lectureId: 99,
+    };
+
+    const mockLogger = new MockLogger();
+    const mockStorage = new MockStorageHandler();
+    const assetStorage = buildAssetStorage(context, mockStorage);
+
+    const sensitiveError: MediaGenerationError = {
+      provider: "replicate",
+      model: "stability-ai/stable-audio-2.5",
+      message: "Sensitive content",
+      code: "SENSITIVE_CONTENT",
+      providerCode: "E005",
+      isRetryable: false,
+      userActionRequired: true,
+    };
+
+    const mockGenerateMusics = vi.fn(async () => {
+      const outcomes: MusicGenerationOutcome[] = [{ ok: false as const, error: sensitiveError }];
+      return outcomes;
+    });
+
+    const result = await regenerateMusic(request, context, {
+      generateMusics: mockGenerateMusics,
+      assetStorage,
+      logger: mockLogger,
+    });
+
+    expect(result.status).toBe("needs_prompt_update");
+    expect(result.error).toMatchObject({ code: "SENSITIVE_CONTENT", providerCode: "E005" });
+    expect(mockStorage.savedFiles.size).toBe(0);
   });
 
   it("uses default model when not specified", async () => {
@@ -377,9 +441,10 @@ describe("regenerateMusic", () => {
     const mockLogger = new MockLogger();
     const mockStorage = new MockStorageHandler();
     const assetStorage = buildAssetStorage(context, mockStorage);
-    const mockGenerateMusics = vi.fn(async () => [
-      { ok: true, buffer: Buffer.from("music") },
-    ]);
+    const mockGenerateMusics = vi.fn(async () => {
+      const outcomes: MusicGenerationOutcome[] = [createMusicSuccess(Buffer.from("music"))];
+      return outcomes;
+    });
 
     const deps: MusicOrchestratorDeps = {
       generateMusics: mockGenerateMusics,

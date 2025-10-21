@@ -199,7 +199,7 @@ describe("buildVisualTrack", () => {
     expect(track[0].startScale).not.toBe(track[1].startScale);
   });
 
-  it("builds placeholder clip when both video and images fail", () => {
+  it("keeps failed video clip when generation fails", () => {
     const imagesBySegment = new Map<number, ImageAsset[]>([
       [
         0,
@@ -225,6 +225,7 @@ describe("buildVisualTrack", () => {
           label: "Video",
           segmentStartImagePrompt: "start",
           movieDirections: "dir",
+          videoPath: undefined,
           status: "needs_prompt_update",
           error: {
             code: "SENSITIVE_CONTENT",
@@ -247,6 +248,8 @@ describe("buildVisualTrack", () => {
     const track = buildVisualTrack(imagesBySegment, videosBySegment, narration, segmentDurations);
 
     expect(track).toHaveLength(1);
+    expect(track[0].kind).toBe("video");
+    expect(track[0].videoAssetId).toBe("video-run123-0");
     expect(track[0].status).toBe("needs_prompt_update");
     expect(track[0].error?.code).toBe("SENSITIVE_CONTENT");
     expect(track[0].duration).toBe(10);

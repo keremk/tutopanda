@@ -339,7 +339,7 @@ describe("generateSegmentVideos Inngest function (integration)", () => {
       "Generating segment videos",
       "Generated video 1/2",
       "Generated video 2/2",
-      "Videos generated successfully",
+      "Video generation complete: 2 video segments generated",
     ]);
 
     expect(stepOrder).toEqual([

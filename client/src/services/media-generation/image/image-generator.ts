@@ -70,26 +70,18 @@ export async function generateImage(
         message: error.message,
         providerCode: error.providerCode,
       });
-      throw error;
+      throw new Error(error.message);
     }
 
-    const wrapped = createMediaGenerationError({
-      code: "UNKNOWN",
+    const message = error instanceof Error && error.message
+      ? error.message
+      : "Unexpected error during image generation";
+    logger?.error("Image generation failed", {
       provider: provider.name,
       model,
-      message: "Unexpected error during image generation",
-      isRetryable: false,
-      userActionRequired: false,
-      cause: error,
+      code: "UNKNOWN",
+      message,
     });
-
-    logger?.error("Image generation failed", {
-      provider: wrapped.provider,
-      model: wrapped.model,
-      code: wrapped.code,
-      message: wrapped.message,
-    });
-
-    throw wrapped;
+    throw new Error(message);
   }
 }

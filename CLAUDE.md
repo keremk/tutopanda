@@ -41,6 +41,7 @@ pnpm build:server       # Build server only
 pnpm check             # TypeScript validation for both packages
 pnpm --filter tutopanda-client lint    # ESLint for client
 pnpm --filter tutopanda-client type-check  # TypeScript check for client only
+pnpm --filter tutopanda-client test:typecheck # For typechecking tests
 
 # Database
 pnpm db:push           # Sync Drizzle migrations (requires DATABASE_URL)

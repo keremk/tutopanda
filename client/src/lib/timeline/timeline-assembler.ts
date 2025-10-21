@@ -88,10 +88,8 @@ export function buildVisualTrack(
     const narrationDuration =
       segmentDurations[segmentIndex] ?? ensurePositiveDuration();
     const video = videosBySegment.get(segmentIndex);
-    const videoIsGenerated =
-      !!(video && (video.status === undefined || video.status === "generated") && video.videoPath);
 
-    if (video && videoIsGenerated) {
+    if (video) {
       const clip: VideoClip = {
         id: `visual-${segmentIndex}`,
         name: `Segment ${segmentIndex + 1} Video`,
