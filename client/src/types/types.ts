@@ -190,12 +190,18 @@ export const kenBurnsClipSchema = timelineClipBaseSchema
   })
   .passthrough();
 
+export const transitionTypeValues = ["freeze-fade", "crossfade", "none"] as const;
+
 export const videoClipSchema = timelineClipBaseSchema
   .extend({
     kind: z.literal("video"),
     videoAssetId: z.string().optional(),
     videoUrl: z.string().optional(),
     volume: z.number().min(0).max(1).optional(),
+    originalDuration: z.number().nonnegative().optional(),
+    speedAdjustment: z.number().positive().optional(),
+    transitionType: z.enum(transitionTypeValues).optional(),
+    transitionDuration: z.number().nonnegative().optional(),
   })
   .passthrough();
 
@@ -247,11 +253,16 @@ export const timelineTrackKeys = [
   "soundEffects",
 ] as const;
 
+export const timelineAssemblyStrategyValues = ["speed-adjustment", "styled-transition"] as const;
+
+export const DEFAULT_TIMELINE_ASSEMBLY_STRATEGY: TimelineAssemblyStrategy = "speed-adjustment";
+
 export const timelineSchema = z.object({
   id: z.string(),
   name: z.string(),
   duration: z.number(),
   tracks: timelineTracksSchema,
+  assemblyStrategy: z.enum(timelineAssemblyStrategyValues).optional(),
 });
 
 // Configuration schemas
@@ -360,6 +371,7 @@ export const videoConfigSchema = z.object({
   imageModel: z.string().default(DEFAULT_IMAGE_MODEL),
   resolution: z.enum(videoResolutionValues),
   duration: z.enum(videoDurationSegmentValues),
+  timelineAssemblyStrategy: z.enum(timelineAssemblyStrategyValues).optional(),
 });
 
 export const narrationConfigSchema = z.object({
@@ -411,6 +423,8 @@ export type MusicClip = z.infer<typeof musicClipSchema>;
 export type SoundFxClip = z.infer<typeof soundFxClipSchema>;
 export type TimelineTrackKey = typeof timelineTrackKeys[number];
 export type AnyTimelineClip = VisualClip | VoiceClip | MusicClip | SoundFxClip;
+export type TimelineAssemblyStrategy = typeof timelineAssemblyStrategyValues[number];
+export type TransitionType = typeof transitionTypeValues[number];
 
 export type LectureContent = z.infer<typeof lectureContentSchema>;
 export type ImageAsset = z.infer<typeof imageAssetSchema>;
@@ -490,6 +504,7 @@ export const DEFAULT_LECTURE_CONFIG: LectureConfig = {
     imageModel: DEFAULT_IMAGE_MODEL,
     resolution: "480p",
     duration: "10",
+    timelineAssemblyStrategy: DEFAULT_TIMELINE_ASSEMBLY_STRATEGY,
   },
   narration: {
     segmentLength: "15",

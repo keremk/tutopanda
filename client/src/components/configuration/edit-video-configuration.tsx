@@ -2,12 +2,13 @@
 
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import type { VideoConfig } from "@/types/types";
+import type { VideoConfig, TimelineAssemblyStrategy } from "@/types/types";
 import {
   videoResolutionValues,
   videoResolutionLabels,
   videoDurationSegmentValues,
   videoDurationSegmentLabels,
+  DEFAULT_TIMELINE_ASSEMBLY_STRATEGY,
 } from "@/types/types";
 import { videoModelOptions, imageModelOptions } from "@/lib/models";
 
@@ -110,6 +111,26 @@ export function EditVideoConfiguration({ config, onChange }: EditVideoConfigurat
             </SelectContent>
           </Select>
           <p className="text-xs text-muted-foreground">Used for generating starting or ending images.</p>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="timelineStrategy">Timeline Assembly Strategy</Label>
+          <Select
+            value={config.timelineAssemblyStrategy ?? DEFAULT_TIMELINE_ASSEMBLY_STRATEGY}
+            onValueChange={(value) => onChange({
+              ...config,
+              timelineAssemblyStrategy: value as TimelineAssemblyStrategy
+            })}
+          >
+            <SelectTrigger id="timelineStrategy">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="speed-adjustment">Speed Adjustment</SelectItem>
+              <SelectItem value="styled-transition">Styled Transitions</SelectItem>
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground">Default strategy for new timelines in this project</p>
         </div>
       </div>
     </div>

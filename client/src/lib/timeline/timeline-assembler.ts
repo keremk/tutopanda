@@ -32,6 +32,7 @@ export interface TimelineAssemblyInput {
   narration: NarrationSettings[];
   music: MusicSettings[];
   runId: string;
+  strategy?: "speed-adjustment" | "styled-transition";
 }
 
 // Group images by segment index extracted from image ID
@@ -78,7 +79,8 @@ export function buildVisualTrack(
   imagesBySegment: Map<number, ImageAsset[]>,
   videosBySegment: Map<number, VideoAsset>,
   narration: NarrationSettings[],
-  segmentDurations: number[]
+  segmentDurations: number[],
+  strategy: "speed-adjustment" | "styled-transition" = "speed-adjustment"
 ): VisualClip[] {
   const visualTrack: VisualClip[] = [];
   let accumulatedTime = 0;
@@ -90,6 +92,47 @@ export function buildVisualTrack(
     const video = videosBySegment.get(segmentIndex);
 
     if (video) {
+      const videoDuration = ensurePositiveDuration(video.duration);
+      const durationMismatch = Math.abs(videoDuration - narrationDuration);
+      const mismatchPercentage = durationMismatch / videoDuration;
+
+      let speedAdjustment: number | undefined;
+      let transitionType: "freeze-fade" | "crossfade" | "none" | undefined;
+      let transitionDuration: number | undefined;
+
+      if (strategy === "speed-adjustment") {
+        // Apply speed adjustment if mismatch is within ±20%
+        if (mismatchPercentage <= 0.20) {
+          speedAdjustment = videoDuration / narrationDuration;
+          console.log(`📹 Video ${video.id}: Applied speed adjustment ${speedAdjustment.toFixed(3)}x (${videoDuration}s → ${narrationDuration}s)`);
+        } else {
+          // Fallback to styled transition if outside 20% range
+          if (videoDuration < narrationDuration) {
+            transitionType = "freeze-fade";
+            transitionDuration = narrationDuration - videoDuration;
+            console.log(`📹 Video ${video.id}: Applied freeze-fade transition (${transitionDuration.toFixed(2)}s gap)`);
+          } else {
+            transitionType = "crossfade";
+            transitionDuration = videoDuration - narrationDuration;
+            console.log(`📹 Video ${video.id}: Applied crossfade transition (${transitionDuration.toFixed(2)}s overlap)`);
+          }
+        }
+      } else {
+        // Styled transition mode
+        if (videoDuration < narrationDuration) {
+          transitionType = "freeze-fade";
+          transitionDuration = narrationDuration - videoDuration;
+          console.log(`📹 Video ${video.id}: Freeze-fade transition (${transitionDuration.toFixed(2)}s gap)`);
+        } else if (videoDuration > narrationDuration) {
+          transitionType = "crossfade";
+          transitionDuration = videoDuration - narrationDuration;
+          console.log(`📹 Video ${video.id}: Crossfade transition (${transitionDuration.toFixed(2)}s overlap)`);
+        } else {
+          transitionType = "none";
+          console.log(`📹 Video ${video.id}: Perfect duration match, no adjustment needed`);
+        }
+      }
+
       const clip: VideoClip = {
         id: `visual-${segmentIndex}`,
         name: `Segment ${segmentIndex + 1} Video`,
@@ -100,6 +143,10 @@ export function buildVisualTrack(
         volume: 0,
         status: video.status,
         error: video.error,
+        originalDuration: videoDuration,
+        speedAdjustment,
+        transitionType,
+        transitionDuration,
       };
       accumulatedTime += narrationDuration;
       visualTrack.push(clip);
@@ -237,7 +284,7 @@ export function calculateTotalDuration(
 export function assembleTimeline(
   input: TimelineAssemblyInput
 ): Timeline {
-  const { images, videos = [], narration, music, runId } = input;
+  const { images, videos = [], narration, music, runId, strategy = "speed-adjustment" } = input;
 
   // Validate inputs
   if (images.length === 0 && videos.length === 0) {
@@ -259,12 +306,15 @@ export function assembleTimeline(
   const imagesBySegment = groupImagesBySegment(images);
   const videosBySegment = groupVideosBySegment(videos);
 
+  console.log(`🎬 Assembling timeline with strategy: ${strategy}`);
+
   // Build all tracks
   const visualTrack = buildVisualTrack(
     imagesBySegment,
     videosBySegment,
     narration,
-    segmentDurations
+    segmentDurations,
+    strategy
   );
   const voiceTrack = buildVoiceTrack(narration, segmentDurations);
   const musicTrack = buildMusicTrack(music, totalDuration, runId);
@@ -281,5 +331,6 @@ export function assembleTimeline(
     name: "Timeline",
     duration: totalDuration,
     tracks,
+    assemblyStrategy: strategy,
   };
 }

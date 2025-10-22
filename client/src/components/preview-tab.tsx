@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import LazyVideoPreview from "./lazy-video-preview";
 import EditorLayout from "./editor-layout";
+import VideoCommandBar from "./video-command-bar";
 import { useLectureEditor } from "./lecture-editor-provider";
 import type { Timeline, TimelineTrackKey, aspectRatioValues } from "@/types/types";
 
@@ -58,6 +59,7 @@ export default function PreviewTab({
       onRemoveClip={onRemoveClip}
       onUpdateClip={onUpdateClip}
     >
+      <VideoCommandBar />
       <LazyVideoPreview
         timeline={activeTimeline}
         currentTime={currentTime}

@@ -110,6 +110,7 @@ const normaliseLectureContent = (content: LectureContent): NormalisedLectureCont
     name: rawTimeline?.name ?? "Timeline",
     duration,
     tracks,
+    assemblyStrategy: rawTimeline?.assemblyStrategy,
   };
 
   return {

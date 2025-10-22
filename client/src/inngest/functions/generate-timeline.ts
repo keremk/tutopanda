@@ -8,7 +8,9 @@ import {
 } from "@/inngest/functions/workflow-utils";
 import { updateLectureContent, type LectureUpdatePayload } from "@/services/lecture/persist";
 import { getLectureById } from "@/data/lecture/repository";
+import { getProjectSettings } from "@/data/project";
 import { assembleTimeline } from "@/lib/timeline/timeline-assembler";
+import { DEFAULT_TIMELINE_ASSEMBLY_STRATEGY } from "@/types/types";
 
 type LoadedLecture = NonNullable<Awaited<ReturnType<typeof getLectureById>>>;
 
@@ -156,6 +158,27 @@ export const generateTimeline = inngest.createFunction(
       const narration = preparedLecture.narration ?? [];
       const music = preparedLecture.music ?? [];
 
+      // Get assembly strategy from project settings
+      const projectSettings = await getProjectSettings(userId);
+
+      // Priority order:
+      // 1. Existing timeline strategy (if regenerating with user override)
+      // 2. Project settings (project-wide default)
+      // 3. Global default constant
+      const strategy =
+        preparedLecture.timeline?.assemblyStrategy ??
+        projectSettings.video.timelineAssemblyStrategy ??
+        DEFAULT_TIMELINE_ASSEMBLY_STRATEGY;
+
+      log.info("Timeline assembly strategy selected", {
+        strategy,
+        source: preparedLecture.timeline?.assemblyStrategy
+          ? "existing-timeline"
+          : projectSettings.video.timelineAssemblyStrategy
+            ? "project-settings"
+            : "default"
+      });
+
       // Assemble timeline using pure function
       const timeline = assembleTimeline({
         images,
@@ -163,6 +186,7 @@ export const generateTimeline = inngest.createFunction(
         narration,
         music,
         runId,
+        strategy,
       });
 
       log.info("Timeline assembled", {
@@ -170,6 +194,7 @@ export const generateTimeline = inngest.createFunction(
         voiceClips: timeline.tracks.voice.length,
         musicClips: timeline.tracks.music.length,
         duration: timeline.duration,
+        assemblyStrategy: timeline.assemblyStrategy,
       });
 
       return timeline;
