@@ -5,6 +5,7 @@ import type { Timeline, ImageAsset, NarrationSettings, MusicSettings, VisualClip
 import { KenBurnsComponent } from './KenBurns-component';
 import { VideoClipRenderer } from './video-clip-renderer';
 import { buildVideoAssetUrl } from '@/lib/video-assets';
+import { SubtitleDisplay } from './subtitle-display';
 
 interface VideoCompositionProps {
   timeline: Timeline;
@@ -13,6 +14,7 @@ interface VideoCompositionProps {
   narration: NarrationSettings[];
   music: MusicSettings[];
   cacheKey?: number;
+  useSubtitles?: boolean;
 }
 
 // Helper to ensure URL has the correct API prefix with cache-busting
@@ -105,6 +107,28 @@ const resolveVideoUrl = (
   return buildVideoAssetUrl(asset, { cacheKey }) ?? undefined;
 };
 
+// Helper to split text into N segments
+const splitTextIntoSegments = (text: string, numSegments: number): string[] => {
+  if (!text || numSegments <= 0) {
+    return [];
+  }
+
+  const words = text.trim().split(/\s+/);
+  const wordsPerSegment = Math.ceil(words.length / numSegments);
+  const segments: string[] = [];
+
+  for (let i = 0; i < numSegments; i++) {
+    const start = i * wordsPerSegment;
+    const end = Math.min(start + wordsPerSegment, words.length);
+    const segment = words.slice(start, end).join(' ');
+    if (segment) {
+      segments.push(segment);
+    }
+  }
+
+  return segments;
+};
+
 export const VideoComposition: React.FC<VideoCompositionProps> = ({
   timeline,
   images,
@@ -112,6 +136,7 @@ export const VideoComposition: React.FC<VideoCompositionProps> = ({
   narration,
   music,
   cacheKey,
+  useSubtitles = false,
 }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
@@ -268,6 +293,41 @@ export const VideoComposition: React.FC<VideoCompositionProps> = ({
             />
           </Sequence>
         );
+      })}
+
+      {/* Subtitles - Display narration text */}
+      {useSubtitles && (timeline.tracks?.voice ?? []).map((clip) => {
+        if (!Number.isFinite(clip.duration) || clip.duration <= 0 || !clip.narrationAssetId) {
+          return null;
+        }
+
+        const narrationAsset = narrationMap.get(clip.narrationAssetId);
+        const finalScript = narrationAsset?.finalScript;
+
+        if (!finalScript) {
+          return null;
+        }
+
+        // Split the finalScript into 3 segments
+        const NUM_SEGMENTS = 3;
+        const segments = splitTextIntoSegments(finalScript, NUM_SEGMENTS);
+        const segmentDuration = clip.duration / segments.length;
+
+        return segments.map((segmentText, index) => {
+          const segmentStartTime = clip.startTime + (index * segmentDuration);
+          const startFrame = Math.round(segmentStartTime * fps);
+          const durationInFrames = Math.round(segmentDuration * fps);
+
+          return (
+            <Sequence
+              key={`${clip.id}-subtitle-${index}`}
+              from={startFrame}
+              durationInFrames={durationInFrames}
+            >
+              <SubtitleDisplay text={segmentText} />
+            </Sequence>
+          );
+        });
       })}
     </AbsoluteFill>
   );
