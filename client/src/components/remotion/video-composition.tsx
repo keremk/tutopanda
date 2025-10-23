@@ -121,24 +121,66 @@ export const VideoComposition: React.FC<VideoCompositionProps> = ({
     [images, videos, narration, music]
   );
 
-  // Preload all video URLs to prevent black screens during playback
-  useEffect(() => {
+  // Memoize video URLs to prevent recalculation on every render
+  const videoUrlMap = useMemo(() => {
+    const urlMap = new Map<string, string>();
     const videoClips = timeline.tracks?.visual?.filter(clip => clip.kind === 'video') ?? [];
-    const unpreloadFunctions: Array<() => void> = [];
 
     for (const clip of videoClips) {
       const videoUrl = resolveVideoUrl(clip, videoMap, cacheKey);
-      if (videoUrl) {
-        const unpreload = preloadVideo(videoUrl);
-        unpreloadFunctions.push(unpreload);
+      if (videoUrl && clip.id) {
+        urlMap.set(clip.id, videoUrl);
       }
     }
+
+    return urlMap;
+  }, [timeline.tracks?.visual, videoMap, cacheKey]);
+
+  // Memoize narration URLs
+  const narrationUrlMap = useMemo(() => {
+    const urlMap = new Map<string, string>();
+    const voiceClips = timeline.tracks?.voice ?? [];
+
+    for (const clip of voiceClips) {
+      const audioUrl = resolveAudioUrl(clip.narrationAssetId, narrationMap, cacheKey);
+      if (audioUrl && clip.id) {
+        urlMap.set(clip.id, audioUrl);
+      }
+    }
+
+    return urlMap;
+  }, [timeline.tracks?.voice, narrationMap, cacheKey]);
+
+  // Memoize music URLs
+  const musicUrlMap = useMemo(() => {
+    const urlMap = new Map<string, string>();
+    const musicClips = timeline.tracks?.music ?? [];
+
+    for (const clip of musicClips) {
+      const audioUrl = resolveAudioUrl(clip.musicAssetId, musicMap, cacheKey);
+      if (audioUrl && clip.id) {
+        urlMap.set(clip.id, audioUrl);
+      }
+    }
+
+    return urlMap;
+  }, [timeline.tracks?.music, musicMap, cacheKey]);
+
+  // Preload all video URLs to prevent black screens during playback
+  useEffect(() => {
+    const unpreloadFunctions: Array<() => void> = [];
+
+    // Use memoized videoUrlMap instead of recalculating
+    videoUrlMap.forEach((videoUrl) => {
+      const unpreload = preloadVideo(videoUrl);
+      unpreloadFunctions.push(unpreload);
+    });
 
     // Cleanup: stop preloading when component unmounts
     return () => {
       unpreloadFunctions.forEach(fn => fn());
     };
-  }, [timeline.tracks?.visual, videoMap, cacheKey]);
+  }, [videoUrlMap]);
 
   return (
     <AbsoluteFill style={{ backgroundColor: '#000' }}>
@@ -149,7 +191,7 @@ export const VideoComposition: React.FC<VideoCompositionProps> = ({
         }
 
         if (clip.kind === 'video') {
-          const videoUrl = resolveVideoUrl(clip, videoMap, cacheKey);
+          const videoUrl = videoUrlMap.get(clip.id);
           if (!videoUrl) {
             return null;
           }
@@ -189,7 +231,7 @@ export const VideoComposition: React.FC<VideoCompositionProps> = ({
 
       {/* Voice track - Narration audio */}
       {(timeline.tracks?.voice ?? []).map((clip) => {
-        const audioUrl = resolveAudioUrl(clip.narrationAssetId, narrationMap, cacheKey);
+        const audioUrl = narrationUrlMap.get(clip.id);
 
         if (!audioUrl || !Number.isFinite(clip.duration) || clip.duration <= 0) {
           return null;
@@ -210,7 +252,7 @@ export const VideoComposition: React.FC<VideoCompositionProps> = ({
 
       {/* Music track - Background music */}
       {(timeline.tracks?.music ?? []).map((clip) => {
-        const audioUrl = resolveAudioUrl(clip.musicAssetId, musicMap, cacheKey);
+        const audioUrl = musicUrlMap.get(clip.id);
 
         if (!audioUrl || !Number.isFinite(clip.duration) || clip.duration <= 0) {
           return null;

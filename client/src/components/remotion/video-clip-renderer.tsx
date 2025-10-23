@@ -49,47 +49,37 @@ export const VideoClipRenderer: React.FC<VideoClipRendererProps> = ({
     clip.transitionDuration
   ) {
     const originalDurationFrames = Math.round(clip.originalDuration * fps);
-    const transitionFrames = Math.round(clip.transitionDuration * fps);
+    const localFrame = frame - startFrame;
 
     return (
-      <>
-        {/* Video plays at normal speed */}
-        <Sequence
-          key={`${clip.id}-video`}
-          from={startFrame}
-          durationInFrames={originalDurationFrames}
-        >
-          <OffthreadVideo
-            src={videoUrlWithDisable}
-            startFrom={0}
-            muted={true}
-            volume={clip.volume ?? 0}
-            style={{ width: "100%", height: "100%" }}
-          />
-        </Sequence>
+      <Sequence key={clip.id} from={startFrame} durationInFrames={durationInFrames}>
+        {/* Video plays to end and freezes on last frame automatically */}
+        <OffthreadVideo
+          src={videoUrlWithDisable}
+          startFrom={0}
+          muted={true}
+          volume={clip.volume ?? 0}
+          style={{ width: "100%", height: "100%" }}
+        />
 
-        {/* Freeze last frame and fade to black */}
-        <Sequence
-          key={`${clip.id}-freeze`}
-          from={startFrame + originalDurationFrames}
-          durationInFrames={transitionFrames}
-        >
-          <Img
-            src={videoUrlWithDisable}
-            style={{
-              width: "100%",
-              height: "100%",
-              objectFit: "cover",
-              opacity: interpolate(
-                frame - (startFrame + originalDurationFrames),
-                [0, transitionFrames],
-                [1, 0],
-                { extrapolateRight: "clamp" }
-              ),
-            }}
-          />
-        </Sequence>
-      </>
+        {/* Black overlay fades in after video ends */}
+        <div
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: '100%',
+            height: '100%',
+            backgroundColor: '#000',
+            opacity: interpolate(
+              localFrame,
+              [originalDurationFrames, durationInFrames],
+              [0, 1],
+              { extrapolateLeft: "clamp", extrapolateRight: "clamp" }
+            ),
+          }}
+        />
+      </Sequence>
     );
   }
 

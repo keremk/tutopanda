@@ -21,7 +21,7 @@ export default function VideoPreviewContent({ timeline, currentTime, isPlaying, 
   const onSeekRef = useRef(onSeek);
   const onPlayRef = useRef(onPlay);
   const onPauseRef = useRef(onPause);
-  const { content, updatedAt } = useLectureEditor();
+  const { content } = useLectureEditor();
 
   const fps = 30;
   const timelineSeconds = Number.isFinite(timeline?.duration)
@@ -136,7 +136,7 @@ export default function VideoPreviewContent({ timeline, currentTime, isPlaying, 
           videos: content.videos ?? [],
           narration: content.narration ?? [],
           music: content.music ?? [],
-          cacheKey: updatedAt.getTime(),
+          cacheKey: undefined, // Let asset paths handle cache invalidation
         }}
         durationInFrames={durationInFrames}
         fps={fps}
