@@ -1,7 +1,9 @@
-import { AbsoluteFill, useCurrentFrame, useVideoConfig, Audio, Sequence, Video } from 'remotion';
-import { useMemo } from 'react';
+import { AbsoluteFill, useCurrentFrame, useVideoConfig, Audio, Sequence } from 'remotion';
+import { useMemo, useEffect } from 'react';
+import { preloadVideo } from '@remotion/preload';
 import type { Timeline, ImageAsset, NarrationSettings, MusicSettings, VisualClip, VideoAsset } from '@/types/types';
 import { KenBurnsComponent } from './KenBurns-component';
+import { VideoClipRenderer } from './video-clip-renderer';
 import { buildVideoAssetUrl } from '@/lib/video-assets';
 
 interface VideoCompositionProps {
@@ -119,6 +121,25 @@ export const VideoComposition: React.FC<VideoCompositionProps> = ({
     [images, videos, narration, music]
   );
 
+  // Preload all video URLs to prevent black screens during playback
+  useEffect(() => {
+    const videoClips = timeline.tracks?.visual?.filter(clip => clip.kind === 'video') ?? [];
+    const unpreloadFunctions: Array<() => void> = [];
+
+    for (const clip of videoClips) {
+      const videoUrl = resolveVideoUrl(clip, videoMap, cacheKey);
+      if (videoUrl) {
+        const unpreload = preloadVideo(videoUrl);
+        unpreloadFunctions.push(unpreload);
+      }
+    }
+
+    // Cleanup: stop preloading when component unmounts
+    return () => {
+      unpreloadFunctions.forEach(fn => fn());
+    };
+  }, [timeline.tracks?.visual, videoMap, cacheKey]);
+
   return (
     <AbsoluteFill style={{ backgroundColor: '#000' }}>
       {/* Visual track */}
@@ -133,19 +154,8 @@ export const VideoComposition: React.FC<VideoCompositionProps> = ({
             return null;
           }
 
-          const from = Math.round(clip.startTime * fps);
-          const durationInFrames = Math.round(clip.duration * fps);
-
-          return (
-            <Sequence key={clip.id} from={from} durationInFrames={durationInFrames}>
-              <Video
-                src={videoUrl}
-                muted={true}
-                volume={clip.volume ?? 0}
-                style={{ width: '100%', height: '100%' }}
-              />
-            </Sequence>
-          );
+          // Use new VideoClipRenderer component
+          return <VideoClipRenderer key={clip.id} clip={clip} videoUrl={videoUrl} />;
         }
 
         const isActive =

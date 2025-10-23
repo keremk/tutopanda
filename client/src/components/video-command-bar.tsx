@@ -23,7 +23,6 @@ export default function VideoCommandBar() {
   const { timeline, updateTimeline, lectureId } = useLectureEditor();
   const [isRegenerating, startTransition] = useTransition();
   const [isPending, setIsPending] = useState(false);
-  const [isExporting, setIsExporting] = useState(false);
 
   const currentStrategy: TimelineAssemblyStrategy = timeline?.assemblyStrategy ?? "speed-adjustment";
 
@@ -53,10 +52,8 @@ export default function VideoCommandBar() {
   };
 
   const handleExport = async () => {
-    setIsExporting(true);
-    // TODO: Phase 2 - implement export
-    console.log("Export video to MP4");
-    setTimeout(() => setIsExporting(false), 2000);
+    // Stubbed for Phase 3 - MP4 export backend implementation
+    alert("MP4 export coming soon! Use the player preview to test your video rendering with different assembly strategies.");
   };
 
   return (
@@ -95,11 +92,10 @@ export default function VideoCommandBar() {
 
         <Button
           onClick={handleExport}
-          disabled={isExporting}
           variant="secondary"
           size="sm"
         >
-          <Download className={`mr-2 h-4 w-4`} />
+          <Download className="mr-2 h-4 w-4" />
           Export
         </Button>
       </div>

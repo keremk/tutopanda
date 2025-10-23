@@ -57,6 +57,7 @@
     "@radix-ui/react-tooltip": "^1.2.0",
     "@remotion/bundler": "^4.0.346",
     "@remotion/player": "^4.0.346",
+    "@remotion/preload": "^4.0.365",
     "@remotion/renderer": "^4.0.346",
     "@tanstack/react-query": "^5.60.5",
     "@types/leaflet": "^1.9.20",

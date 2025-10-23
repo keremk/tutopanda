@@ -8,7 +8,7 @@ export type LectureAssetIdentifiers = {
   lectureId: number;
 };
 
-export type LectureAssetCategory = "images" | "music" | "narration" | "videos";
+export type LectureAssetCategory = "images" | "music" | "narration" | "videos" | "render";
 
 export type LectureAssetStorageOptions = {
   storageHandler?: StorageHandler;
@@ -42,6 +42,11 @@ export type LectureAssetStorage = {
     musicId: string
   ) => Promise<string>;
   resolveMusicPath: (musicId: string) => string;
+  saveRender: (
+    content: Buffer | Uint8Array | ReadableStream,
+    lectureId: number
+  ) => Promise<string>;
+  resolveRenderPath: (lectureId: number) => string;
 };
 
 /**
@@ -102,6 +107,14 @@ export function createLectureAssetStorage(
   const resolveVideoPath = (videoId: string) =>
     resolveAssetPath("videos", `${videoId}.mp4`);
 
+  const saveRender = (
+    content: Buffer | Uint8Array | ReadableStream,
+    lectureId: number
+  ) => saveAsset("render", `lecture-${lectureId}.mp4`, content);
+
+  const resolveRenderPath = (lectureId: number) =>
+    resolveAssetPath("render", `lecture-${lectureId}.mp4`);
+
   return {
     basePath,
     resolveAssetPath,
@@ -114,5 +127,7 @@ export function createLectureAssetStorage(
     resolveNarrationPath,
     saveMusic,
     resolveMusicPath,
+    saveRender,
+    resolveRenderPath,
   };
 }

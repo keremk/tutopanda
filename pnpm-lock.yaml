@@ -132,6 +132,9 @@ importers:
       '@remotion/player':
         specifier: ^4.0.346
         version: 4.0.347(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
+      '@remotion/preload':
+        specifier: ^4.0.365
+        version: 4.0.365
       '@remotion/renderer':
         specifier: ^4.0.346
         version: 4.0.347(bufferutil@4.0.9)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
@@ -2572,6 +2575,9 @@ packages:
     peerDependencies:
       react: '>=16.8.0'
       react-dom: '>=16.8.0'
+
+  '@remotion/preload@4.0.365':
+    resolution: {integrity: sha512-d5q5MvA5o1IJX8E3KD3lMEWjuRiq+klYyFNLkyIquwKvdtULPGlXG1ccBhdRN/sjMOdT1GxadXkXt0hrR8L9YA==}
 
   '@remotion/renderer@4.0.347':
     resolution: {integrity: sha512-Wu/vnn4soPLozpJQFIQorvKk9M4Y5eLHyjN42ZfZnmTzM+t3+Dbydf1ivN5i1Bf0APXSVw8IZFdv3TqEP94WYQ==}
@@ -8453,6 +8459,8 @@ snapshots:
       react: 19.1.1
       react-dom: 19.1.1(react@19.1.1)
       remotion: 4.0.347(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
+
+  '@remotion/preload@4.0.365': {}
 
   '@remotion/renderer@4.0.347(bufferutil@4.0.9)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)':
     dependencies:
