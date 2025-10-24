@@ -8,12 +8,6 @@ interface ScoreTabProps {
   onPlay: () => void;
   onPause: () => void;
   onSeek: (time: number) => void;
-  onRemoveClip: (track: TimelineTrackKey, id: string) => void;
-  onUpdateClip: (
-    track: TimelineTrackKey,
-    id: string,
-    updates: { startTime?: number; duration?: number }
-  ) => void;
   selectedClipId: string | null;
 }
 
@@ -23,8 +17,6 @@ export default function ScoreTab({
   onPlay,
   onPause,
   onSeek,
-  onRemoveClip,
-  onUpdateClip,
   selectedClipId,
 }: ScoreTabProps) {
   return (
@@ -34,8 +26,6 @@ export default function ScoreTab({
       onPlay={onPlay}
       onPause={onPause}
       onSeek={onSeek}
-      onRemoveClip={onRemoveClip}
-      onUpdateClip={onUpdateClip}
     >
       <BackgroundScoreEditor
         selectedClipId={selectedClipId}

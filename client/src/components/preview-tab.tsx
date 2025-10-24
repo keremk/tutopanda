@@ -11,12 +11,6 @@ interface PreviewTabProps {
   onPlay: () => void;
   onPause: () => void;
   onSeek: (time: number) => void;
-  onRemoveClip: (track: TimelineTrackKey, id: string) => void;
-  onUpdateClip: (
-    track: TimelineTrackKey,
-    id: string,
-    updates: { startTime?: number; duration?: number }
-  ) => void;
   aspectRatio?: typeof aspectRatioValues[number];
 }
 
@@ -26,8 +20,6 @@ export default function PreviewTab({
   onPlay,
   onPause,
   onSeek,
-  onRemoveClip,
-  onUpdateClip,
   aspectRatio,
 }: PreviewTabProps) {
   const { timeline, lectureId } = useLectureEditor();
@@ -56,8 +48,6 @@ export default function PreviewTab({
       onPlay={onPlay}
       onPause={onPause}
       onSeek={onSeek}
-      onRemoveClip={onRemoveClip}
-      onUpdateClip={onUpdateClip}
     >
       <VideoCommandBar />
       <LazyVideoPreview

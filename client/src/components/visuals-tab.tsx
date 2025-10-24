@@ -11,12 +11,6 @@ interface VisualsTabProps {
   onPlay: () => void;
   onPause: () => void;
   onSeek: (time: number) => void;
-  onRemoveClip: (track: TimelineTrackKey, id: string) => void;
-  onUpdateClip: (
-    track: TimelineTrackKey,
-    id: string,
-    updates: { startTime?: number; duration?: number }
-  ) => void;
   selectedClipId: string | null;
 }
 
@@ -26,8 +20,6 @@ export default function VisualsTab({
   onPlay,
   onPause,
   onSeek,
-  onRemoveClip,
-  onUpdateClip,
   selectedClipId,
 }: VisualsTabProps) {
   const { timeline } = useLectureEditor();
@@ -48,8 +40,6 @@ export default function VisualsTab({
       onPlay={onPlay}
       onPause={onPause}
       onSeek={onSeek}
-      onRemoveClip={onRemoveClip}
-      onUpdateClip={onUpdateClip}
     >
       {isVideoClip ? (
         <VideoSegmentEditor selectedClipId={videoClipId} />

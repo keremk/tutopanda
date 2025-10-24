@@ -11,12 +11,6 @@ interface TimelineEditorContentProps {
   onPlay: () => void;
   onPause: () => void;
   onSeek: (time: number) => void;
-  onRemoveClip: (track: TimelineTrackKey, id: string) => void;
-  onUpdateClip: (
-    track: TimelineTrackKey,
-    id: string,
-    updates: { startTime?: number; duration?: number }
-  ) => void;
   onClipSelect?: (track: TimelineTrackKey, clipId: string) => void;
 }
 
@@ -27,8 +21,6 @@ export default function TimelineEditorContent({
   onPlay,
   onPause,
   onSeek,
-  onRemoveClip,
-  onUpdateClip,
   onClipSelect,
 }: TimelineEditorContentProps) {
   const [timelineWidth, setTimelineWidth] = useState(800);
@@ -68,8 +60,6 @@ export default function TimelineEditorContent({
           effectiveWidth={metrics.effectiveWidth}
           pixelsPerSecond={metrics.pixelsPerSecond}
           onSeek={onSeek}
-          onRemoveClip={onRemoveClip}
-          onUpdateClip={onUpdateClip}
           onClipSelect={onClipSelect}
         />
       </div>

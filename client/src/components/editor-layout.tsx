@@ -9,12 +9,6 @@ interface EditorLayoutProps {
   onPlay: () => void;
   onPause: () => void;
   onSeek: (time: number) => void;
-  onRemoveClip: (track: TimelineTrackKey, id: string) => void;
-  onUpdateClip: (
-    track: TimelineTrackKey,
-    id: string,
-    updates: { startTime?: number; duration?: number }
-  ) => void;
   children: React.ReactNode;
 }
 
@@ -24,8 +18,6 @@ export default function EditorLayout({
   onPlay,
   onPause,
   onSeek,
-  onRemoveClip,
-  onUpdateClip,
   children,
 }: EditorLayoutProps) {
   const { timeline } = useLectureEditor();
@@ -68,8 +60,6 @@ export default function EditorLayout({
           onPlay={onPlay}
           onPause={onPause}
           onSeek={onSeek}
-          onRemoveClip={onRemoveClip}
-          onUpdateClip={onUpdateClip}
           onClipSelect={handleClipSelect}
         />
       </div>

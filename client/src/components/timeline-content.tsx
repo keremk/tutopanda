@@ -11,12 +11,6 @@ interface TimelineContentProps {
   effectiveWidth: number;
   pixelsPerSecond: number;
   onSeek: (time: number) => void;
-  onRemoveClip: (track: TimelineTrackKey, id: string) => void;
-  onUpdateClip: (
-    track: TimelineTrackKey,
-    id: string,
-    updates: { startTime?: number; duration?: number }
-  ) => void;
   onClipSelect?: (track: TimelineTrackKey, clipId: string) => void;
 }
 
@@ -28,8 +22,6 @@ export function TimelineContent({
   effectiveWidth,
   pixelsPerSecond,
   onSeek,
-  onRemoveClip,
-  onUpdateClip,
   onClipSelect,
 }: TimelineContentProps) {
   return (
@@ -62,8 +54,6 @@ export function TimelineContent({
           effectiveWidth={effectiveWidth}
           pixelsPerSecond={pixelsPerSecond}
           onSeek={onSeek}
-          onRemoveClip={onRemoveClip}
-          onUpdateClip={onUpdateClip}
           onClipSelect={onClipSelect}
         />
       </div>

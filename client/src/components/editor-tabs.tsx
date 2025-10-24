@@ -85,52 +85,6 @@ export default function EditorTabs() {
     return clips.length > 0 ? Math.max(...clips) : 0;
   }, []);
 
-  const handleRemoveClip = useCallback((track: TimelineTrackKey, id: string) => {
-    updateTimeline((previous) => {
-      const base = ensureTimeline(previous);
-      const clips = base.tracks[track] ?? [];
-      const clipToRemove = clips.find((clip) => clip.id === id);
-      const updatedClips = clips.filter((clip) => clip.id !== id);
-      const tracks = {
-        ...base.tracks,
-        [track]: updatedClips,
-      };
-
-      console.log(`❌ Removed clip: ${clipToRemove?.name ?? id}`);
-
-      return {
-        ...base,
-        tracks,
-        duration: recomputeDuration(tracks),
-      };
-    });
-  }, [updateTimeline, ensureTimeline, recomputeDuration]);
-
-  const handleUpdateClip = useCallback((
-    track: TimelineTrackKey,
-    id: string,
-    updates: { startTime?: number; duration?: number }
-  ) => {
-    updateTimeline((previous) => {
-      const base = ensureTimeline(previous);
-      const clips = base.tracks[track] ?? [];
-      const updatedClips = clips.map((clip) =>
-        clip.id === id ? { ...clip, ...updates } : clip
-      );
-      const tracks = {
-        ...base.tracks,
-        [track]: updatedClips,
-      };
-
-      console.log(`🔄 Updated clip ${id}:`, updates);
-
-      return {
-        ...base,
-        tracks,
-        duration: recomputeDuration(tracks),
-      };
-    });
-  }, [updateTimeline, ensureTimeline, recomputeDuration]);
 
   // Get selected clip ID based on timeline selection
   const selectedClipId = timelineSelection?.clipId ?? null;
@@ -161,8 +115,6 @@ export default function EditorTabs() {
             onPlay={handlePlay}
             onPause={handlePause}
             onSeek={handleSeek}
-            onRemoveClip={handleRemoveClip}
-            onUpdateClip={handleUpdateClip}
             aspectRatio={projectSettings.image.aspectRatio}
           />
         </TabsContent>
@@ -174,8 +126,6 @@ export default function EditorTabs() {
             onPlay={handlePlay}
             onPause={handlePause}
             onSeek={handleSeek}
-            onRemoveClip={handleRemoveClip}
-            onUpdateClip={handleUpdateClip}
             selectedClipId={selectedClipId}
           />
         </TabsContent>
@@ -187,8 +137,6 @@ export default function EditorTabs() {
             onPlay={handlePlay}
             onPause={handlePause}
             onSeek={handleSeek}
-            onRemoveClip={handleRemoveClip}
-            onUpdateClip={handleUpdateClip}
             selectedClipId={selectedClipId}
           />
         </TabsContent>
@@ -200,8 +148,6 @@ export default function EditorTabs() {
             onPlay={handlePlay}
             onPause={handlePause}
             onSeek={handleSeek}
-            onRemoveClip={handleRemoveClip}
-            onUpdateClip={handleUpdateClip}
             selectedClipId={selectedClipId}
           />
         </TabsContent>
