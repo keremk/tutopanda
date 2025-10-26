@@ -19,7 +19,9 @@
       ],
       "@assets/*": [
         "attached_assets/*"
-      ]
+      ],
+      "@shared/*": ["shared/src/*"],
+      "@cli/*": ["cli/src/*"]
     }
   }
 }

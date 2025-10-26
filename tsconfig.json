@@ -10,6 +10,12 @@
     },
     {
       "path": "./server"
+    },
+    {
+      "path": "./shared"
+    },
+    {
+      "path": "./cli"
     }
   ]
 }
