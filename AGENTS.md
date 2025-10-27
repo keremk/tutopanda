@@ -1,16 +1,24 @@
 # Repository Guidelines
 
 ## Project Structure & Module Organization
-Tutopanda is a pnpm workspace with two packages. `client/` hosts the Next.js 15 front end; routes live in `src/app` with grouping folders like `(landing)` and `(docs)`. Shared UI lives in `src/components`, hooks in `src/hooks`, utilities in `src/lib`, and validation in `src/schema.ts`. `server/` is scoped for the Express + Drizzle API; keep the entry file at `server/index.ts`, organise features by folder, and let esbuild emit runtime code to the ignored `server/dist/`. Consult `design_guidelines.md` before adjusting visuals.
+Tutopanda is now a pnpm workspace with four packages.
+- `client/` (`tutopanda-client`) remains the Next.js 15 web client. Routes live in `src/app` (group folders follow Next.js conventions), shared UI in `src/components`, hooks in `src/hooks`, utilities in `src/lib`, and validation in `src/schema.ts`. The client is mid-refactor as movie generation shifts into the backend stack.
+- `server/` (`tutopanda-server`) hosts the API surface on Nitro/h3; group routes under `server/server/routes` with handlers composed from shared logic. Runtime output is still emitted to `server/dist/` (ignored by git). Coordinate with the core library for all movie generation.
+- `core/` (`tutopanda-core`) is the shared TypeScript library for orchestrating AI-based movie asset generation. Source lives under `src/`, with published entry points in `src/index.ts`. Build artifacts go to `dist/`.
+- `cli/` (`tutopanda-cli`) provides a command-line workflow for generating movies, backed by the core package. Keep the Ink entry point in `src/cli.tsx` and organise reusable UI under `src/`.
+
+Consult `design_guidelines.md` before adjusting visuals in the client, and keep shared logic inside `core/` whenever possible to avoid duplication across the API and CLI surfaces.
 
 ## Build, Test, and Development Commands
-Run `pnpm install` once to hydrate the workspaces. `pnpm dev` launches Next.js and the server concurrently; use `pnpm dev:client` or `pnpm dev:server` for focused loops. Build artifacts with `pnpm build` or the package-scoped variants. `pnpm check` runs TypeScript validation for both packages, while `pnpm --filter tutopanda-client lint` and `pnpm --filter tutopanda-client type-check` and for tests `pnpm --filter tutopanda-client test:typecheck` target the client workspace specifically. 
+Run `pnpm install` once to hydrate the workspaces. Use `pnpm dev` for the combined web client and API loop, or `pnpm dev:client` / `pnpm dev:server` for focused development (CLI and core expose `pnpm --filter tutopanda-<pkg> dev` watchers when needed). Build artifacts either via `pnpm build` or per-package scripts such as `pnpm --filter tutopanda-core build`. Linting and type checks run through the package names: e.g. `pnpm --filter tutopanda-client lint`, `pnpm --filter tutopanda-core type-check`, `pnpm --filter tutopanda-cli lint`. Vitest is wired the same way (`pnpm --filter tutopanda-server test`, etc.). Use the actual package names with `--filter` when invoking commands from the repo root.
 
 ## Coding Style & Naming Conventions
 Write strict TypeScript and prefer functional React components with kebab-case filenames. Route segment folders in `src/app` should follow Next.js rules (`(group)`, `[param]`, etc.). Use Tailwind utilities and the design tokens defined in `tailwind.config.ts` instead of ad-hoc CSS. Internal imports should use the configured aliases such as `@/components/*` and `@/lib/*`. Reuse helpers from `src/lib` before adding new utilities, and keep new files two-space indented to match the existing style.
 
+- Optimise for clarity first: avoid adding defensive guards or nested ternaries that obscure intent unless there is a concrete bug being handled. Prefer small helper functions or straightforward control flow.
+
 ## Testing Guidelines
-The repo does not yet ship automated tests, so linting and type checks act as the gate. For new code introduce tests, with Vitest as the Testing Library for client code and colocate specs using a `.test.tsx` suffix. Ensure the package exposes a `test` script and wire it through the root via `pnpm --filter <pkg> test`. Document any fixture data inside the package and keep runs deterministic.
+The repo still relies on linting and type checks as the baseline gate, but all packages are wired for Vitest. Add tests for new behaviour (`.test.ts`/`.test.tsx` next to the code) across client, server, core, and CLI. Ensure each package exposes the relevant `test` scripts and use `pnpm --filter <package> test` from the root. Document any fixture data inside its package and keep runs deterministic.
 
 ## Commit & Pull Request Guidelines
 Follow the `<type>: <summary>` pattern seen in history (example `init: first version that runs on Next.js`). Keep subjects imperative and scope commits to one concern. Pull requests should explain the change, link tracking issues, and include screenshots or clips for UI updates. Add a testing note listing the commands you ran (at minimum `pnpm check`). Call out required follow-ups such as database pushes or environment changes before requesting review.

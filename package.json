@@ -5,21 +5,33 @@
   "license": "MIT",
   "workspaces": [
     "client",
-    "server"
+    "server",
+    "core",
+    "cli"
   ],
   "scripts": {
     "dev": "concurrently \"pnpm --filter tutopanda-client dev\" \"pnpm --filter tutopanda-server dev\"",
     "dev:client": "pnpm --filter tutopanda-client dev",
     "dev:server": "pnpm --filter tutopanda-server dev",
-    "build": "pnpm --filter tutopanda-client build && pnpm --filter tutopanda-server build",
+    "dev:core": "pnpm --filter tutopanda-core dev",
+    "dev:cli": "pnpm --filter tutopanda-cli dev",
+    "build": "pnpm --filter tutopanda-core build && pnpm --filter tutopanda-cli build && pnpm --filter tutopanda-client build && pnpm --filter tutopanda-server build",
     "build:client": "pnpm --filter tutopanda-client build",
     "build:server": "pnpm --filter tutopanda-server build",
-    "lint": "pnpm --filter tutopanda-client lint",
+    "build:core": "pnpm --filter tutopanda-core build",
+    "build:cli": "pnpm --filter tutopanda-cli build",
+    "lint": "pnpm --filter tutopanda-client lint && pnpm --filter tutopanda-server lint && pnpm --filter tutopanda-core lint && pnpm --filter tutopanda-cli lint",
+    "lint:client": "pnpm --filter tutopanda-client lint",
+    "lint:server": "pnpm --filter tutopanda-server lint",
+    "lint:core": "pnpm --filter tutopanda-core lint",
+    "lint:cli": "pnpm --filter tutopanda-cli lint",
     "start": "pnpm --filter tutopanda-server start",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "lint:all": "pnpm --filter tutopanda-client lint && pnpm --filter tutopanda-server lint && pnpm format:check",
-    "check": "pnpm --filter tutopanda-client type-check && pnpm --filter tutopanda-server check"
+    "lint:all": "pnpm lint && pnpm format:check",
+    "type-check": "pnpm --filter tutopanda-client type-check && pnpm --filter tutopanda-server type-check && pnpm --filter tutopanda-core type-check && pnpm --filter tutopanda-cli type-check",
+    "check": "pnpm type-check",
+    "test": "pnpm --filter tutopanda-client test && pnpm --filter tutopanda-server test && pnpm --filter tutopanda-core test && pnpm --filter tutopanda-cli test"
   },
   "devDependencies": {
     "@typescript-eslint/eslint-plugin": "^8.46.2",
