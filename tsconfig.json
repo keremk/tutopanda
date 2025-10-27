@@ -12,7 +12,7 @@
       "path": "./server"
     },
     {
-      "path": "./shared"
+      "path": "./core"
     },
     {
       "path": "./cli"

@@ -1,5 +1,5 @@
 packages:
   - 'client'
   - 'server'
-  - 'shared'
+  - 'core'
   - 'cli'

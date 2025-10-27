@@ -1,12 +1,23 @@
 {
-  "extends": "../../tsconfig.base.json",
-  "compilerOptions": {
-    "rootDir": "src",
-    "outDir": "dist",
-    "module": "ESNext",  // Or "CommonJS" for bin
-    "target": "ES2022",
-    "composite": true
-  },
-  "include": ["src"],
-  "exclude": ["node_modules", "dist"]
+	"extends": "../tsconfig.base.json",
+	"compilerOptions": {
+		"outDir": "dist",
+		"rootDir": "src",
+		"lib": ["ES2022"],
+		"module": "ESNext",
+		"moduleResolution": "bundler",
+		"target": "ES2022",
+		"strict": true,
+		"esModuleInterop": true,
+		"skipLibCheck": true,
+		"resolveJsonModule": true,
+		"isolatedModules": true,
+		"jsx": "react",
+		"typeRoots": [
+			"./node_modules/@types",
+			"../node_modules/@types"
+		]
+	},
+	"include": ["src/**/*.ts", "src/**/*.tsx"],
+	"exclude": ["node_modules", "dist", "**/*.test.ts", "**/*.test.tsx"]
 }

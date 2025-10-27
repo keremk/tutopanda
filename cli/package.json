@@ -1,0 +1,45 @@
+{
+	"name": "tutopanda-cli",
+	"version": "1.0.0",
+	"description": "CLI tool for generating movie assets",
+	"license": "MIT",
+	"bin": "dist/cli.js",
+	"type": "module",
+	"engines": {
+		"node": ">=16"
+	},
+	"scripts": {
+		"build": "tsc",
+		"dev": "tsc --watch",
+		"lint": "eslint src",
+		"type-check": "tsc --noEmit",
+		"test": "vitest",
+		"test:typecheck": "tsc --project tsconfig.vitest.json --noEmit",
+		"test:ui": "vitest --ui",
+		"test:run": "vitest run"
+	},
+	"files": [
+		"dist"
+	],
+	"packageManager": "pnpm@10.15.0",
+	"dependencies": {
+		"ink": "^4.1.0",
+		"meow": "^11.0.0",
+		"react": "^18.2.0"
+	},
+	"devDependencies": {
+		"@eslint/eslintrc": "^3.3.1",
+		"@eslint/js": "^9.36.0",
+		"@types/node": "^20.16.11",
+		"@types/react": "^18.3.11",
+		"@typescript-eslint/parser": "^8.18.2",
+		"@vitest/ui": "^3.2.4",
+		"eslint": "^8",
+		"eslint-config-prettier": "^10.1.8",
+		"eslint-plugin-react": "^7.32.2",
+		"eslint-plugin-react-hooks": "^4.6.0",
+		"ink-testing-library": "^3.0.0",
+		"typescript": "^5.6.3",
+		"vitest": "^3.2.4"
+	}
+}

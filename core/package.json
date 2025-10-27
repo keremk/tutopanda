@@ -1,23 +1,26 @@
 {
-  "name": "tutopanda-server",
+  "name": "tutopanda-core",
   "version": "1.0.0",
-  "description": "Nitro server for Tutopanda",
+  "description": "Core library for building movie assets using AI generators",
   "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "license": "MIT",
-  "packageManager": "pnpm@10.15.0",
   "scripts": {
-    "build": "nitro build",
-    "dev": "nitro dev",
-    "preview": "node .output/server/index.mjs",
-    "lint": "eslint server",
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "lint": "eslint src",
     "type-check": "tsc --noEmit",
     "test": "vitest",
     "test:typecheck": "tsc --project tsconfig.vitest.json --noEmit",
     "test:ui": "vitest --ui",
     "test:run": "vitest run"
   },
+  "keywords": ["ai", "assets", "movie", "audio", "images"],
+  "author": "",
+  "packageManager": "pnpm@10.15.0",
   "dependencies": {
-    "h3": "^1.15.4"
+    "@flystorage/file-storage": "^1.2.0"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.3.1",
@@ -27,7 +30,6 @@
     "@vitest/ui": "^3.2.4",
     "eslint": "^8",
     "eslint-config-prettier": "^10.1.8",
-    "nitropack": "^2.12.8",
     "typescript": "^5.6.3",
     "vitest": "^3.2.4"
   }

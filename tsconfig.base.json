@@ -20,7 +20,7 @@
       "@assets/*": [
         "attached_assets/*"
       ],
-      "@shared/*": ["shared/src/*"],
+      "@core/*": ["core/src/*"],
       "@cli/*": ["cli/src/*"]
     }
   }
