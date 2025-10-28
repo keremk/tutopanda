@@ -174,6 +174,27 @@ interface EventLog {
 
 Executors obtain an `EventLog` by calling `createEventLog(storageContext)`; the implementation stays inside the core package.
 
+#### Event Log Backends
+The high-level API stays the same across environments, but the storage mechanism differs so we get safe appends without losing portability.
+
+- **CLI / local development (append-only files)**  
+  - We extend the FlyStorage local adapter with a true append primitive (effectively `fs.appendFile` guarded by a per-path mutex).  
+  - Each log (`events/inputs.log`, `events/artefacts.log`) is only ever appended to; the CLI never rewrites the whole file when it emits events.  
+  - Concurrency inside the CLI is funneled through the append helper so `Promise.all` job execution can push events as soon as they finish without clobbering earlier lines.  
+  - After a successful manifest build, the CLI rotates the live logs: copy the JSONL contents to an archival file (`events/rev-0005.inputs.jsonl`, etc.), then truncate the live logs so the next run starts from a clean slate. This keeps local storage bounded while still leaving a per-revision audit trail on disk.
+
+- **Server / cloud deployments (Redis + S3 archive)**  
+  - Live events land in a Redis-compatible stream (Upstash / Vercel KV / self-hosted Redis all work). `XADD` gives us atomic appends and ordered IDs without implementing our own locking.  
+  - Planners and runners read from the stream with a cursor so they only consume entries created after the last manifest. That keeps dirty-detection efficient even when multiple workers are active.  
+  - When the runner commits a new manifest:  
+    1. Stream the Redis entries for the just-completed revision in order.  
+    2. Persist the new manifest.  
+    3. Serialize the event batch to JSONL (`events/rev-0005.inputs.jsonl`, `events/rev-0005.artefacts.jsonl`) and upload it to S3 for long-term audit.  
+    4. Trim the Redis stream (or delete the key) so only post-manifest edits remain buffered.  
+  - On failure we simply leave the stream untouched; retries see the existing events and can skip clean artefacts. We only purge after both the manifest write and the archival upload succeed.
+
+This split lets us ship the Milestone 2 CLI work immediately (filesystem append-only implementation) while deferring the cloud driver to a follow-up milestone. The core surface area (`EventLog`) does not change—each environment chooses the backend driver it wires into `createEventLog`.
+
 ### Plan Store Helpers
 Plans live under `runs/<revision>-plan.json`. A built-in helper encapsulates the persistence contract so callers never juggle paths.
 

@@ -7,6 +7,7 @@ import type {
   RevisionId,
 } from './types.js';
 
+/* eslint-disable no-unused-vars */
 export interface EventLog {
   streamInputs(movieId: string, sinceRevision?: RevisionId): AsyncIterable<InputEvent>;
   streamArtefacts(movieId: string, sinceRevision?: RevisionId): AsyncIterable<ArtefactEvent>;
@@ -75,23 +76,8 @@ async function* iterateEvents<T extends { revision: RevisionId }>(
 async function appendEvent(storage: StorageContext, path: string, event: unknown): Promise<void> {
   const serialized = JSON.stringify(event);
   const payload = serialized.endsWith('\n') ? serialized : `${serialized}\n`;
-
-  const exists = await storage.storage.fileExists(path);
-  const finalPayload = exists ? await concatenateWithExisting(storage, path, payload) : payload;
-  const targetPayload = finalPayload.endsWith('\n') ? finalPayload : `${finalPayload}\n`;
-
-  const tmpPath = `${path}.tmp-${Date.now().toString(16)}-${Math.random().toString(16).slice(2)}`;
-  await storage.storage.write(tmpPath, targetPayload, { mimeType: JSONL_MIME });
-  await storage.storage.moveFile(tmpPath, path);
-}
-
-async function concatenateWithExisting(storage: StorageContext, path: string, payload: string): Promise<string> {
-  const current = await storage.storage.readToString(path);
-  if (!current) {
-    return payload;
-  }
-  const normalized = current.endsWith('\n') ? current : `${current}\n`;
-  return `${normalized}${payload}`;
+  const targetPayload = payload.endsWith('\n') ? payload : `${payload}\n`;
+  await storage.append(path, targetPayload, JSONL_MIME);
 }
 
 function isRevisionAfter(candidate: RevisionId, pivot: RevisionId): boolean {

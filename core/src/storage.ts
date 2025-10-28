@@ -1,6 +1,8 @@
 import { FileStorage } from '@flystorage/file-storage';
 import { InMemoryStorageAdapter } from '@flystorage/in-memory';
 import { LocalStorageAdapter } from '@flystorage/local-fs';
+import { promises as fs } from 'node:fs';
+import * as nodePath from 'node:path';
 import { posix as path } from 'node:path';
 import type { ExecutionPlan, RevisionId } from './types.js';
 
@@ -19,11 +21,14 @@ interface BaseStorageConfig {
   basePath?: string;
 }
 
+/* eslint-disable no-unused-vars */
 export interface StorageContext {
   storage: FileStorage;
   basePath: string;
   /** Resolve a storage-relative path (POSIX separators). */
   resolve(movieId: string, ...segments: string[]): string;
+  /** Append a UTF-8 string to a storage-relative file, creating it if needed. */
+  append(relativePath: string, data: string, mimeType?: string): Promise<void>;
 }
 
 const DEFAULT_BASE_PATH = 'builds';
@@ -31,6 +36,26 @@ const DEFAULT_BASE_PATH = 'builds';
 export function createStorageContext(config: StorageConfig): StorageContext {
   const basePath = normalizeSegment(config.basePath ?? DEFAULT_BASE_PATH);
   const storage = new FileStorage(resolveAdapter(config));
+  const appendQueues = new Map<string, Promise<void>>();
+
+  async function enqueueAppend(key: string, task: () => Promise<void>): Promise<void> {
+    const previous = appendQueues.get(key) ?? Promise.resolve();
+    const next = previous.then(task);
+    appendQueues.set(
+      key,
+      next.catch(() => {
+        /* noop: errors handled by caller */
+      })
+    );
+    try {
+      await next;
+    } finally {
+      if (appendQueues.get(key) === next) {
+        appendQueues.delete(key);
+      }
+    }
+  }
+
   return {
     storage,
     basePath,
@@ -41,6 +66,22 @@ export function createStorageContext(config: StorageConfig): StorageContext {
         Boolean
       );
       return allSegments.length ? path.join(...allSegments) : '';
+    },
+    append(relativePath, data, mimeType = 'application/json') {
+      const normalizedPath = normalizeSegment(relativePath);
+      return enqueueAppend(normalizedPath, async () => {
+        if (config.kind === 'local') {
+          await appendLocalFile(config.rootDir, normalizedPath, data);
+          return;
+        }
+        // Fallback for in-memory adapter or other drivers: read-modify-write.
+        const exists = await storage.fileExists(normalizedPath);
+        const current = exists
+          ? await storage.readToString(normalizedPath)
+          : '';
+        const nextPayload = current ? current + data : data;
+        await writeString(storage, normalizedPath, nextPayload, mimeType);
+      });
     },
   };
 }
@@ -173,4 +214,27 @@ async function writeString(
 
 function normalizeSegment(segment: string): string {
   return segment.replace(/^\/+/, '').replace(/\/+$/, '');
+}
+
+async function appendLocalFile(
+  rootDir: string,
+  relativePath: string,
+  data: string
+): Promise<void> {
+  const absolutePath = toAbsolutePath(rootDir, relativePath);
+  await fs.mkdir(nodePath.dirname(absolutePath), { recursive: true });
+  const handle = await fs.open(absolutePath, 'a');
+  try {
+    await handle.write(data);
+  } finally {
+    await handle.close();
+  }
+}
+
+function toAbsolutePath(rootDir: string, relativePath: string): string {
+  if (!relativePath) {
+    return rootDir;
+  }
+  const segments = relativePath.split('/').filter(Boolean);
+  return nodePath.join(rootDir, ...segments);
 }

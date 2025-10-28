@@ -1,3 +1,6 @@
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   createEventLog,
@@ -113,5 +116,46 @@ describe('EventLog', () => {
       inline: 'hello',
     });
     expect(outputHash).toBe(outputHashPermuted);
+  });
+
+  it('handles concurrent appends on the local filesystem backend', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'tutopanda-event-log-'));
+    try {
+      const ctx = createStorageContext({
+        kind: 'local',
+        rootDir: root,
+        basePath: 'builds',
+      });
+      await initializeMovieStorage(ctx, 'demo');
+      const eventLog = createEventLog(ctx);
+
+      const artefacts: ArtefactEvent[] = Array.from({ length: 20 }, (_, index) => ({
+        artefactId: `segment_script_${index}`,
+        revision: `rev-${String(index + 1).padStart(4, '0')}`,
+        inputsHash: hashInputs([`input:${index}`]),
+        output: { inline: `payload-${index}` },
+        status: 'succeeded',
+        producedBy: 'script_producer',
+        createdAt: new Date(Date.now() + index).toISOString(),
+      }));
+
+      await Promise.all(
+        artefacts.map((event) => eventLog.appendArtefact('demo', event)),
+      );
+
+      const logPath = join(root, 'builds/demo/events/artefacts.log');
+      const raw = await readFile(logPath, 'utf8');
+      const lines = raw
+        .split('\n')
+        .map((line) => line.trim())
+        .filter(Boolean);
+
+      expect(lines).toHaveLength(artefacts.length);
+      const parsed = lines.map((line) => JSON.parse(line) as ArtefactEvent);
+      const seenIds = new Set(parsed.map((evt) => evt.artefactId));
+      expect(seenIds.size).toBe(artefacts.length);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
   });
 });
