@@ -1,7 +1,16 @@
-# Generation Graph
+# Build System for Generating Short Movies
 
 ## Broad Context
-This core library is a build system that allows users the specify a query (e.g. "Tell me about the Civil War") together with some configurations and the AI goes ahead, does a research, creates a script and creates all the necessary assets like images, videos, narration audio, background music etc. to create a timeline for a video presentation. The timeline will then be fed into a Remotion video to generate a full video presentation. This library will be used from various apps. 
+This core library is a build system that allows users the specify a query (e.g. "Tell me about the Civil War") together with some configurations and the AI goes ahead, does a research, creates a script and creates all the necessary assets like images, videos, narration audio, background music etc. to create a timeline for a video presentation. The timeline will then be fed into a Remotion video to generate a full video presentation. 
+
+The library will expose an API that will be used both from a locally running CLI and also from a cloud hosted system. The API will be asking for a generation or regeneration of a movie (using the timeline which is fed into Remotion along with links to the artefacts generated.) The storage here is intended for a single movie but will include all the metadata and revision information needed. Some important points:
+- For the first generation: The API will accept a user inquiry prompt ("I want to learn about Civil War"), default configurations and user specified overrides. 
+    - The outputs will be the generated timeline with links to assets, the generated prompts, error states (if there are errors)
+- For the subsequent revision requests, so the API will accept the necessary parameters. 
+    - It may be that the full generation did not end up generating all required artefacts and the movie timeline, so the user can change some of the configurations or simply retry.
+    - User may change some of the generated prompts and retry the generation. Or chaneg some of the configurations (e.g. use different voice)
+
+We expect multiple regenerations of the movie as the users try, tweak or error, so the revisions may grow in median case to 5-10 revision and in 90 percentile up to 20-30. This is intended for generating somewhat short movies (at least in the short term) due to the cost of generation of all artefacts via AI models. The duration will be initially capped to 5min, max 30 segments of 10s each. And the number of images per segment will be capped to 5. So at max we will be generating 150 images.
 
 ## Generation Graph Diagram
 This diagram attempts to explain the data flow of the video timeline generation. 

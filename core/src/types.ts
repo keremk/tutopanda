@@ -124,3 +124,20 @@ export interface BlueprintSection {
 export interface GraphBlueprint {
   sections: BlueprintSection[];
 }
+
+// --- build / planning ---
+export type RevisionId = `rev-${string}`;
+
+export interface JobDescriptor {
+  jobId: Id;
+  producer: ProducerKind | string;
+  inputs: Id[];
+  context?: Record<string, unknown>;
+}
+
+export interface ExecutionPlan {
+  revision: RevisionId;
+  manifestBaseHash: string;
+  layers: JobDescriptor[][];
+  createdAt: IsoDatetime;
+}

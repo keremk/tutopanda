@@ -12,6 +12,12 @@ Consult `design_guidelines.md` before adjusting visuals in the client, and keep 
 ## Build, Test, and Development Commands
 Run `pnpm install` once to hydrate the workspaces. Use `pnpm dev` for the combined web client and API loop, or `pnpm dev:client` / `pnpm dev:server` for focused development (CLI and core expose `pnpm --filter tutopanda-<pkg> dev` watchers when needed). Build artifacts either via `pnpm build` or per-package scripts such as `pnpm --filter tutopanda-core build`. Linting and type checks run through the package names: e.g. `pnpm --filter tutopanda-client lint`, `pnpm --filter tutopanda-core type-check`, `pnpm --filter tutopanda-cli lint`. Vitest is wired the same way (`pnpm --filter tutopanda-server test`, etc.). Use the actual package names with `--filter` when invoking commands from the repo root.
 
+> **Important**: Do **not** run `pnpm install` as a build step or during routine development tasks—only run it when specifically instructed to hydrate dependencies.
+
+> **Agent Rule**: Never run package-management commands (`pnpm add`, `pnpm install`, etc.) without explicit user approval. Always surface the dependency request to the user instead.
+
+> **Agent Rule**: Never use `git checkout` or other destructive git commands to reset files. Always coordinate with the user if a revert is needed.
+
 ## Coding Style & Naming Conventions
 Write strict TypeScript and prefer functional React components with kebab-case filenames. Route segment folders in `src/app` should follow Next.js rules (`(group)`, `[param]`, etc.). Use Tailwind utilities and the design tokens defined in `tailwind.config.ts` instead of ad-hoc CSS. Internal imports should use the configured aliases such as `@/components/*` and `@/lib/*`. Reuse helpers from `src/lib` before adding new utilities, and keep new files two-space indented to match the existing style.
 

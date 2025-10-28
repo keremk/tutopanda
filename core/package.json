@@ -16,11 +16,19 @@
     "test:ui": "vitest --ui",
     "test:run": "vitest run"
   },
-  "keywords": ["ai", "assets", "movie", "audio", "images"],
+  "keywords": [
+    "ai",
+    "assets",
+    "movie",
+    "audio",
+    "images"
+  ],
   "author": "",
   "packageManager": "pnpm@10.15.0",
   "dependencies": {
-    "@flystorage/file-storage": "^1.2.0"
+    "@flystorage/file-storage": "^1.2.0",
+    "@flystorage/in-memory": "^1.1.0",
+    "@flystorage/local-fs": "^1.2.0"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.3.1",

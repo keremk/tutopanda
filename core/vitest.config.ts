@@ -4,7 +4,7 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
-    pool: 'forks',
+    pool: 'threads',
     fileParallelism: false,
     minWorkers: 1,
     maxWorkers: 1,
