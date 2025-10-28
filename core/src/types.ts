@@ -141,3 +141,36 @@ export interface ExecutionPlan {
   layers: JobDescriptor[][];
   createdAt: IsoDatetime;
 }
+
+export type InputEventSource = 'user' | 'system';
+
+export interface InputEvent {
+  id: Id;
+  revision: RevisionId;
+  hash: string;
+  payload: unknown;
+  editedBy: InputEventSource;
+  createdAt: IsoDatetime;
+}
+
+export type ArtefactEventStatus = 'succeeded' | 'failed' | 'skipped';
+
+export interface ArtefactEventOutput {
+  blob?: {
+    hash: string;
+    size: number;
+    mimeType: string;
+  };
+  inline?: string;
+}
+
+export interface ArtefactEvent {
+  artefactId: Id;
+  revision: RevisionId;
+  inputsHash: string;
+  output: ArtefactEventOutput;
+  status: ArtefactEventStatus;
+  producedBy: Id;
+  diagnostics?: Record<string, unknown>;
+  createdAt: IsoDatetime;
+}
