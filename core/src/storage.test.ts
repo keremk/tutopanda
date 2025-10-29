@@ -37,6 +37,14 @@ describe('initializeMovieStorage', () => {
     expect(await storage.fileExists('builds/demo/events/inputs.log')).toBe(true);
     expect(await storage.fileExists('builds/demo/events/artefacts.log')).toBe(true);
     expect(await storage.fileExists('builds/demo/current.json')).toBe(true);
+
+    const pointer = JSON.parse(await storage.readToString('builds/demo/current.json'));
+    expect(pointer).toEqual({
+      revision: null,
+      manifestPath: null,
+      hash: null,
+      updatedAt: null,
+    });
   });
 });
 

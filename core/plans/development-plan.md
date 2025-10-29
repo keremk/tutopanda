@@ -35,11 +35,13 @@ This roadmap breaks the storage + execution stack into milestones that each deli
   - Implement `Manifest` type, validation, and `ManifestService.loadCurrent/saveManifest`.
   - Add `manifest-from-events` builder stub returning aggregated hashes (without full timeline yet).
   - Ensure `current.json` pointer update is atomic.
+  - Introduce `createInputHasher` / `createArtefactHasher` utilities that accept raw payloads (strings, numbers, objects) and emit canonical hashes + normalized payload digests so tests can exercise real config data.
 - **CLI work**
   - Introduce `pnpm --filter tutopanda-cli run manifest:show --movie <id>` that prints the current manifest (or explains how to initialize).
+  - Update CLI edit/append flows to call the new hashing helpers directly so captured events reflect actual user input rather than pre-baked digests.
 - **Tests**
-  - Core: round-trip tests for `saveManifest` + `loadCurrent`, ensuring pointer updates survive simulated crashes.
-  - CLI: fixture manifest to confirm command output and error messaging for uninitialized movies.
+  - Core: round-trip tests for `saveManifest` + `loadCurrent`, ensuring pointer updates survive simulated crashes, plus unit coverage for the hashing helpers across payload types.
+  - CLI: fixture manifest to confirm command output and error messaging for uninitialized movies, and hashing tests feeding representative user input through the CLI command surface.
 
 ## Milestone 4 – Planner Integration
 - **Core additions**

@@ -4,7 +4,7 @@ import { LocalStorageAdapter } from '@flystorage/local-fs';
 import { promises as fs } from 'node:fs';
 import * as nodePath from 'node:path';
 import { posix as path } from 'node:path';
-import type { ExecutionPlan, RevisionId } from './types.js';
+import type { ExecutionPlan, ManifestPointer, RevisionId } from './types.js';
 
 export type StorageConfig =
   | (BaseStorageConfig & {
@@ -132,7 +132,7 @@ export async function initializeMovieStorage(
     await ensureFile(
       storage,
       path.join(root, 'current.json'),
-      JSON.stringify({ revision: null }, null, 2)
+      JSON.stringify(emptyManifestPointer(), null, 2)
     );
   }
 }
@@ -214,6 +214,15 @@ async function writeString(
 
 function normalizeSegment(segment: string): string {
   return segment.replace(/^\/+/, '').replace(/\/+$/, '');
+}
+
+function emptyManifestPointer(): ManifestPointer {
+  return {
+    revision: null,
+    manifestPath: null,
+    hash: null,
+    updatedAt: null,
+  };
 }
 
 async function appendLocalFile(

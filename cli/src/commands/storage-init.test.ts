@@ -40,7 +40,12 @@ describe('runStorageInit', () => {
     }
 
     const current = await readFile(join(root, 'builds/demo/current.json'), 'utf8');
-    expect(JSON.parse(current)).toEqual({ revision: null });
+    expect(JSON.parse(current)).toEqual({
+      revision: null,
+      manifestPath: null,
+      hash: null,
+      updatedAt: null,
+    });
   });
 
   it('is idempotent when rerun', async () => {

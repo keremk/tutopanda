@@ -36,11 +36,11 @@ describe('runEventsAppend', () => {
     const root = await createTempRoot();
     await runStorageInit({ movieId: 'demo', rootDir: root, basePath: 'builds' });
 
-    const inputEvent: InputEvent = {
+    const payload = { prompt: 'hello world' };
+    const inputEvent: Omit<InputEvent, 'hash'> = {
       id: 'inquiry_prompt',
       revision: 'rev-0001',
-      payload: { prompt: 'hello world' },
-      hash: hashInputPayload({ prompt: 'hello world' }),
+      payload,
       editedBy: 'user',
       createdAt: new Date().toISOString(),
     };
@@ -63,7 +63,12 @@ describe('runEventsAppend', () => {
       collected.push(evt);
     }
 
-    expect(collected).toEqual([inputEvent]);
+    expect(collected).toEqual([
+      {
+        ...inputEvent,
+        hash: hashInputPayload(payload),
+      },
+    ]);
   });
 
   it('appends artefact events to the log', async () => {

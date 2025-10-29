@@ -1,11 +1,14 @@
-import { createHash } from 'node:crypto';
 import type { StorageContext } from './storage.js';
 import type {
   ArtefactEvent,
-  ArtefactEventOutput,
   InputEvent,
   RevisionId,
 } from './types.js';
+import {
+  hashArtefactOutput,
+  hashInputPayload,
+  hashInputs,
+} from './hashing.js';
 
 /* eslint-disable no-unused-vars */
 export interface EventLog {
@@ -39,17 +42,7 @@ export function createEventLog(storage: StorageContext): EventLog {
   };
 }
 
-export function hashInputPayload(payload: unknown): string {
-  return stableHash(payload);
-}
-
-export function hashArtefactOutput(output: ArtefactEventOutput): string {
-  return stableHash(output);
-}
-
-export function hashInputs(inputs: readonly string[]): string {
-  return stableHash([...inputs].sort());
-}
+export { hashInputPayload, hashArtefactOutput, hashInputs };
 
 async function* iterateEvents<T extends { revision: RevisionId }>(
   storage: StorageContext,
@@ -82,35 +75,4 @@ async function appendEvent(storage: StorageContext, path: string, event: unknown
 
 function isRevisionAfter(candidate: RevisionId, pivot: RevisionId): boolean {
   return collator.compare(candidate, pivot) > 0;
-}
-
-function stableHash(value: unknown): string {
-  const canonical = canonicalStringify(value);
-  return createHash('sha256').update(canonical).digest('hex');
-}
-
-function canonicalStringify(value: unknown): string {
-  return JSON.stringify(normalizeForSerialization(value));
-}
-
-function normalizeForSerialization(value: unknown): unknown {
-  if (value === null || value === undefined) {
-    return null;
-  }
-  if (Array.isArray(value)) {
-    return value.map((item) => normalizeForSerialization(item));
-  }
-  if (typeof value === 'object') {
-    const entries = Object.entries(value as Record<string, unknown>);
-    entries.sort(([aKey], [bKey]) => aKey.localeCompare(bKey));
-    const output: Record<string, unknown> = {};
-    for (const [key, val] of entries) {
-      output[key] = normalizeForSerialization(val);
-    }
-    return output;
-  }
-  if (typeof value === 'number' && !Number.isFinite(value)) {
-    return value.toString();
-  }
-  return value;
 }

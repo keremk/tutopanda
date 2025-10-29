@@ -142,6 +142,49 @@ export interface ExecutionPlan {
   createdAt: IsoDatetime;
 }
 
+export interface BlobRef {
+  hash: string;
+  size: number;
+  mimeType: string;
+}
+
+export interface ManifestInputEntry {
+  hash: string;
+  payloadDigest: string;
+  createdAt: IsoDatetime;
+}
+
+export interface ManifestArtefactEntry {
+  hash: string;
+  blob?: BlobRef;
+  inline?: string;
+  producedBy: Id;
+  status: ArtefactEventStatus;
+  createdAt: IsoDatetime;
+}
+
+export interface Manifest {
+  revision: RevisionId;
+  baseRevision: RevisionId | null;
+  createdAt: IsoDatetime;
+  inputs: Record<string, ManifestInputEntry>;
+  artefacts: Record<string, ManifestArtefactEntry>;
+  timeline?: TimelineDocument;
+}
+
+export type TimelineDocument = Record<string, unknown>;
+
+export interface ManifestPointer {
+  revision: RevisionId | null;
+  manifestPath: string | null;
+  hash: string | null;
+  updatedAt: IsoDatetime | null;
+}
+
+export interface Clock {
+  now(): IsoDatetime;
+}
+
 export type InputEventSource = 'user' | 'system';
 
 export interface InputEvent {
@@ -156,11 +199,7 @@ export interface InputEvent {
 export type ArtefactEventStatus = 'succeeded' | 'failed' | 'skipped';
 
 export interface ArtefactEventOutput {
-  blob?: {
-    hash: string;
-    size: number;
-    mimeType: string;
-  };
+  blob?: BlobRef;
   inline?: string;
 }
 

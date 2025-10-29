@@ -6,6 +6,7 @@ import {
   createStorageContext,
   type ArtefactEvent,
   type InputEvent,
+  hashInputPayload,
 } from 'tutopanda-core';
 
 export type EventAppendKind = 'input' | 'artifact';
@@ -35,7 +36,15 @@ export async function runEventsAppend(
   const parsed = JSON.parse(raw) as InputEvent | ArtefactEvent;
 
   if (options.type === 'input') {
-    await eventLog.appendInput(options.movieId, parsed as InputEvent);
+    const input = parsed as InputEvent;
+    if (input.payload === undefined) {
+      throw new Error('Input event payload is required');
+    }
+    const event: InputEvent = {
+      ...input,
+      hash: hashInputPayload(input.payload),
+    };
+    await eventLog.appendInput(options.movieId, event);
   } else if (options.type === 'artifact') {
     await eventLog.appendArtefact(options.movieId, parsed as ArtefactEvent);
   } else {
