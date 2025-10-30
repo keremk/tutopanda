@@ -18,6 +18,11 @@ builds/movie_civilwar_001/
 ├── runs/
 │   ├── rev-0003-plan.json     # Planner output with dependency layers and assumed manifest hash
 │   └── rev-0003-progress.json # Optional per-layer completion checkpoints
+├── prompts/
+│   └── segment/
+│       ├── segment-0001/image.txt
+│       ├── segment-0001/video.txt
+│       └── segment-0001/music.txt
 └── metrics/               # Optional aggregates (job cost, retries)
 ```
 
@@ -27,9 +32,10 @@ builds/movie_civilwar_001/
 - `current.json` updates atomically to point to the new manifest (use temp file + rename locally, or a DynamoDB/S3 metadata entry in the cloud). Consumers only need this pointer to load the full state.
 
 ### Asset Handling
-- Binary payloads are written once to `blobs/<sha256>`. Manifests reference them by hash, eliminating the need for consolidation and ensuring deduplication across revisions.  
-- Text artefacts (scripts, prompts) can live inline in the manifest for fast reads, with large pieces optionally compressed into blob files referenced by hash.  
-- Garbage collection simply deletes blobs that are no longer referenced by any manifest (perform a mark-and-sweep periodically).
+- **Binary artefacts** (audio, video, images) are written under the content-addressed `blobs/` tree. The manifest stores their hash and metadata, so deduplication falls out naturally.  
+- **Readable prompts & scripts** live alongside the artefact tree in dedicated folders (e.g. `prompts/segment/segment-0003/image.txt`). Each file is hashed individually when we append artefact events, preserving formatting while still enabling dirty detection.  
+- **Derived text artefacts** (scripts, summaries) remain inline in the manifest unless they grow large—in that case we mirror the prompt pattern and drop the content into `artifacts/text/<id>.txt` while the manifest references it by hash.  
+- Garbage collection removes blob files and prompt/script files that are no longer referenced by any manifest (mark-and-sweep after new manifests are committed).
 
 ### Benefits Over Current Plan
 - No path rewriting logic: every consumer dereferences artefact IDs via the manifest, so historical snapshots remain valid even after pruning.  
@@ -229,6 +235,17 @@ interface Planner {
 ```
 - The planner reads log streams through the supplied `eventLog`, so callers never touch file paths.  
 - The planner returns an `ExecutionPlan`; the caller can hand it straight to the runner. Persistence under `runs/<revision>-plan.json` is handled by helper utilities such as `planStore.save(plan, storageContext)` that live in core.
+
+### Topological Layering (Kahn’s Algorithm)
+The planner emits producer jobs in dependency-respecting “layers” so the runner can fan out work within a layer while guaranteeing upstream data is ready. We compute those layers using Kahn’s algorithm:
+
+1. **Build indegree counts**. Walk the expanded blueprint and manifest to build a graph of producer → producer dependencies (inputs that are themselves produced artefacts). Track how many incoming edges (`indegree`) each producer has once dirty detection marks it for execution.
+2. **Seed the ready queue**. Any dirty producer whose indegree is zero can run immediately because all of its inputs are either raw user inputs or already satisfied artefacts. We enqueue these in a FIFO (or priority) queue.
+3. **Drain layer by layer**. Repeatedly drain the queue: every pop becomes part of the current execution layer. For each popped producer, decrement the indegree of its dependants; when a dependant’s indegree reaches zero, push it into the queue for the next layer.
+4. **Emit execution layers**. Each pass over the queue forms an ordered array of producers. We append that array to the `ExecutionPlan.layers` list and continue until the queue is empty.
+5. **Detect cycles or stale graphs**. If the queue empties before we schedule all dirty producers, we report a cycle (or missing dependency) instead of generating a partial plan. This guards against blueprint drift or bugs that introduce cyclical dependencies.
+
+Because Kahn’s algorithm runs in `O(|V| + |E|)` time with straightforward data structures, it scales with the size of the producer DAG and naturally produces the layered structure the runner expects. It also makes it easy to sprinkle in heuristics (e.g., provider-specific prioritisation) later by adjusting queue ordering without rewriting the core planner.
 
 ### Runner Hooks
 ```ts

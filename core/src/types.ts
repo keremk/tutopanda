@@ -185,6 +185,24 @@ export interface Clock {
   now(): IsoDatetime;
 }
 
+export interface ProducerGraphNode {
+  jobId: Id;
+  producer: ProducerKind | string;
+  inputs: Id[];
+  produces: Id[];
+  context?: Record<string, unknown>;
+}
+
+export interface ProducerGraphEdge {
+  from: Id;
+  to: Id;
+}
+
+export interface ProducerGraph {
+  nodes: ProducerGraphNode[];
+  edges: ProducerGraphEdge[];
+}
+
 export type InputEventSource = 'user' | 'system';
 
 export interface InputEvent {

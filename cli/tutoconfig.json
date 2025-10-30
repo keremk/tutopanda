@@ -1,0 +1,42 @@
+{
+  "storage": {
+    "root": "~/.tutopanda/builds",
+    "basePath": "builds"
+  },
+  "blueprint": {
+    "segmentCount": 2,
+    "imagesPerSegment": 1,
+    "useVideo": false,
+    "isImageToVideo": false
+  },
+  "inputs": {
+    "InquiryPrompt": "Tell me a story about the sea",
+    "MovieDirectionPromptInput": "Keep it uplifting",
+    "MusicPromptInput": "Ambient orchestral",
+    "SegmentNarrationInput": [
+      "The waves crashed against the cliffs",
+      "A lighthouse pierced the mist"
+    ],
+    "VoiceId": "default",
+    "Emotion": "dramatic",
+    "Audience": "general",
+    "Language": "en",
+    "Duration": 60,
+    "ImagesPerSegment": 1,
+    "SegmentImagePromptInput": [
+      "Stormy ocean under moonlight",
+      "Calm harbor at dawn"
+    ],
+    "ImageStyle": "cinematic",
+    "Size": "1080p",
+    "AspectRatio": "16:9",
+    "UseVideo": false,
+    "IsImageToVideo": false,
+    "StartingImagePromptInput": "Old lighthouse standing guard",
+    "SegmentAnimations": {
+      "segment0": "pan-left",
+      "segment1": "zoom-in"
+    },
+    "AssemblyStrategy": "timeline"
+  }
+}

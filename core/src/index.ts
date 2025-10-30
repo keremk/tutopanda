@@ -5,3 +5,6 @@ export * from './storage.js';
 export * from './event-log.js';
 export * from './manifest.js';
 export * from './hashing.js';
+export * from './planner.js';
+export * from './revisions.js';
+export * from './schema/index.js';

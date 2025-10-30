@@ -23,7 +23,7 @@ describe('EventLog', () => {
 
     const payload = { prompt: 'tell me a story', temperature: 0.8 };
     const inputEvent: InputEvent = {
-      id: 'inquiry_prompt',
+      id: 'InquiryPrompt',
       revision: 'rev-0001',
       hash: hashInputPayload(payload),
       payload,

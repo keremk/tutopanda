@@ -57,15 +57,27 @@ This roadmap breaks the storage + execution stack into milestones that each deli
   - Core: deterministic planner tests using fixture manifests/events, asserting dirty propagation.
   - CLI: integration test verifying plan file presence and summary output.
 
+## Milestone 4.5 – CLI Workflow & Prompt Editing
+- **Core additions**
+  - Expand config schemas with friendly enums (styles, audiences, language codes) and helpers for materialising prompt/timeline files that preserve formatting.
+  - Provide utilities for hashing per-segment prompt files and timeline edits so planner dirty detection sees file-level changes instead of monolithic hashes.
+- **CLI work**
+  - Implement new command surface per `cli/docs/cli-interface.md`:
+    - `tutopanda init` scaffolding the CLI config (defaulting to `~/.tutopanda`, storing defaults in JSON).
+    - `tutopanda query "<prompt>"` loading defaults, applying shortcut flags (`--style`, `--voice`, etc.), invoking planner/runner, and returning a movieId.
+    - `tutopanda inspect` exporting prompts/timeline into user-friendly TOML/JSON while keeping the underlying prompt files on disk as plain text.
+    - `tutopanda edit` re-importing edited TOML inputs, updating per-segment prompt files, hashing them individually, and requesting regeneration.
+  - Retire legacy `build plan` / `events append` commands in favour of the high-level workflow.
+- **Tests**
+  - CLI: thorough Vitest coverage for init/query/edit flows, including validation errors, config precedence, and hashing of edited prompts.
+  - Core: schema tests ensuring enums/validation stay in sync with blueprint inputs and prompt file hashes map cleanly to event-log artefact IDs.
+
 ## Milestone 5 – Runner Infrastructure (dry-run)
 - **Core additions**
   - Implement `Runner.execute` + `Runner.executeJob` with in-memory job graph but stubbed `produce`.
   - Add `RunResult` container with `buildManifest()` placeholder (returns previous manifest for now).
 - **CLI work**
-  - New `pnpm --filter tutopanda-cli run build:prepare --movie <id>` that:
-    - Reads latest plan.
-    - Runs runner in dry-run mode (records intended jobs in `runs/<rev>-progress.json`).
-    - Shows dependency layers and job counts.
+  - Augment the query/edit commands to optionally run in dry-run mode, surfacing the dry-run report inline (replaces prior `build:prepare` utility).
 - **Tests**
   - Core: ensure runner respects plan layering and concurrency guards even with mock `produce`.
   - CLI: confirm command generates progress file and logs layered output.
@@ -77,7 +89,7 @@ This roadmap breaks the storage + execution stack into milestones that each deli
   - Implement `RunResult.buildManifest()` to fold latest artefact events into a new manifest.
 - **CLI work**
   - Add configuration for provider shims (mock implementations for local dev).
-  - Command `pnpm --filter tutopanda-cli run build:execute --movie <id>` executing plan end-to-end using mocks that emit sample artefacts (images/audio as text files).
+  - Extend `query`/`edit` to execute full builds, writing manifests and reporting previews (supersedes `build:execute`).
 - **Tests**
   - Core: unit tests covering blob dedupe + manifest update when new hash differs.
   - CLI: integration test verifying new manifest appears and `current.json` points to revision.
