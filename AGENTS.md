@@ -20,6 +20,11 @@ Run `pnpm install` once to hydrate the workspaces. Use `pnpm dev` for the combin
 
 > **Agent Rule**: When you see an /* eslint-disable no-unused-vars */ Do NOT delete it. It is there for a reason to turn off an overeager rule trying it on Interfaces.
 
+> **Agent Rule**: When running vitest, make sure to cd into the project and run it there, here is how to do for CLI
+```bash
+cd cli && pnpm vitest run --pool=threads --poolOptions.threads.singleThread
+```
+
 ## Coding Style & Naming Conventions
 Write strict TypeScript and prefer functional React components with kebab-case filenames. Route segment folders in `src/app` should follow Next.js rules (`(group)`, `[param]`, etc.). Use Tailwind utilities and the design tokens defined in `tailwind.config.ts` instead of ad-hoc CSS. Internal imports should use the configured aliases such as `@/components/*` and `@/lib/*`. Reuse helpers from `src/lib` before adding new utilities, and keep new files two-space indented to match the existing style.
 

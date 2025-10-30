@@ -9,6 +9,10 @@ import {
 } from '../lib/project-config.js';
 import { readCliConfig } from '../lib/cli-config.js';
 import { generatePlan } from '../lib/planner.js';
+import {
+  executeDryRun,
+  type DryRunSummary,
+} from '../lib/dry-run.js';
 
 export interface QueryOptions {
   prompt: string;
@@ -21,6 +25,7 @@ export interface QueryOptions {
   duration?: number;
   aspectRatio?: string;
   size?: string;
+  dryRun?: boolean;
 }
 
 export interface QueryResult {
@@ -28,6 +33,7 @@ export interface QueryResult {
   storageMovieId: string;
   planPath: string;
   targetRevision: string;
+  dryRun?: DryRunSummary;
 }
 
 export async function runQuery(options: QueryOptions): Promise<QueryResult> {
@@ -70,11 +76,20 @@ export async function runQuery(options: QueryOptions): Promise<QueryResult> {
     isNew: true,
   });
 
+  const dryRun = options.dryRun
+    ? await executeDryRun({
+        movieId: storageMovieId,
+        plan: planResult.plan,
+        manifest: planResult.manifest,
+      })
+    : undefined;
+
   return {
     movieId,
     storageMovieId,
     planPath: planResult.planPath,
     targetRevision: planResult.targetRevision,
+    dryRun,
   };
 }
 

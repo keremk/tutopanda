@@ -11,6 +11,10 @@ import {
 import { formatMovieId } from './query.js';
 import { generatePlan } from '../lib/planner.js';
 import { parsePromptsToml, writePromptFile } from '../lib/prompts.js';
+import {
+  executeDryRun,
+  type DryRunSummary,
+} from '../lib/dry-run.js';
 
 export interface EditOptions {
   movieId: string;
@@ -24,12 +28,14 @@ export interface EditOptions {
   duration?: number;
   aspectRatio?: string;
   size?: string;
+  dryRun?: boolean;
 }
 
 export interface EditResult {
   storageMovieId: string;
   planPath: string;
   targetRevision: string;
+  dryRun?: DryRunSummary;
 }
 
 export async function runEdit(options: EditOptions): Promise<EditResult> {
@@ -88,10 +94,19 @@ export async function runEdit(options: EditOptions): Promise<EditResult> {
     isNew: false,
   });
 
+  const dryRun = options.dryRun
+    ? await executeDryRun({
+        movieId: storageMovieId,
+        plan: planResult.plan,
+        manifest: planResult.manifest,
+      })
+    : undefined;
+
   return {
     storageMovieId,
     planPath: planResult.planPath,
     targetRevision: planResult.targetRevision,
+    dryRun,
   };
 }
 

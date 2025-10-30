@@ -7,6 +7,7 @@ import { runInit } from './commands/init.js';
 import { runQuery } from './commands/query.js';
 import { runInspect } from './commands/inspect.js';
 import { runEdit } from './commands/edit.js';
+import type { DryRunSummary } from './lib/dry-run.js';
 
 const console = globalThis.console;
 
@@ -30,6 +31,7 @@ const cli = meow(
       movieId: { type: 'string' },
       prompts: { type: 'boolean', default: true },
       inputs: { type: 'string' },
+      dryrun: { type: 'boolean' },
     },
   },
 );
@@ -53,6 +55,7 @@ async function main(): Promise<void> {
     movieId?: string;
     prompts?: boolean;
     inputs?: string;
+    dryrun?: boolean;
   };
 
   switch (command) {
@@ -85,9 +88,13 @@ async function main(): Promise<void> {
         duration: flags.duration,
         aspectRatio: flags.aspectRatio,
         size: flags.size,
+        dryRun: Boolean(flags.dryrun),
       });
       console.log(`Movie created with id = ${result.movieId}`);
       console.log(`Plan saved to ${result.planPath}`);
+      if (result.dryRun) {
+        printDryRunSummary(result.dryRun);
+      }
       return;
     }
     case 'inspect': {
@@ -125,9 +132,13 @@ async function main(): Promise<void> {
         duration: flags.duration,
         aspectRatio: flags.aspectRatio,
         size: flags.size,
+        dryRun: Boolean(flags.dryrun),
       });
       console.log(`Updated prompts for movie ${flags.movieId}. New revision: ${result.targetRevision}`);
       console.log(`Plan saved to ${result.planPath}`);
+      if (result.dryRun) {
+        printDryRunSummary(result.dryRun);
+      }
       return;
     }
     default: {
@@ -137,3 +148,22 @@ async function main(): Promise<void> {
 }
 
 void main();
+
+function printDryRunSummary(summary: DryRunSummary): void {
+  const counts = summary.statusCounts;
+  console.log(
+    `Dry run status: ${summary.status}. Layers: ${summary.layers}. Jobs: ${summary.jobCount} (succeeded ${counts.succeeded}, failed ${counts.failed}, skipped ${counts.skipped}).`,
+  );
+
+  const preview = summary.jobs.slice(0, 5);
+  if (preview.length === 0) {
+    return;
+  }
+  console.log('Sample jobs:');
+  for (const job of preview) {
+    console.log(`  [Layer ${job.layerIndex}] ${job.producer} -> ${job.status}`);
+  }
+  if (summary.jobs.length > preview.length) {
+    console.log(`  … ${summary.jobs.length - preview.length} more`);
+  }
+}

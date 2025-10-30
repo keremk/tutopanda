@@ -46,6 +46,7 @@ describe('runEdit', () => {
     const editResult = await runEdit({ movieId: queryResult.movieId, inputsPath: promptTomlPath });
 
     expect(editResult.targetRevision).toBe('rev-0002');
+    expect(editResult.dryRun).toBeUndefined();
 
     const cliConfig = JSON.parse(await readFile(cliConfigPath, 'utf8')) as {
       storage: { root: string; basePath: string };
@@ -55,5 +56,20 @@ describe('runEdit', () => {
     const inquiryPath = resolve(cliConfig.storage.root, cliConfig.storage.basePath, storageMovieId, 'prompts', 'inquiry.txt');
     const inquiryContents = await readFile(inquiryPath, 'utf8');
     expect(inquiryContents.trim()).toBe('Tell me about stars');
+  });
+
+  it('supports dry run mode', async () => {
+    const root = await createTempRoot();
+    const cliConfigPath = join(root, 'cli-config.json');
+    process.env.TUTOPANDA_CLI_CONFIG = cliConfigPath;
+
+    await runInit({ rootFolder: root, configPath: cliConfigPath });
+    const queryResult = await runQuery({ prompt: 'Describe oceans' });
+
+    const editResult = await runEdit({ movieId: queryResult.movieId, dryRun: true });
+
+    expect(editResult.dryRun).toBeDefined();
+    expect(editResult.dryRun?.jobCount).toBeGreaterThan(0);
+    expect(editResult.dryRun?.statusCounts.skipped).toBeGreaterThan(0);
   });
 });

@@ -42,6 +42,7 @@ describe('runQuery', () => {
     const result = await runQuery({ prompt: 'Tell me a story about the sea' });
 
     expect(result.movieId).toHaveLength(8);
+    expect(result.dryRun).toBeUndefined();
 
     const cliConfig = await readCliConfig(cliConfigPath);
     expect(cliConfig).not.toBeNull();
@@ -54,5 +55,20 @@ describe('runQuery', () => {
 
     const prompt = await readFile(join(movieDir, 'prompts', 'inquiry.txt'), 'utf8');
     expect(prompt.trim()).toBe('Tell me a story about the sea');
+  });
+
+  it('can perform a dry run and report summary', async () => {
+    const root = await createTempRoot();
+    const cliConfigPath = join(root, 'cli-config.json');
+    process.env.TUTOPANDA_CLI_CONFIG = cliConfigPath;
+
+    await runInit({ rootFolder: root, configPath: cliConfigPath });
+
+    const result = await runQuery({ prompt: 'Explain gravity', dryRun: true });
+
+    expect(result.dryRun).toBeDefined();
+    expect(result.dryRun?.status).toBe('succeeded');
+    expect(result.dryRun?.jobCount).toBeGreaterThan(0);
+    expect(result.dryRun?.statusCounts.skipped).toBeGreaterThan(0);
   });
 });

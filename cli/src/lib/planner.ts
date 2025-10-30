@@ -15,6 +15,8 @@ import {
   type InputValues,
   type Manifest,
   type RevisionId,
+  type ExecutionPlan,
+  type StorageContext,
 } from 'tutopanda-core';
 import type { CliConfig } from './cli-config.js';
 import type { ProjectConfig } from 'tutopanda-core';
@@ -33,6 +35,8 @@ export interface GeneratePlanResult {
   planPath: string;
   targetRevision: string;
   inputEvents: InputEvent[];
+  manifest: Manifest;
+  plan: ExecutionPlan;
 }
 
 export async function generatePlan(options: GeneratePlanOptions): Promise<GeneratePlanResult> {
@@ -59,7 +63,8 @@ export async function generatePlan(options: GeneratePlanOptions): Promise<Genera
   const planner = createPlanner();
 
   const manifest = await loadOrCreateManifest(manifestService, movieId);
-  const targetRevision = nextRevisionId(manifest.revision ?? null);
+  let targetRevision = nextRevisionId(manifest.revision ?? null);
+  targetRevision = await ensureUniquePlanRevision(storageContext, movieId, targetRevision);
 
   const { blueprint, inputValues } = deriveBlueprintAndInputs(projectConfig);
   const pendingEvents = createInputEvents(prompt, inputValues, targetRevision);
@@ -80,7 +85,13 @@ export async function generatePlan(options: GeneratePlanOptions): Promise<Genera
   await planStore.save(plan, { movieId, storage: storageContext });
 
   const planPath = resolve(movieDir, 'runs', `${targetRevision}-plan.json`);
-  return { planPath, targetRevision, inputEvents: pendingEvents };
+  return {
+    planPath,
+    targetRevision,
+    inputEvents: pendingEvents,
+    manifest,
+    plan,
+  };
 }
 
 async function loadOrCreateManifest(
@@ -132,4 +143,25 @@ function makeInputEvent(id: string, payload: unknown, revision: RevisionId, crea
     editedBy: 'user',
     createdAt,
   };
+}
+
+async function ensureUniquePlanRevision(
+  storageContext: StorageContext,
+  movieId: string,
+  initial: RevisionId,
+): Promise<RevisionId> {
+  let candidate = initial;
+  while (await planExists(storageContext, movieId, candidate)) {
+    candidate = nextRevisionId(candidate);
+  }
+  return candidate;
+}
+
+async function planExists(
+  storageContext: StorageContext,
+  movieId: string,
+  revision: RevisionId,
+): Promise<boolean> {
+  const planPath = storageContext.resolve(movieId, 'runs', `${revision}-plan.json`);
+  return storageContext.storage.fileExists(planPath);
 }

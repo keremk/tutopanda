@@ -231,3 +231,51 @@ export interface ArtefactEvent {
   diagnostics?: Record<string, unknown>;
   createdAt: IsoDatetime;
 }
+
+export interface SerializedError {
+  name: string;
+  message: string;
+  stack?: string;
+}
+
+export interface ProduceRequest {
+  movieId: Id;
+  job: JobDescriptor;
+  layerIndex: number;
+  attempt: number;
+  revision: RevisionId;
+}
+
+export interface ProduceResult {
+  jobId: Id;
+  status: ArtefactEventStatus;
+  artefacts?: ArtefactEvent[];
+  diagnostics?: Record<string, unknown>;
+}
+
+export type ProduceFn = (request: ProduceRequest) => Promise<ProduceResult>;
+
+export interface JobResult {
+  jobId: Id;
+  producer: ProducerKind | string;
+  status: ArtefactEventStatus;
+  artefacts: ArtefactEvent[];
+  diagnostics?: Record<string, unknown>;
+  layerIndex: number;
+  attempt: number;
+  startedAt: IsoDatetime;
+  completedAt: IsoDatetime;
+  error?: SerializedError;
+}
+
+export type RunStatus = 'succeeded' | 'failed';
+
+export interface RunResult {
+  status: RunStatus;
+  revision: RevisionId;
+  manifestBaseHash: string;
+  jobs: JobResult[];
+  startedAt: IsoDatetime;
+  completedAt: IsoDatetime;
+  buildManifest(): Promise<Manifest>;
+}
