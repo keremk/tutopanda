@@ -1,37 +1,38 @@
 import { describe, expect, it } from 'vitest';
-import { BuildPlanConfigSchema } from './config.js';
+import { createDefaultProjectConfig, parseProjectConfig } from './config.js';
 
-describe('BuildPlanConfigSchema', () => {
-  it('parses a valid config', () => {
-    const config = BuildPlanConfigSchema.parse({
-      blueprint: {
-        segmentCount: 2,
-        imagesPerSegment: 1,
-        useVideo: false,
-        isImageToVideo: false,
-      },
-      inputs: {
-        InquiryPrompt: 'Write a story',
-        Duration: 60,
-        SegmentNarrationInput: ['line one'],
-        UseVideo: false,
-        ImagesPerSegment: 1,
-      },
-    });
-    expect(config.blueprint.segmentCount).toBe(2);
+describe('ProjectConfigSchema', () => {
+  it('provides defaults when fields are omitted', () => {
+    const config = createDefaultProjectConfig();
+    expect(config.General.UseVideo).toBe(false);
+    expect(config.General.Duration).toBe(60);
+    expect(config.Image.ImagesPerSegment).toBe(2);
+    expect(config.Video.IsImageToVideo).toBe(false);
   });
 
-  it('rejects invalid blueprint config', () => {
-    expect(() =>
-      BuildPlanConfigSchema.parse({
-        blueprint: {
-          segmentCount: 0,
-          imagesPerSegment: 1,
-          useVideo: false,
-          isImageToVideo: false,
+  it('parses provided values and keeps unknown fields optional', () => {
+    const config = parseProjectConfig({
+      General: {
+        UseVideo: true,
+        Duration: 90,
+        Style: 'Pixar',
+      },
+      Image: {
+        ImagesPerSegment: 3,
+      },
+      Video: {
+        IsImageToVideo: true,
+        ImageToVideo: {
+          Segment_1: false,
         },
-        inputs: {},
-      }),
-    ).toThrow();
+      },
+    });
+
+    expect(config.General.UseVideo).toBe(true);
+    expect(config.General.Duration).toBe(90);
+    expect(config.General.Style).toBe('Pixar');
+    expect(config.Image.ImagesPerSegment).toBe(3);
+    expect(config.Video.IsImageToVideo).toBe(true);
+    expect(config.Video.ImageToVideo.Segment_1).toBe(false);
   });
 });

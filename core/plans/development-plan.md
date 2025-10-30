@@ -82,17 +82,45 @@ This roadmap breaks the storage + execution stack into milestones that each deli
   - Core: ensure runner respects plan layering and concurrency guards even with mock `produce`.
   - CLI: confirm command generates progress file and logs layered output.
 
+## Milestone 5.5 – Provider Registry with Mock Producers
+- **Providers package**
+  - Implement the registry described in `providers/docs/provider-architecture.md`, loading mappings and exposing `resolve`/`warmStart`.
+  - Populate `mappings.ts` with mock-only handlers for every `ProducerKind`, returning deterministic artefacts suitable for unit and integration tests.
+  - Add shared fixtures/utilities (`secretResolver`, logger adapters) and document the usage in the providers README.
+- **Core updates**
+  - Extend the producer catalog so every `Producer` definition includes `provider` and `providerModel` metadata (even if they point at mock providers for now).
+  - Update the runner’s `produce` stub to call into the providers registry (mock mode) and surface structured `ProducerResult` data.
+- **CLI work**
+  - Introduce configuration flag(s) for selecting provider mode (`--provider-mode=mock` default) and wire them through to the runner.
+  - Add a `--dryrun` option to `tutopanda query` / `edit` that executes the full plan against the mock providers, persists mock artefacts, and prints a summary so new producers/blueprints can be validated manually.
+- **Tests**
+  - Providers: Vitest coverage for registry resolution, per-kind mock producers, and secret resolver defaults.
+  - Core/CLI: integration test showing a full plan + run uses the registry and produces mock artefacts end-to-end.
+
 ## Milestone 6 – ProduceFn Wiring & Asset Blob Writes
 - **Core additions**
   - Define `BlobRef` + blob store helpers (content-addressed path under `blobs/`).
-  - Update `Runner.execute` to call provided `produce`, append artefact events, and return manifest-builder input.
+  - Update `Runner.execute` to work with the registry-backed mock producers, append artefact events, and return manifest-builder input.
   - Implement `RunResult.buildManifest()` to fold latest artefact events into a new manifest.
 - **CLI work**
-  - Add configuration for provider shims (mock implementations for local dev).
-  - Extend `query`/`edit` to execute full builds, writing manifests and reporting previews (supersedes `build:execute`).
+  - Extend `query`/`edit` to execute full builds, writing manifests and reporting previews (supersedes `build:execute`), still defaulting to mock providers.
 - **Tests**
   - Core: unit tests covering blob dedupe + manifest update when new hash differs.
-  - CLI: integration test verifying new manifest appears and `current.json` points to revision.
+  - CLI: integration test verifying new manifest appears and `current.json` points to revision using mock artefacts.
+
+## Milestone 6.5 – Live Provider Integrations
+- **Providers package**
+  - Implement live handlers for the initial provider/model pairs (OpenAI script/prompt, Replicate image/video/music/audio).
+  - Add provider-specific client wrappers (OpenAI, Replicate, ElevenLabs) plus retry/rate-limit utilities.
+  - Document required environment variables and update mappings to select live factories when `providerMode` is `live`.
+- **Core updates**
+  - Teach the runner to choose between mock and live handlers per job (CLI flag, per-movie config, or environment toggle).
+  - Ensure provider metadata (provider slug, model id, cost class) is emitted into artefact events and manifests.
+- **CLI work**
+  - Add user-facing options for selecting providers/models, validating availability via the registry, and surfacing cost warnings.
+- **Tests**
+  - Providers: integration tests for each live handler using mocked HTTP (e.g., MSW) plus smoketest gating for real API calls behind an explicit flag.
+  - Core/CLI: regression test ensuring mixed-mode runs (some live, some mock) resolve correctly and persist provider metadata.
 
 ## Milestone 7 – End-to-End Regeneration Loop
 - **Core additions**

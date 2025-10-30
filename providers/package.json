@@ -1,0 +1,34 @@
+{
+  "name": "tutopanda-providers",
+  "version": "1.0.0",
+  "description": "AI provider integrations for Tutopanda",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "license": "MIT",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "lint": "eslint src",
+    "type-check": "tsc --noEmit",
+    "test": "vitest",
+    "test:typecheck": "tsc --project tsconfig.vitest.json --noEmit",
+    "test:ui": "vitest --ui",
+    "test:run": "vitest run"
+  },
+  "keywords": ["ai", "providers", "openai", "replicate", "elevenlabs"],
+  "author": "",
+  "packageManager": "pnpm@10.15.0",
+  "dependencies": {},
+  "devDependencies": {
+    "@eslint/eslintrc": "^3.3.1",
+    "@eslint/js": "^9.36.0",
+    "@types/node": "^20.16.11",
+    "@typescript-eslint/parser": "^8.18.2",
+    "@vitest/ui": "^3.2.4",
+    "eslint": "^8",
+    "eslint-config-prettier": "^10.1.8",
+    "typescript": "^5.6.3",
+    "vitest": "^3.2.4"
+  }
+}
