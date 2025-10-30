@@ -4,16 +4,16 @@
 Initialize tutopanda CLI before use. Expected to be called once
 
 ```bash
-tutopanda init --rootFolder=/Path/To/Folder --defaultConfig=/Path/To/DefaultConfig.json
+tutopanda init --rootFolder=/Path/To/Folder --defaultSettings=/Path/To/DefaultSettings.json
 ```
-- Creates the initial folder structures and default config file. 
+- Creates the initial folder structures and default settings file. 
     - If rootFolder is not specified, it uses ~/.tutopanda as the root.
         - The builds will go under a `builds/` folder (always)
         - Each build will be under a folder `movie-{movieId}` under `builds/`
-    - If defaultConfig is not specified, it creates a default config
-        - `{rootFolder}\default-config.json`
+    - If defaultSettings is not specified, it creates a default settings
+        - `{rootFolder}\default-settings.json`
 
-### Default Config Values:
+### Default Settings Values:
 Added some sane defaults to use (some of them not yet defined, will define in later milestones)
 ```json
 {
@@ -74,7 +74,7 @@ Following are available as shortcuts (commandline arguments): style, voice, useV
 ```bash
 tutopanda query "Tell me about Civil war" --settings=Path/To/Config/config.json 
 ```
-This will allow them to provide a JSON which is a subset of the Default config values. And the specified values will override the defaults.
+This will allow them to provide a JSON which is a subset of the default settings values. And the specified values will override the defaults.
 
 - Running `tutopanda query` will return a `movieId` after successful completion. This can be used for subsequent regenerations to edit a generated movie. Here is what the `tutopanda query` returns as the final result (we will still specify all the intermediate notifications it will return as it creates and executes a plan, but this is the final summary)
 ```bash
@@ -229,7 +229,7 @@ tutopanda inspect --movieId=q12345 --errors
 
 ## CLI Runtime Role
 - The CLI is responsible for collecting user prompts, configurations, and edits. It serializes prompt edits to TOML purely as a user-facing format; core storage keeps prompts as plain text files (with full formatting) and the CLI converts between TOML and those files.
-- For initial queries, the CLI merges the default config (from `tutopanda init`) with command-line overrides and the prompt argument, then invokes the core planner/runner pipeline.
+- For initial queries, the CLI merges the default settings (from `tutopanda init`) with command-line overrides and the prompt argument, then invokes the core planner/runner pipeline.
 - For regenerations, `tutopanda inspect` exports prompts/timeline to TOML/JSON for editing. When the user runs `tutopanda edit`, the CLI hashes each edited prompt individually, writes them back to the structured prompt files, and hands the hashes to core so only changed segments rerun.
 - The CLI never writes to the content-addressed blob store directly; it delegates all persistence of artefacts to the core storage helpers.
 - TOML/JSON exchanges are strictly CLI–user interfaces. Core services see structured prompt files and hashes, not TOML payloads.

@@ -1,170 +1,139 @@
 #!/usr/bin/env node
 /* eslint-env node */
 /* eslint-disable no-console */
-import React from 'react';
-import { render } from 'ink';
-import meow from 'meow';
 import process from 'node:process';
-import App from './app.js';
-import { runBuildPlan } from './commands/build-plan.js';
-import { runManifestShow } from './commands/manifest-show.js';
-import { runEventsAppend } from './commands/events-append.js';
-import { runStorageInit } from './commands/storage-init.js';
-import { runInitCli } from './commands/init-cli.js';
+import meow from 'meow';
+import { runInit } from './commands/init.js';
+import { runQuery } from './commands/query.js';
+import { runInspect } from './commands/inspect.js';
+import { runEdit } from './commands/edit.js';
 
 const console = globalThis.console;
 
 const cli = meow(
-  `\nUsage\n  $ tutopanda <command> [options]\n\nCommands\n  storage init      Initialize storage structure for a movie\n  events append     Append an event JSON payload to the appropriate log\n  manifest show     Print the latest manifest for a movie\n  build plan        Generate an execution plan for a configuration\n\nOptions\n  --movie <id>        Movie identifier (required)\n  --root <path>      Root directory for storage (defaults to cwd)\n  --base-path <prefix>  Optional base prefix inside the storage root\n  --type <kind>      Event kind (input|artifact) for events append\n  --file <path>      Path to JSON file describing the event payload\n  --config <path>    Path to JSON configuration file for build plan\n  --prompt <text>    Optional prompt override when generating a plan\n\nExamples\n  $ tutopanda storage init --movie demo\n  $ tutopanda events append --movie demo --type input --file input.json\n  $ tutopanda manifest show --movie demo\n  $ tutopanda build plan --movie demo --config config.json --prompt "Tell me a story"\n`,
+  `\nUsage\n  $ tutopanda <command> [options]\n\nCommands\n  init              Initialize Tutopanda CLI configuration\n  query <prompt>    Generate a plan for a new movie using defaults + overrides\n  inspect           Export prompts or timeline data for a movie\n  edit              Apply prompt/config edits and regenerate a movie\n\nExamples\n  $ tutopanda init --rootFolder=~/media/tutopanda --defaultSettings=~/media/tutopanda/default-settings.json\n  $ tutopanda query "Tell me about the Civil War" --style=Pixar --voice=Clara\n  $ tutopanda inspect --movieId=q123456 --prompts\n  $ tutopanda edit --movieId=q123456 --inputs=edited-prompts.toml\n`,
   {
     importMeta: import.meta,
     flags: {
-      movie: {
-        type: 'string',
-      },
-      root: {
-        type: 'string',
-      },
-      basePath: {
-        type: 'string',
-      },
-      name: {
-        type: 'string',
-      },
-      type: {
-        type: 'string',
-      },
-      file: {
-        type: 'string',
-      },
-      config: {
-        type: 'string',
-      },
-      prompt: {
-        type: 'string',
-      },
-      storagePath: {
-        type: 'string',
-      },
+      rootFolder: { type: 'string' },
+      defaultSettings: { type: 'string' },
+      settings: { type: 'string' },
+      settingsPath: { type: 'string' },
+      style: { type: 'string' },
+      voice: { type: 'string' },
+      useVideo: { type: 'boolean' },
+      audience: { type: 'string' },
+      language: { type: 'string' },
+      duration: { type: 'number' },
+      aspectRatio: { type: 'string' },
+      size: { type: 'string' },
+      movieId: { type: 'string' },
+      prompts: { type: 'boolean', default: true },
+      inputs: { type: 'string' },
     },
   },
 );
 
 async function main(): Promise<void> {
-  const [command, subcommand] = cli.input;
+  const [command, ...rest] = cli.input;
+  const flags = cli.flags as {
+    rootFolder?: string;
+    defaultSettings?: string;
+    configPath?: string;
+    settings?: string;
+    settingsPath?: string;
+    style?: string;
+    voice?: string;
+    useVideo?: boolean;
+    audience?: string;
+    language?: string;
+    duration?: number;
+    aspectRatio?: string;
+    size?: string;
+    movieId?: string;
+    prompts?: boolean;
+    inputs?: string;
+  };
 
-  if (command === 'storage' && subcommand === 'init') {
-    if (!cli.flags.movie) {
-      console.error('Error: --movie is required for storage init');
-      process.exitCode = 1;
+  switch (command) {
+    case 'init': {
+      const result = await runInit({
+        rootFolder: flags.rootFolder,
+        defaultSettings: flags.defaultSettings,
+        configPath: flags.configPath,
+      });
+      console.log(`Initialized Tutopanda CLI at ${result.rootFolder}`);
+      console.log(`Default settings: ${result.defaultSettingsPath}`);
+      console.log(`Builds directory: ${result.buildsFolder}`);
       return;
     }
-
-    const { rootPath } = await runStorageInit({
-      movieId: cli.flags.movie,
-      rootDir: cli.flags.root,
-      basePath: cli.flags.basePath,
-    });
-    console.log(`Initialized storage at ${rootPath}`);
-    return;
+    case 'query': {
+      const prompt = rest.join(' ').trim();
+      if (!prompt) {
+        console.error('Error: prompt is required for query.');
+        process.exitCode = 1;
+        return;
+      }
+      const result = await runQuery({
+        prompt,
+        settingsPath: flags.settings ?? flags.settingsPath,
+        style: flags.style,
+        voice: flags.voice,
+        useVideo: flags.useVideo,
+        audience: flags.audience,
+        language: flags.language,
+        duration: flags.duration,
+        aspectRatio: flags.aspectRatio,
+        size: flags.size,
+      });
+      console.log(`Movie created with id = ${result.movieId}`);
+      console.log(`Plan saved to ${result.planPath}`);
+      return;
+    }
+    case 'inspect': {
+      if (!flags.movieId) {
+        console.error('Error: --movieId is required for inspect.');
+        process.exitCode = 1;
+        return;
+      }
+      const result = await runInspect({
+        movieId: flags.movieId,
+        prompts: flags.prompts,
+      });
+      if (result.promptsToml) {
+        console.log(result.promptsToml);
+      } else {
+        console.log('No prompts found for the specified movie.');
+      }
+      return;
+    }
+    case 'edit': {
+      if (!flags.movieId) {
+        console.error('Error: --movieId is required for edit.');
+        process.exitCode = 1;
+        return;
+      }
+      const result = await runEdit({
+        movieId: flags.movieId,
+        inputsPath: flags.inputs,
+        settingsPath: flags.settings ?? flags.settingsPath,
+        style: flags.style,
+        voice: flags.voice,
+        useVideo: flags.useVideo,
+        audience: flags.audience,
+        language: flags.language,
+        duration: flags.duration,
+        aspectRatio: flags.aspectRatio,
+        size: flags.size,
+      });
+      console.log(`Updated prompts for movie ${flags.movieId}. New revision: ${result.targetRevision}`);
+      console.log(`Plan saved to ${result.planPath}`);
+      return;
+    }
+    default: {
+      cli.showHelp();
+    }
   }
-
-  if (command === 'events' && subcommand === 'append') {
-    if (!cli.flags.movie) {
-      console.error('Error: --movie is required for events append');
-      process.exitCode = 1;
-      return;
-    }
-    const rawType = cli.flags.type?.toLowerCase();
-    if (!rawType) {
-      console.error('Error: --type is required for events append');
-      process.exitCode = 1;
-      return;
-    }
-    const normalizedType = rawType === 'artefact' ? 'artifact' : rawType;
-    if (normalizedType !== 'input' && normalizedType !== 'artifact') {
-      console.error('Error: --type must be either "input" or "artifact"');
-      process.exitCode = 1;
-      return;
-    }
-    if (!cli.flags.file) {
-      console.error('Error: --file is required for events append');
-      process.exitCode = 1;
-      return;
-    }
-
-    const { eventPath } = await runEventsAppend({
-      movieId: cli.flags.movie,
-      type: normalizedType,
-      file: cli.flags.file,
-      rootDir: cli.flags.root,
-      basePath: cli.flags.basePath,
-    });
-    console.log(`Appended ${normalizedType} event from ${eventPath}`);
-    return;
-  }
-
-  if (command === 'manifest' && subcommand === 'show') {
-    if (!cli.flags.movie) {
-      console.error('Error: --movie is required for manifest show');
-      process.exitCode = 1;
-      return;
-    }
-
-    const result = await runManifestShow({
-      movieId: cli.flags.movie,
-      rootDir: cli.flags.root,
-      basePath: cli.flags.basePath,
-    });
-
-    if (result.status === 'not-found') {
-      console.error('No manifest found. Run a build to create the first revision.');
-      process.exitCode = 1;
-      return;
-    }
-
-    console.log(JSON.stringify(result.manifest, null, 2));
-    console.log(`Manifest hash: ${result.hash}`);
-    return;
-  }
-
-  if (command === 'build' && subcommand === 'plan') {
-    if (!cli.flags.movie) {
-      console.error('Error: --movie is required for build plan');
-      process.exitCode = 1;
-      return;
-    }
-    if (!cli.flags.config) {
-      console.error('Error: --config is required for build plan');
-      process.exitCode = 1;
-      return;
-    }
-
-    const result = await runBuildPlan({
-      movieId: cli.flags.movie,
-      configPath: cli.flags.config,
-      prompt: cli.flags.prompt,
-      rootDir: cli.flags.root,
-      basePath: cli.flags.basePath,
-    });
-
-    console.log(JSON.stringify(result.plan, null, 2));
-    console.log(`Plan saved to ${result.planPath}`);
-    return;
-  }
-
-  if (command === 'init') {
-    const result = await runInitCli({
-      configPath: cli.flags.config,
-      storagePath: cli.flags.storagePath,
-    });
-    console.log(`CLI configuration written to ${result.configPath}`);
-    console.log(`Default storage path: ${result.storagePath}`);
-    return;
-  }
-
-  render(<App name={cli.flags.name} />);
 }
-
 
 void main();

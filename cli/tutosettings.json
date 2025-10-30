@@ -1,0 +1,45 @@
+{
+  "General": {
+    "UseVideo": false,
+    "Audience": "general",
+    "AudiencePrompt": "",
+    "Language": "en",
+    "Duration": 60,
+    "AspectRatio": "16:9",
+    "Size": "480p",
+    "Style": "Ghibli",
+    "CustomStyle": ""
+  },
+  "Audio": {
+    "Voice": "Atlas",
+    "Emotion": "dramatic",
+    "Model": "",
+    "Provider": ""
+  },
+  "Music": {
+    "Prompt": "",
+    "Model": "",
+    "Provider": ""
+  },
+  "ScriptGeneration": {
+    "Model": "",
+    "Provider": "",
+    "ReasoningEffort": ""
+  },
+  "Image": {
+    "Format": "PNG",
+    "Model": "",
+    "Provider": "",
+    "ImagesPerSegment": 2
+  },
+  "Video": {
+    "Model": "",
+    "Provider": "",
+    "ImageModel": "",
+    "ImageProvider": "",
+    "IsImageToVideo": false,
+    "ImageToVideo": {},
+    "AssemblyStrategy": "speed-adjustment",
+    "SegmentAnimations": {}
+  }
+}
