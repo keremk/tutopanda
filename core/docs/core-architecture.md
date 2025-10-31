@@ -36,6 +36,15 @@ builds/movie_civilwar_001/
 - **Readable prompts & scripts** live alongside the artefact tree in dedicated folders (e.g. `prompts/segment/segment-0003/image.txt`). Each file is hashed individually when we append artefact events, preserving formatting while still enabling dirty detection.  
 - **Derived text artefacts** (scripts, summaries) remain inline in the manifest unless they grow large—in that case we mirror the prompt pattern and drop the content into `artifacts/text/<id>.txt` while the manifest references it by hash.  
 - Garbage collection removes blob files and prompt/script files that are no longer referenced by any manifest (mark-and-sweep after new manifests are committed).
+- The blobs/ layout is a classic content-addressed scheme: every artefact gets hashed (SHA-256), and we store the payload under
+  <blobs>/<first-two-hex-digits>/<full-hash>. So:
+
+  - The subfolders (34, ec, 7d, …) are just the first two characters of the hash.
+  - This keeps each directory from getting huge when many blobs share the same prefix.
+  - The filename is the full hash; that lets us deduplicate identical artefacts across runs because we never rewrite the same hash
+    twice.
+  - When the runner writes an artefact, it records the hash in the manifest/event log alongside the metadata so downstream consumers
+    can fetch it from blobs/ using the hash.
 
 ### Benefits Over Current Plan
 - No path rewriting logic: every consumer dereferences artefact IDs via the manifest, so historical snapshots remain valid even after pruning.  

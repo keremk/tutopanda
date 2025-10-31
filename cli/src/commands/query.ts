@@ -13,6 +13,10 @@ import {
   executeDryRun,
   type DryRunSummary,
 } from '../lib/dry-run.js';
+import {
+  executeBuild,
+  type BuildSummary,
+} from '../lib/build.js';
 
 export interface QueryOptions {
   prompt: string;
@@ -34,6 +38,9 @@ export interface QueryResult {
   planPath: string;
   targetRevision: string;
   dryRun?: DryRunSummary;
+  build?: BuildSummary;
+  manifestPath?: string;
+  storagePath: string;
 }
 
 export async function runQuery(options: QueryOptions): Promise<QueryResult> {
@@ -67,6 +74,9 @@ export async function runQuery(options: QueryOptions): Promise<QueryResult> {
 
   const movieId = generateMovieId();
   const storageMovieId = formatMovieId(movieId);
+  const storageRoot = cliConfig.storage.root;
+  const storageBasePath = cliConfig.storage.basePath;
+  const movieDir = resolve(storageRoot, storageBasePath, storageMovieId);
 
   const planResult = await generatePlan({
     cliConfig,
@@ -81,8 +91,19 @@ export async function runQuery(options: QueryOptions): Promise<QueryResult> {
         movieId: storageMovieId,
         plan: planResult.plan,
         manifest: planResult.manifest,
+        storage: { rootDir: storageRoot, basePath: storageBasePath },
       })
     : undefined;
+
+  const buildResult = options.dryRun
+    ? undefined
+    : await executeBuild({
+        cliConfig,
+        movieId: storageMovieId,
+        plan: planResult.plan,
+        manifest: planResult.manifest,
+        manifestHash: planResult.manifestHash,
+      });
 
   return {
     movieId,
@@ -90,6 +111,9 @@ export async function runQuery(options: QueryOptions): Promise<QueryResult> {
     planPath: planResult.planPath,
     targetRevision: planResult.targetRevision,
     dryRun,
+    build: buildResult?.summary,
+    manifestPath: buildResult?.manifestPath,
+    storagePath: movieDir,
   };
 }
 

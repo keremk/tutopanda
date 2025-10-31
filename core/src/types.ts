@@ -88,6 +88,16 @@ export interface Producer {
   medianLatencySec?: number;
 }
 
+export interface ProducerCatalogEntry {
+  provider: ProviderName;
+  providerModel: string;
+  rateKey: string;
+  costClass?: "low" | "mid" | "high";
+  medianLatencySec?: number;
+}
+
+export type ProducerCatalog = Record<ProducerKind, ProducerCatalogEntry>;
+
 type NodeId<K extends NodeKind> =
   K extends "InputSource" ? InputSourceKind :
   K extends "Producer" ? ProducerKind :
@@ -132,6 +142,10 @@ export interface JobDescriptor {
   jobId: Id;
   producer: ProducerKind | string;
   inputs: Id[];
+  produces: Id[];
+  provider: ProviderName;
+  providerModel: string;
+  rateKey: string;
   context?: Record<string, unknown>;
 }
 
@@ -190,6 +204,9 @@ export interface ProducerGraphNode {
   producer: ProducerKind | string;
   inputs: Id[];
   produces: Id[];
+  provider: ProviderName;
+  providerModel: string;
+  rateKey: string;
   context?: Record<string, unknown>;
 }
 
@@ -238,6 +255,19 @@ export interface SerializedError {
   stack?: string;
 }
 
+export interface ProducedBlobOutput {
+  data: Uint8Array | string;
+  mimeType: string;
+}
+
+export interface ProducedArtefact {
+  artefactId: Id;
+  status?: ArtefactEventStatus;
+  inline?: string;
+  blob?: ProducedBlobOutput;
+  diagnostics?: Record<string, unknown>;
+}
+
 export interface ProduceRequest {
   movieId: Id;
   job: JobDescriptor;
@@ -248,11 +278,12 @@ export interface ProduceRequest {
 
 export interface ProduceResult {
   jobId: Id;
-  status: ArtefactEventStatus;
-  artefacts?: ArtefactEvent[];
+  status?: ArtefactEventStatus;
+  artefacts: ProducedArtefact[];
   diagnostics?: Record<string, unknown>;
 }
 
+/* eslint-disable no-unused-vars */
 export type ProduceFn = (request: ProduceRequest) => Promise<ProduceResult>;
 
 export interface JobResult {

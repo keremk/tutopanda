@@ -27,6 +27,8 @@
 		"meow": "^11.0.0",
 		"react": "^18.2.0",
 		"smol-toml": "^1.4.2",
+		"tutopanda-core": "workspace:*",
+		"tutopanda-providers": "workspace:*",
 		"zod": "^3.25.76"
 	},
 	"devDependencies": {

@@ -1,6 +1,6 @@
 /* eslint-env node */
 import process from 'node:process';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -47,6 +47,10 @@ describe('runEdit', () => {
 
     expect(editResult.targetRevision).toBe('rev-0002');
     expect(editResult.dryRun).toBeUndefined();
+    expect(editResult.build?.status).toBe('succeeded');
+    expect(editResult.manifestPath).toBeDefined();
+    const manifestStats = await stat(editResult.manifestPath!);
+    expect(manifestStats.isFile()).toBe(true);
 
     const cliConfig = JSON.parse(await readFile(cliConfigPath, 'utf8')) as {
       storage: { root: string; basePath: string };
@@ -66,10 +70,11 @@ describe('runEdit', () => {
     await runInit({ rootFolder: root, configPath: cliConfigPath });
     const queryResult = await runQuery({ prompt: 'Describe oceans' });
 
-    const editResult = await runEdit({ movieId: queryResult.movieId, dryRun: true });
+    const editResult = await runEdit({ movieId: queryResult.movieId, dryRun: true, style: 'Pixar' });
 
     expect(editResult.dryRun).toBeDefined();
     expect(editResult.dryRun?.jobCount).toBeGreaterThan(0);
-    expect(editResult.dryRun?.statusCounts.skipped).toBeGreaterThan(0);
+    expect(editResult.dryRun?.statusCounts.succeeded).toBeGreaterThan(0);
+    expect(editResult.build).toBeUndefined();
   });
 });

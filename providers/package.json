@@ -19,7 +19,9 @@
   "keywords": ["ai", "providers", "openai", "replicate", "elevenlabs"],
   "author": "",
   "packageManager": "pnpm@10.15.0",
-  "dependencies": {},
+  "dependencies": {
+    "tutopanda-core": "workspace:*"
+  },
   "devDependencies": {
     "@eslint/eslintrc": "^3.3.1",
     "@eslint/js": "^9.36.0",

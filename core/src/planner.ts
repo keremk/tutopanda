@@ -12,9 +12,11 @@ import {
   type ExecutionPlan,
   type InputEvent,
   type Manifest,
+  type ProducerCatalog,
   type ProducerGraph,
   type ProducerGraphEdge,
   type ProducerGraphNode,
+  type ProducerKind,
   type RevisionId,
 } from './types.js';
 
@@ -23,6 +25,7 @@ interface PlannerOptions {
   clock?: Clock;
 }
 
+/* eslint-disable no-unused-vars */
 export interface PlannerLogger {
   info?(message: string, meta?: Record<string, unknown>): void;
   warn?(message: string, meta?: Record<string, unknown>): void;
@@ -84,12 +87,16 @@ export function createPlanner(options: PlannerOptions = {}) {
 
 export function createProducerGraphFromConfig(
   config: BlueprintExpansionConfig,
+  catalog: ProducerCatalog,
 ): ProducerGraph {
   const expanded = expandBlueprint(config);
-  return createProducerGraph(expanded);
+  return createProducerGraph(expanded, catalog);
 }
 
-export function createProducerGraph(expanded: ExpandedBlueprint): ProducerGraph {
+export function createProducerGraph(
+  expanded: ExpandedBlueprint,
+  catalog: ProducerCatalog,
+): ProducerGraph {
   const nodeMap = new Map(expanded.nodes.map((node) => [node.key, node]));
   const producerNodes = expanded.nodes.filter(
     (node) => node.ref.kind === 'Producer' && node.active,
@@ -107,6 +114,10 @@ export function createProducerGraph(expanded: ExpandedBlueprint): ProducerGraph 
     const producedArtefacts = collectProducedArtefacts(producer, expanded.edges, nodeMap).map(
       canonicalizeArtifactKey,
     );
+    const catalogEntry = catalog[producer.ref.id as ProducerKind];
+    if (!catalogEntry) {
+      throw new Error(`Missing producer catalog entry for ${producer.ref.id}`);
+    }
 
     for (const dependencyKey of rawInputs) {
       if (!dependencyKey.startsWith('Artifact:')) {
@@ -127,6 +138,9 @@ export function createProducerGraph(expanded: ExpandedBlueprint): ProducerGraph 
       producer: producer.ref.id,
       inputs: canonicalInputs,
       produces: producedArtefacts,
+      provider: catalogEntry.provider,
+      providerModel: catalogEntry.providerModel,
+      rateKey: catalogEntry.rateKey,
       context: {
         index: producer.index,
         label: producer.label,
@@ -243,6 +257,10 @@ function buildExecutionLayers(
         jobId: info.node.jobId,
         producer: info.node.producer,
         inputs: info.node.inputs,
+        produces: info.node.produces,
+        provider: info.node.provider,
+        providerModel: info.node.providerModel,
+        rateKey: info.node.rateKey,
         context: info.node.context,
       });
 

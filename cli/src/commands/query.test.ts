@@ -55,6 +55,16 @@ describe('runQuery', () => {
 
     const prompt = await readFile(join(movieDir, 'prompts', 'inquiry.txt'), 'utf8');
     expect(prompt.trim()).toBe('Tell me a story about the sea');
+
+    expect(result.build?.status).toBe('succeeded');
+    expect(result.manifestPath).toBeDefined();
+    const manifestStats = await stat(result.manifestPath!);
+    expect(manifestStats.isFile()).toBe(true);
+
+    const current = JSON.parse(
+      await readFile(join(movieDir, 'current.json'), 'utf8'),
+    ) as { revision?: string };
+    expect(current.revision).toBe(result.targetRevision);
   });
 
   it('can perform a dry run and report summary', async () => {
@@ -69,6 +79,7 @@ describe('runQuery', () => {
     expect(result.dryRun).toBeDefined();
     expect(result.dryRun?.status).toBe('succeeded');
     expect(result.dryRun?.jobCount).toBeGreaterThan(0);
-    expect(result.dryRun?.statusCounts.skipped).toBeGreaterThan(0);
+    expect(result.dryRun?.statusCounts.succeeded).toBeGreaterThan(0);
+    expect(result.build).toBeUndefined();
   });
 });

@@ -15,6 +15,10 @@ import {
   executeDryRun,
   type DryRunSummary,
 } from '../lib/dry-run.js';
+import {
+  executeBuild,
+  type BuildSummary,
+} from '../lib/build.js';
 
 export interface EditOptions {
   movieId: string;
@@ -36,6 +40,9 @@ export interface EditResult {
   planPath: string;
   targetRevision: string;
   dryRun?: DryRunSummary;
+  build?: BuildSummary;
+  manifestPath?: string;
+  storagePath: string;
 }
 
 export async function runEdit(options: EditOptions): Promise<EditResult> {
@@ -99,14 +106,27 @@ export async function runEdit(options: EditOptions): Promise<EditResult> {
         movieId: storageMovieId,
         plan: planResult.plan,
         manifest: planResult.manifest,
+        storage: { rootDir: storageRoot, basePath },
       })
     : undefined;
+  const buildResult = options.dryRun
+    ? undefined
+    : await executeBuild({
+        cliConfig,
+        movieId: storageMovieId,
+        plan: planResult.plan,
+        manifest: planResult.manifest,
+        manifestHash: planResult.manifestHash,
+      });
 
   return {
     storageMovieId,
     planPath: planResult.planPath,
     targetRevision: planResult.targetRevision,
     dryRun,
+    build: buildResult?.summary,
+    manifestPath: buildResult?.manifestPath,
+    storagePath: movieDir,
   };
 }
 

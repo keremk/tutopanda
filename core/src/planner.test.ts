@@ -6,11 +6,100 @@ import { createManifestService, ManifestNotFoundError } from './manifest.js';
 import { hashPayload } from './hashing.js';
 import { nextRevisionId } from './revisions.js';
 import type {
-  BlueprintExpansionConfig,
   InputEvent,
   Manifest,
+  ProducerCatalog,
   ProducerGraph,
+  RevisionId,
 } from './types.js';
+import type { BlueprintExpansionConfig } from './blueprints.js';
+
+const testCatalog: ProducerCatalog = {
+  ScriptProducer: {
+    provider: 'openai',
+    providerModel: 'openai/GPT-5',
+    rateKey: 'llm:script',
+    costClass: 'high',
+    medianLatencySec: 45,
+  },
+  TextToMusicPromptProducer: {
+    provider: 'openai',
+    providerModel: 'openai/GPT-5-mini',
+    rateKey: 'llm:music-prompt',
+    costClass: 'mid',
+    medianLatencySec: 12,
+  },
+  MusicProducer: {
+    provider: 'replicate',
+    providerModel: 'stability-ai/stable-audio-2.5',
+    rateKey: 'music:stable-audio-2.5',
+    costClass: 'high',
+    medianLatencySec: 30,
+  },
+  AudioProducer: {
+    provider: 'replicate',
+    providerModel: 'elevenlabs/turbo-v2.5',
+    rateKey: 'audio:elevenlabs-turbo',
+    costClass: 'mid',
+    medianLatencySec: 22,
+  },
+  TextToImagePromptProducer: {
+    provider: 'openai',
+    providerModel: 'openai/GPT-5-mini',
+    rateKey: 'llm:image-prompt',
+    costClass: 'mid',
+    medianLatencySec: 10,
+  },
+  TextToImageProducer: {
+    provider: 'replicate',
+    providerModel: 'bytedance/seedream-4',
+    rateKey: 'image:seedream-4',
+    costClass: 'high',
+    medianLatencySec: 35,
+  },
+  TextToVideoPromptProducer: {
+    provider: 'openai',
+    providerModel: 'openai/GPT-5-mini',
+    rateKey: 'llm:video-prompt',
+    costClass: 'mid',
+    medianLatencySec: 10,
+  },
+  TextToVideoProducer: {
+    provider: 'replicate',
+    providerModel: 'google/veo-3-fast',
+    rateKey: 'video:veo-3-fast',
+    costClass: 'high',
+    medianLatencySec: 90,
+  },
+  ImageToVideoPromptProducer: {
+    provider: 'openai',
+    providerModel: 'openai/GPT-5-mini',
+    rateKey: 'llm:image-video-prompt',
+    costClass: 'mid',
+    medianLatencySec: 10,
+  },
+  StartImageProducer: {
+    provider: 'replicate',
+    providerModel: 'google/imagen-4',
+    rateKey: 'image:start-imagen-4',
+    costClass: 'high',
+    medianLatencySec: 30,
+  },
+  ImageToVideoProducer: {
+    provider: 'replicate',
+    providerModel: 'bytedance/seedance-1-lite',
+    rateKey: 'video:seedance-1-lite',
+    costClass: 'high',
+    medianLatencySec: 120,
+  },
+  TimelineAssembler: {
+    provider: 'internal',
+    providerModel: 'workflow/timeline-assembler',
+    rateKey: 'internal:timeline',
+    costClass: 'low',
+    medianLatencySec: 5,
+  },
+};
 
 function memoryContext(basePath = 'builds') {
   return createStorageContext({ kind: 'memory', basePath });
@@ -57,13 +146,15 @@ function assertTopological(plan: ExecutionPlanLike, graph: ProducerGraph) {
     if (!order.has(edge.from) || !order.has(edge.to)) {
       continue;
     }
-    expect(order.get(edge.from)).toBeLessThan(order.get(edge.to));
+    const fromOrder = order.get(edge.from)!;
+    const toOrder = order.get(edge.to)!;
+    expect(fromOrder).toBeLessThan(toOrder);
   }
 }
 
 type ExecutionPlanLike = Awaited<ReturnType<ReturnType<typeof createPlanner>['computePlan']>>;
 
-function createInputEvents(values: Record<string, unknown>, revision: string): InputEvent[] {
+function createInputEvents(values: Record<string, unknown>, revision: RevisionId): InputEvent[] {
   const now = new Date().toISOString();
   return Object.entries(values).map(([id, payload]) => {
     const { hash } = hashPayload(payload);
@@ -83,7 +174,7 @@ describe('planner', () => {
     const ctx = memoryContext();
     await initializeMovieStorage(ctx, 'demo');
     const eventLog = createEventLog(ctx);
-    const graph = createProducerGraphFromConfig(blueprintConfig());
+    const graph = createProducerGraphFromConfig(blueprintConfig(), testCatalog);
     const planner = createPlanner();
     const manifest = await loadManifest(ctx);
 
@@ -104,7 +195,7 @@ describe('planner', () => {
     const ctx = memoryContext();
     await initializeMovieStorage(ctx, 'demo');
     const eventLog = createEventLog(ctx);
-    const graph = createProducerGraphFromConfig(blueprintConfig());
+    const graph = createProducerGraphFromConfig(blueprintConfig(), testCatalog);
     const planner = createPlanner();
 
     const baseline = createInputEvents({ InquiryPrompt: 'Tell me a story' }, 'rev-0001');
@@ -146,7 +237,7 @@ describe('planner', () => {
     const ctx = memoryContext();
     await initializeMovieStorage(ctx, 'demo');
     const eventLog = createEventLog(ctx);
-    const graph = createProducerGraphFromConfig(blueprintConfig());
+    const graph = createProducerGraphFromConfig(blueprintConfig(), testCatalog);
     const planner = createPlanner();
 
     const baseRevision = 'rev-0001';
@@ -199,8 +290,26 @@ describe('planner', () => {
 
     const cyclicGraph: ProducerGraph = {
       nodes: [
-        { jobId: 'Producer:A', producer: 'ProducerA', inputs: [], produces: ['Artifact:alpha'], context: {} },
-        { jobId: 'Producer:B', producer: 'ProducerB', inputs: ['Artifact:alpha'], produces: ['Artifact:beta'], context: {} },
+        {
+          jobId: 'Producer:A',
+          producer: 'ProducerA',
+          inputs: [],
+          produces: ['Artifact:alpha'],
+          provider: 'internal',
+          providerModel: 'mock/ProducerA',
+          rateKey: 'internal:a',
+          context: {},
+        },
+        {
+          jobId: 'Producer:B',
+          producer: 'ProducerB',
+          inputs: ['Artifact:alpha'],
+          produces: ['Artifact:beta'],
+          provider: 'internal',
+          providerModel: 'mock/ProducerB',
+          rateKey: 'internal:b',
+          context: {},
+        },
       ],
       edges: [
         { from: 'Producer:A', to: 'Producer:B' },

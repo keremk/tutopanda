@@ -8,6 +8,7 @@ import { runQuery } from './commands/query.js';
 import { runInspect } from './commands/inspect.js';
 import { runEdit } from './commands/edit.js';
 import type { DryRunSummary } from './lib/dry-run.js';
+import type { BuildSummary } from './lib/build.js';
 
 const console = globalThis.console;
 
@@ -93,7 +94,10 @@ async function main(): Promise<void> {
       console.log(`Movie created with id = ${result.movieId}`);
       console.log(`Plan saved to ${result.planPath}`);
       if (result.dryRun) {
-        printDryRunSummary(result.dryRun);
+        printDryRunSummary(result.dryRun, result.storagePath);
+      } else if (result.build) {
+        printBuildSummary(result.build, result.manifestPath);
+        console.log(`Manifests and artefacts stored under: ${result.storagePath}`);
       }
       return;
     }
@@ -137,7 +141,10 @@ async function main(): Promise<void> {
       console.log(`Updated prompts for movie ${flags.movieId}. New revision: ${result.targetRevision}`);
       console.log(`Plan saved to ${result.planPath}`);
       if (result.dryRun) {
-        printDryRunSummary(result.dryRun);
+        printDryRunSummary(result.dryRun, result.storagePath);
+      } else if (result.build) {
+        printBuildSummary(result.build, result.manifestPath);
+        console.log(`Manifests and artefacts stored under: ${result.storagePath}`);
       }
       return;
     }
@@ -149,14 +156,26 @@ async function main(): Promise<void> {
 
 void main();
 
-function printDryRunSummary(summary: DryRunSummary): void {
+function printDryRunSummary(summary: DryRunSummary, storagePath: string): void {
   const counts = summary.statusCounts;
   console.log(
     `Dry run status: ${summary.status}. Layers: ${summary.layers}. Jobs: ${summary.jobCount} (succeeded ${counts.succeeded}, failed ${counts.failed}, skipped ${counts.skipped}).`,
   );
 
+  const byProducer = new Map<string, number>();
+  for (const job of summary.jobs) {
+    byProducer.set(job.producer, (byProducer.get(job.producer) ?? 0) + 1);
+  }
+  if (byProducer.size > 0) {
+    console.log('Re-executed producers:');
+    for (const [producer, count] of byProducer) {
+      console.log(`  ${producer}: ${count}`);
+    }
+  }
+
   const preview = summary.jobs.slice(0, 5);
   if (preview.length === 0) {
+    console.log(`Mock artefacts and logs stored under: ${storagePath}`);
     return;
   }
   console.log('Sample jobs:');
@@ -165,5 +184,16 @@ function printDryRunSummary(summary: DryRunSummary): void {
   }
   if (summary.jobs.length > preview.length) {
     console.log(`  … ${summary.jobs.length - preview.length} more`);
+  }
+  console.log(`Mock artefacts and logs stored under: ${storagePath}`);
+}
+
+function printBuildSummary(summary: BuildSummary, manifestPath?: string): void {
+  const counts = summary.counts;
+  console.log(
+    `Build status: ${summary.status}. Jobs: ${summary.jobCount} (succeeded ${counts.succeeded}, failed ${counts.failed}, skipped ${counts.skipped}). Manifest revision: ${summary.manifestRevision}.`,
+  );
+  if (manifestPath) {
+    console.log(`Manifest saved to ${manifestPath}`);
   }
 }

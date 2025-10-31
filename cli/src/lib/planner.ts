@@ -18,6 +18,7 @@ import {
   type ExecutionPlan,
   type StorageContext,
 } from 'tutopanda-core';
+import { producerCatalog } from 'tutopanda-providers';
 import type { CliConfig } from './cli-config.js';
 import type { ProjectConfig } from 'tutopanda-core';
 import { deriveBlueprintAndInputs } from './project-config.js';
@@ -37,6 +38,7 @@ export interface GeneratePlanResult {
   inputEvents: InputEvent[];
   manifest: Manifest;
   plan: ExecutionPlan;
+  manifestHash: string | null;
 }
 
 export async function generatePlan(options: GeneratePlanOptions): Promise<GeneratePlanResult> {
@@ -62,7 +64,7 @@ export async function generatePlan(options: GeneratePlanOptions): Promise<Genera
   const eventLog = createEventLog(storageContext);
   const planner = createPlanner();
 
-  const manifest = await loadOrCreateManifest(manifestService, movieId);
+  const { manifest, hash: manifestHash } = await loadOrCreateManifest(manifestService, movieId);
   let targetRevision = nextRevisionId(manifest.revision ?? null);
   targetRevision = await ensureUniquePlanRevision(storageContext, movieId, targetRevision);
 
@@ -77,7 +79,7 @@ export async function generatePlan(options: GeneratePlanOptions): Promise<Genera
     movieId,
     manifest,
     eventLog,
-    blueprint: createProducerGraphFromConfig(blueprint),
+    blueprint: createProducerGraphFromConfig(blueprint, producerCatalog),
     targetRevision,
     pendingEdits: pendingEvents,
   });
@@ -91,26 +93,30 @@ export async function generatePlan(options: GeneratePlanOptions): Promise<Genera
     inputEvents: pendingEvents,
     manifest,
     plan,
+    manifestHash,
   };
 }
 
 async function loadOrCreateManifest(
   service: ReturnType<typeof createManifestService>,
   movieId: string,
-): Promise<Manifest> {
+): Promise<{ manifest: Manifest; hash: string | null }> {
   try {
-    const { manifest } = await service.loadCurrent(movieId);
-    return manifest;
+    const { manifest, hash } = await service.loadCurrent(movieId);
+    return { manifest, hash };
   } catch (error) {
     if (error instanceof ManifestNotFoundError) {
       return {
-        revision: 'rev-0000',
-        baseRevision: null,
-        createdAt: new Date().toISOString(),
-        inputs: {},
-        artefacts: {},
-        timeline: {},
-      } satisfies Manifest;
+        manifest: {
+          revision: 'rev-0000',
+          baseRevision: null,
+          createdAt: new Date().toISOString(),
+          inputs: {},
+          artefacts: {},
+          timeline: {},
+        } satisfies Manifest,
+        hash: null,
+      };
     }
     throw error;
   }

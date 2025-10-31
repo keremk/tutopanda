@@ -88,10 +88,9 @@ This roadmap breaks the storage + execution stack into milestones that each deli
   - Populate `mappings.ts` with mock-only handlers for every `ProducerKind`, returning deterministic artefacts suitable for unit and integration tests.
   - Add shared fixtures/utilities (`secretResolver`, logger adapters) and document the usage in the providers README.
 - **Core updates**
-  - Extend the producer catalog so every `Producer` definition includes `provider` and `providerModel` metadata (even if they point at mock providers for now).
+  - Define a producer catalog contract and require callers to inject provider/model metadata when expanding blueprints (no more hard-coded defaults inside core).
   - Update the runner’s `produce` stub to call into the providers registry (mock mode) and surface structured `ProducerResult` data.
 - **CLI work**
-  - Introduce configuration flag(s) for selecting provider mode (`--provider-mode=mock` default) and wire them through to the runner.
   - Add a `--dryrun` option to `tutopanda query` / `edit` that executes the full plan against the mock providers, persists mock artefacts, and prints a summary so new producers/blueprints can be validated manually.
 - **Tests**
   - Providers: Vitest coverage for registry resolution, per-kind mock producers, and secret resolver defaults.

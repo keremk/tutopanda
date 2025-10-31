@@ -1,5 +1,13 @@
+import { Buffer } from 'node:buffer';
+import { createHash } from 'node:crypto';
+import type { EventLog } from './event-log.js';
+import { hashInputs } from './event-log.js';
+import { createManifestService, type ManifestService } from './manifest.js';
+import type { StorageContext } from './storage.js';
 import {
+  type ArtefactEvent,
   type ArtefactEventStatus,
+  type BlobRef,
   type Clock,
   type ExecutionPlan,
   type JobDescriptor,
@@ -8,6 +16,7 @@ import {
   type ProduceFn,
   type ProduceRequest,
   type ProduceResult,
+  type ProducedArtefact,
   type RunResult,
   type SerializedError,
   type RevisionId,
@@ -30,15 +39,28 @@ export interface RunnerOptions {
 export interface RunnerExecutionContext {
   movieId: string;
   manifest: Manifest;
+  storage: StorageContext;
+  eventLog: EventLog;
+  manifestService?: ManifestService;
   produce?: ProduceFn;
   logger?: RunnerLogger;
   clock?: Clock;
 }
 
+type SingleJobExecutionContext = RunnerExecutionContext & {
+  revision: RevisionId;
+  layerIndex?: number;
+  attempt?: number;
+};
+
 interface RunnerJobContext extends RunnerExecutionContext {
   layerIndex: number;
   attempt: number;
   revision: RevisionId;
+  produce: ProduceFn;
+  logger: RunnerLogger;
+  clock: Clock;
+  manifestService: ManifestService;
 }
 
 const defaultClock: Clock = {
@@ -57,13 +79,16 @@ export function createRunner(options: RunnerOptions = {}) {
       const clock = context.clock ?? baseClock;
       const logger = context.logger ?? baseLogger;
       const produce = context.produce ?? baseProduce;
+      const storage = context.storage;
+      const eventLog = context.eventLog;
 
-      const startedAt = nowIso(clock);
+      const manifestService = context.manifestService ?? createManifestService(storage);
+
+      const startedAt = clock.now();
       const jobs: JobResult[] = [];
-      const layers = plan.layers ?? [];
 
-      for (let layerIndex = 0; layerIndex < layers.length; layerIndex += 1) {
-        const layer = layers[layerIndex] ?? [];
+      for (let layerIndex = 0; layerIndex < plan.layers.length; layerIndex += 1) {
+        const layer = plan.layers[layerIndex] ?? [];
         if (layer.length === 0) {
           continue;
         }
@@ -84,6 +109,7 @@ export function createRunner(options: RunnerOptions = {}) {
             produce,
             logger,
             clock,
+            manifestService,
           });
           jobs.push(jobResult);
         }
@@ -95,30 +121,47 @@ export function createRunner(options: RunnerOptions = {}) {
         });
       }
 
-      const completedAt = nowIso(clock);
+      const completedAt = clock.now();
       const status: RunResult['status'] = jobs.some((job) => job.status === 'failed')
         ? 'failed'
         : 'succeeded';
 
       return {
         status,
-        revision: plan.revision as RevisionId,
+        revision: plan.revision,
         manifestBaseHash: plan.manifestBaseHash,
         jobs,
         startedAt,
         completedAt,
         async buildManifest(): Promise<Manifest> {
-          return context.manifest;
+          return manifestService.buildFromEvents({
+            movieId: context.movieId,
+            targetRevision: plan.revision,
+            baseRevision: context.manifest.revision,
+            eventLog,
+            clock,
+          });
         },
       };
     },
 
-    async executeJob(job: JobDescriptor, context: RunnerJobContext): Promise<JobResult> {
+    async executeJob(job: JobDescriptor, ctx: SingleJobExecutionContext): Promise<JobResult> {
+      const clock = ctx.clock ?? baseClock;
+      const logger = ctx.logger ?? baseLogger;
+      const produce = ctx.produce ?? baseProduce;
+      const storage = ctx.storage;
+      const eventLog = ctx.eventLog;
+      const manifestService = ctx.manifestService ?? createManifestService(storage);
+
       return executeJob(job, {
-        ...context,
-        produce: context.produce ?? baseProduce,
-        logger: context.logger ?? baseLogger,
-        clock: context.clock ?? baseClock,
+        ...ctx,
+        layerIndex: ctx.layerIndex ?? 0,
+        attempt: ctx.attempt ?? 1,
+        revision: ctx.revision,
+        produce,
+        logger,
+        clock,
+        manifestService,
       });
     },
   };
@@ -137,10 +180,11 @@ function createStubProduce(): ProduceFn {
 
 async function executeJob(
   job: JobDescriptor,
-  context: RunnerJobContext & { produce: ProduceFn; logger: RunnerLogger; clock: Clock },
+  context: RunnerJobContext,
 ): Promise<JobResult> {
-  const { movieId, layerIndex, attempt, revision, produce, logger, clock } = context;
-  const startedAt = nowIso(clock);
+  const { movieId, layerIndex, attempt, revision, produce, logger, clock, storage, eventLog } = context;
+  const startedAt = clock.now();
+  const inputsHash = hashInputs(job.inputs);
 
   try {
     const result = await produce({
@@ -151,8 +195,18 @@ async function executeJob(
       revision,
     });
 
-    const completedAt = nowIso(clock);
-    const status = normalizeStatus(result.status);
+    const artefacts = await materializeArtefacts(result.artefacts, {
+      movieId,
+      job,
+      revision,
+      inputsHash,
+      storage,
+      eventLog,
+      clock,
+    });
+
+    const completedAt = clock.now();
+    const status = deriveJobStatus(normalizeStatus(result.status), artefacts);
 
     logger.info?.('runner.job.completed', {
       movieId,
@@ -162,13 +216,14 @@ async function executeJob(
       status,
       layerIndex,
       attempt,
+      artefacts: artefacts.length,
     });
 
     return {
       jobId: job.jobId,
       producer: job.producer,
       status,
-      artefacts: result.artefacts ?? [],
+      artefacts,
       diagnostics: result.diagnostics,
       layerIndex,
       attempt,
@@ -176,7 +231,7 @@ async function executeJob(
       completedAt,
     };
   } catch (error) {
-    const completedAt = nowIso(clock);
+    const completedAt = clock.now();
     const serialized = serializeError(error);
 
     logger.error?.('runner.job.failed', {
@@ -203,13 +258,115 @@ async function executeJob(
   }
 }
 
-function nowIso(clock: Clock): string {
-  return clock.now();
+async function materializeArtefacts(
+  artefacts: ProducedArtefact[],
+  context: {
+    movieId: string;
+    job: JobDescriptor;
+    revision: RevisionId;
+    inputsHash: string;
+    storage: StorageContext;
+    eventLog: EventLog;
+    clock: Clock;
+  },
+): Promise<ArtefactEvent[]> {
+  const events: ArtefactEvent[] = [];
+  for (const artefact of artefacts) {
+    const status = normalizeStatus(artefact.status);
+    const output: { blob?: BlobRef; inline?: string } = {};
+
+    if (artefact.blob && status === 'succeeded') {
+      output.blob = await persistBlob(context.storage, context.movieId, artefact.blob);
+    }
+
+    if (artefact.inline !== undefined) {
+      output.inline = artefact.inline;
+    }
+
+    const event: ArtefactEvent = {
+      artefactId: artefact.artefactId,
+      revision: context.revision,
+      inputsHash: context.inputsHash,
+      output,
+      status,
+      producedBy: context.job.jobId,
+      diagnostics: artefact.diagnostics,
+      createdAt: context.clock.now(),
+    };
+
+    await context.eventLog.appendArtefact(context.movieId, event);
+    events.push(event);
+  }
+  return events;
+}
+
+async function persistBlob(
+  storage: StorageContext,
+  movieId: string,
+  blob: ProducedArtefact['blob'],
+): Promise<BlobRef> {
+  if (!blob) {
+    throw new Error('Expected blob payload to persist.');
+  }
+  const buffer = toBuffer(blob.data);
+  const hash = createHash('sha256').update(buffer).digest('hex');
+  const prefix = hash.slice(0, 2);
+  const relativePath = storage.resolve(movieId, 'blobs', prefix, hash);
+
+  if (!(await storage.storage.fileExists(relativePath))) {
+    await ensureDirectories(storage, relativePath);
+    const tmpPath = `${relativePath}.tmp-${Date.now().toString(16)}-${Math.random().toString(16).slice(2)}`;
+    await storage.storage.write(tmpPath, buffer, { mimeType: blob.mimeType });
+    await storage.storage.moveFile(tmpPath, relativePath);
+  }
+
+  return {
+    hash,
+    size: buffer.byteLength,
+    mimeType: blob.mimeType,
+  };
+}
+
+async function ensureDirectories(storage: StorageContext, fullPath: string): Promise<void> {
+  const segments = fullPath.split('/').slice(0, -1);
+  if (!segments.length) {
+    return;
+  }
+  let current = '';
+  for (const segment of segments) {
+    current = current ? `${current}/${segment}` : segment;
+    if (!(await storage.storage.directoryExists(current))) {
+      await storage.storage.createDirectory(current, {});
+    }
+  }
+}
+
+function toBuffer(data: Uint8Array | string): Buffer {
+  return typeof data === 'string' ? Buffer.from(data) : Buffer.from(data);
 }
 
 function normalizeStatus(status: ArtefactEventStatus | undefined): ArtefactEventStatus {
   if (status === 'succeeded' || status === 'failed' || status === 'skipped') {
     return status;
+  }
+  return 'succeeded';
+}
+
+function deriveJobStatus(
+  baseStatus: ArtefactEventStatus,
+  artefacts: ArtefactEvent[],
+): ArtefactEventStatus {
+  if (artefacts.some((event) => event.status === 'failed')) {
+    return 'failed';
+  }
+  if (baseStatus === 'failed') {
+    return 'failed';
+  }
+  if (artefacts.length === 0) {
+    return baseStatus;
+  }
+  if (artefacts.every((event) => event.status === 'skipped')) {
+    return baseStatus === 'succeeded' ? 'skipped' : baseStatus;
   }
   return 'succeeded';
 }
