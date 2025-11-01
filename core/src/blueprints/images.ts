@@ -5,7 +5,6 @@ import {
   inputRef,
   node,
   producerRef,
-  segmentDim,
   segmentImageDims,
   useImagesOnly,
 } from './helpers.js';

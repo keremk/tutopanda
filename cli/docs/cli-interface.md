@@ -15,19 +15,157 @@ tutopanda init --rootFolder=/Path/To/Folder --defaultSettings=/Path/To/DefaultSe
 
 ### Default Settings Values:
 Added some sane defaults to use (some of them not yet defined, will define in later milestones)
+
+> There is significant change from the prior version of this. 
+> Also the casing is changed from PascalCasing to camelCasing.
+
+- Many of the providers in the producers list will either use some of the general attributes or need custom some custom attributes. 
+  - The general attributes are always provided to all providers and they can either use what is in there, or use the overrides in the `customAttributes` per provider. It is up to the provider to do the mapping as long as they are given the general attributes
+
 ```json
 {
-  "General": {
-    "UseVideo": false, // Global, can be overriden per segment
-    "Audience": "general", // Enumerated audiences list, if set to custom then described in AudienceCustom
-    "AudiencePrompt": "", // If Audience is set to custom then specified as prompt here. 
-    "Language": "en", // Allowed values: en, de, es, fr, tr (for now)
-    "Duration": 60, // in seconds, SegmentCount is deduced from Duration/10 (each segment always 10s)
-    "AspectRatio": "16:9", // 1:1, 3:2, 2:3, 4:3, 3:4, 16:9, 9:16, 21:9
-    "Size": "480p", // 480p, 720p, 1080p
-    "Style": "Ghibli", // Enumerated list of styles, and there is the last option "Custom". Ghibli, Pixar, Anime, Watercolor, Cartoon, PhotoRealistic, Custom
-    "CustomStyle": "", // Defines a prompt for a style definition if Style == Custom
+  "general": {
+    "useVideo": false, // Global, can be overriden per segment
+    "audience": "general", // Enumerated audiences list, if set to custom then described in AudienceCustom
+    "audiencePrompt": "", // If Audience is set to custom then specified as prompt here. 
+    "language": "en", // Allowed values: en, de, es, fr, tr (for now)
+    "duration": 60, // in seconds, SegmentCount is deduced from Duration/10 (each segment always 10s)
+    "aspectRatio": "16:9", // 1:1, 3:2, 2:3, 4:3, 3:4, 16:9, 9:16, 21:9
+    "size": "480p", // 480p, 720p, 1080p
+    "style": "Ghibli", // Enumerated list of styles, and there is the last option "Custom". Ghibli, Pixar, Anime, Watercolor, Cartoon, PhotoRealistic, Custom
+    "customStyle": "", // Defines a prompt for a style definition if Style == Custom
   },
+  "producers": [
+    {
+      "producer": "ScriptProducer",
+      "providers": [
+        {
+          "priority": "main",
+          "provider": "openai",
+          "model": "openai/gpt5",
+          "customAttributes": {
+            "reasoning": "low",
+            "multiArtefact": true,
+          }  
+        }
+      ]
+    },
+    {
+      "producer": "TextToMusicPromptProducer",
+      "providers": [
+        {
+          "priority": "main",
+          "provider": "openai",
+          "model": "openai/gpt5-mini",
+        },
+      ]
+    },
+    {
+      "producer": "TextToMusicProducer",
+      "providers": [
+        {
+          "priority": "main",
+          "provider": "replicate",
+          "model": "stability-ai/stable-audio-2.5",
+          "customAttributes": {
+            "cfg_scale": 1,
+          }  
+        }
+      ]
+    },
+    {
+      "producer": "AudioProducer",
+      "providers": [
+        {
+          "priority": "main",
+          "provider": "replicate",
+          "model": "minimax/speech-02-hd",
+          "customAttributes": {
+            "emotion": "auto",
+            "voice_id": "English_CaptivatingStoryteller",
+          }  
+        },
+        {
+          "provider": "replicate",
+          "model": "elevenlabs/v3",
+          "customAttributes": {
+            "voice": "Grimblewood",
+            "speed": 0.9
+          }  
+        }
+      ]
+    },
+    {
+      "producer": "TextToImagePromptProducer",
+      "providers": [
+        {
+          "priority": "main",
+          "provider": "openai",
+          "model": "openai/gpt5-mini",
+        },
+      ]
+    },
+    {
+      "producer": "TextToImageProducer",
+      "providers": [
+        {
+          "priority": "main",
+          "provider": "replicate",
+          "model": "bytedance/seedream-4",
+          "customAttributes": {
+            "cfg_scale": 1,
+          }  
+        }
+      ]
+    },
+    {
+      "producer": "TextToVideoPromptProducer",
+      "providers": [
+        {
+          "priority": "main",
+          "provider": "openai",
+          "model": "openai/gpt5-mini",
+        },
+      ]
+    },
+    {
+      "producer": "TextToVideoProducer",
+      "providers": [
+        {
+          "priority": "main",
+          "provider": "replicate",
+          "model": "bytedance/seedance-1-pro-fast",
+          "customAttributes": {
+            "resolution": "480p",
+            "duration": 10,
+          }  
+        },
+        {
+          "provider": "replicate",
+          "model": "bytedance/seedance-1-lite",
+          "customAttributes": {
+            "resolution": "480p",
+            "duration": 10,
+          }  
+        }
+      ]
+    },
+    {
+      "producer": "ImageToVideoPromptProducer",
+      "providers": [
+        {
+          "priority": "main",
+          "provider": "openai",
+          "model": "openai/gpt5-mini",
+          "customAttributes": {
+            "multiArtefact": true,
+          }
+        },
+      ]
+    },
+
+    
+  ],
   "Audio" : {
     "Voice": "Atlas", // Will depend on the model and provider, this will be a user-friendly name and mapped by the Producer to an actual VoiceId that the model expects
     "Emotion": "dramatic", // Will depend on the model and provider
@@ -225,7 +363,54 @@ tutopanda inspect --movieId=q12345 --plan
 ```bash
 tutopanda inspect --movieId=q12345 --errors
 ```
+## Selecting Producer Implementations
+- In the default settings we mentioned how user can specify the default producer implementations (provider, model). Here we showing how these can be changed per generation or regeneration.
+> The implementation of this will use the providers package APIs to ask for the correct function given (provider, model, environment="local")
 
+### Specifying Provider & Models
+- Users should be able to specify different (provider, model) pairs for each producer type with a fallback pair and for each segment generation.
+- This can be specified either in first generation or subsequent edits (regenerations)
+- The specified providers override the existing ones.
+- Per (provider, model) custom attributes can also be specified here.
+- Producer names should match the available producer kinds for the current setup otherwise it returns error with a message saying which producer(s) did not match.
+- If a given (provider, model, environment="local") is not available, again an error is returned saying which.
+- Some (provider, model) may require custom attributes or different values enumerations for an already specified attribute. Adding customAttributes here will override the top level settings.config.
+  - E.g. (1) `size` may be specified at the General Settings level but the model is expecting a different value, or we want to limit that model to a lower size
+  - E.g. (2) qwen/qwen-image model requires a custom model called `guidance` which can be specified here.
+- Multiple providers per producer can be specified mainly for "fallback" logic. The main provider is marked by {priority = "main"}
+
+Specify during query
+```bash
+tutopanda query "Tell me about the Waterloo war" --providers=path/To/providers.json
+```
+or during edit
+```bash
+tutopanda edit --movieId=q12345 --providers=path/To/providers.json
+```
+
+```json
+{
+  "producers": [
+    {
+      "producer": "ScriptProducer",
+      "providers": [
+        {
+          "priority": "main",
+          "provider": "openai",
+          "model": "openai/gpt5",
+          "customAttributes": {
+            "reasoning": "low"
+          }  
+        },
+        {
+          "provider": "google",
+          "model": "google/gemini-flash-2.5",
+        }
+      ]
+    }
+  ]
+}
+```
 
 ## CLI Runtime Role
 - The CLI is responsible for collecting user prompts, configurations, and edits. It serializes prompt edits to TOML purely as a user-facing format; core storage keeps prompts as plain text files (with full formatting) and the CLI converts between TOML and those files.
