@@ -21,6 +21,8 @@ Added some sane defaults to use (some of them not yet defined, will define in la
 
 - Many of the providers in the producers list will either use some of the general attributes or need custom some custom attributes. 
   - The general attributes are always provided to all providers and they can either use what is in there, or use the overrides in the `customAttributes` per provider. It is up to the provider to do the mapping as long as they are given the general attributes
+- Note that the providers are not always calls to external AI model providers. For example TimelineAssembler will use a `tutopanda/timeline-assembler` component built in the providers package to generate timeline artefact. The "model" attribute is therefore refers to the special instance of the component. 
+> TODO: Perhaps we should consider changing name `model` to something else to support other types of providers. They essentially form a (category, subcategory) type lookup request to source the correct implementation. 
 
 ```json
 {
@@ -34,6 +36,11 @@ Added some sane defaults to use (some of them not yet defined, will define in la
     "size": "480p", // 480p, 720p, 1080p
     "style": "Ghibli", // Enumerated list of styles, and there is the last option "Custom". Ghibli, Pixar, Anime, Watercolor, Cartoon, PhotoRealistic, Custom
     "customStyle": "", // Defines a prompt for a style definition if Style == Custom
+    "useVideo": true,
+    "IsImageToVideo": false, // Global can be overriden per segment
+    "ImageToVideo": { // Segments are 1 based
+        "Segment_1": true, // Example of segment 1 overriding IsImageToVideo (not part of default)
+    }
   },
   "producers": [
     {
@@ -43,9 +50,8 @@ Added some sane defaults to use (some of them not yet defined, will define in la
           "priority": "main",
           "provider": "openai",
           "model": "openai/gpt5",
+          "configFile": "script-producer.toml",
           "customAttributes": {
-            "reasoning": "low",
-            "multiArtefact": true,
           }  
         }
       ]
@@ -57,6 +63,7 @@ Added some sane defaults to use (some of them not yet defined, will define in la
           "priority": "main",
           "provider": "openai",
           "model": "openai/gpt5-mini",
+          "configFile": "text-to-music-prompt-producer.toml"
         },
       ]
     },
@@ -102,6 +109,10 @@ Added some sane defaults to use (some of them not yet defined, will define in la
           "priority": "main",
           "provider": "openai",
           "model": "openai/gpt5-mini",
+          "configFile": "text-to-image-prompt-producer.toml",
+          "customAttributes": {
+            "imagesPerSegment": 2, // Maximum is 5, cannot be 0
+          }
         },
       ]
     },
@@ -125,6 +136,7 @@ Added some sane defaults to use (some of them not yet defined, will define in la
           "priority": "main",
           "provider": "openai",
           "model": "openai/gpt5-mini",
+          "configFile": "text-to-video-prompt-producer.toml"
         },
       ]
     },
@@ -157,48 +169,104 @@ Added some sane defaults to use (some of them not yet defined, will define in la
           "priority": "main",
           "provider": "openai",
           "model": "openai/gpt5-mini",
+          "configFile": "image-to-video-prompt-producer.toml"
           "customAttributes": {
-            "multiArtefact": true,
           }
         },
       ]
     },
-
-    
-  ],
-  "Audio" : {
-    "Voice": "Atlas", // Will depend on the model and provider, this will be a user-friendly name and mapped by the Producer to an actual VoiceId that the model expects
-    "Emotion": "dramatic", // Will depend on the model and provider
-    "Model": "", // TBD
-    "Provider": "", // TBD
-  },
-  "Music": {
-    "Model": "", // TBD
-    "Provider": "", // TBD
-  },
-  "ScriptGeneration": {
-    "Model": "", // TBD
-    "Provider": "", // TBD
-    "ReasoningEffort": "", // If the model supports it, depends on the model
-  },
-  "Image": {
-    "Format": "PNG | JPG", Enumerated list of formats PNG, JPG are supported
-    "Model": "", // TBD
-    "Provider": "", // TBD
-    "ImagesPerSegment": 2, // Maximum is 5, cannot be 0
-  },
-  "Video": {
-    "Model": "", // TBD
-    "Provider": "", // TBD
-    "ImageModel": "", // TBD if IsImageToVideo is true
-    "ImageProvider": "", // TBD if IsImageToVideo is false
-    "IsImageToVideo": false, // Global can be overriden per segment
-    "ImageToVideo": { // Segments are 1 based
-        "Segment_1": true, // Example of segment 1 overriding IsImageToVideo (not part of default)
+    {
+      "producer": "StartImageProducer",
+      "providers": [
+        {
+          "priority": "main",
+          "provider": "replicate",
+          "model": "bytedance/seedream-4",
+          "customAttributes": {
+            "cfg_scale": 1,
+          }  
+        }
+      ]
     },
-    "AssemblyStrategy": "speed-adjustment"  // Videos need to fit to narration audio which is usually not exactly 10s, so speed-adjustment basically adjusts the speed slightly to fit the video to the exact audio duration. Other option is fade-out-transition where the video fadesout slowly if it is less than audio to prevent black segments
-  },
+    {
+      "producer": "ImageToVideoProducer",
+      "providers": [
+        {
+          "priority": "main",
+          "provider": "replicate",
+          "model": "bytedance/seedance-1-pro-fast",
+          "customAttributes": {
+            "resolution": "480p",
+            "duration": 10,
+          }  
+        }
+      ]
+    },
+    {
+      "producer": "TimelineAssembler",
+      "providers": [
+        {
+          "priority": "main",
+          "provider": "tutopanda",
+          "model": "tutopanda/timeline-assembler",
+          "customAttributes": {
+            "assemblyStrategy": "speed-adjustment"
+          }
+        }
+      ]
+    }
+  ]
 }
+```
+
+### Default System Prompts
+- The LLM providers are further configured with 
+  - systemPrompt
+  - textFormat: For the output, it can be either `jsonSchema` or `text`
+  - reasoning: The model reasoning effort. Either of `minimal`, `low`, `medium`, `high`
+  - jsonSchema: for structured outputs that produces multiple artefacts. We need to create multiple artefacts so makes sure the dependencies can refer to them separately. Only string values are supported in properties or arrays.
+    - Each string property value is represented in a text file.
+    - For arrays of strings, they are represented each as a text file.
+  - variables: Comma delimited list of variables that can be used in system prompt
+    - Each variable mentioned here must also be declared in the settings.json file customAttributes section.
+  - tools: Comma delimited list of tools
+    - Currently only WebSearch for gpt-5 models from OpenAI is supported 
+- The configuration is a TOML file as configured in settings under the configFile attribute for the provider.
+
+Example: `image-to-video-prompt-producer.toml`
+```toml
+[system_prompt]
+textFormat = "json_schema" 
+jsonSchema = """
+{
+  "name": "segment_image_movie_description",
+  "strict": true,
+  "reasoning": "low",
+  "schema": {
+    "type": "object",
+    "properties": {
+      "segment_start_image": {
+        "type": "string",
+        "description": "Prompt describing the starting image for the video segment as determined from the narrative."
+      },
+      "movie_directions": {
+        "type": "string",
+        "description": "Prompt describing the movie generator's directions, including camera moves, style, and cut-scene descriptions."
+      }
+    },
+    "required": [
+      "segment_start_image",
+      "movie_directions"
+    ],
+    "additionalProperties": false
+  }
+}
+"""
+variables = "foo,bar"
+tools = "WebSearch"
+systemPrompt = """
+You are an expert in {foo}. You should generate {bar}.
+"""
 ```
 
 ## Query to generate a video
@@ -378,6 +446,7 @@ tutopanda inspect --movieId=q12345 --errors
   - E.g. (1) `size` may be specified at the General Settings level but the model is expecting a different value, or we want to limit that model to a lower size
   - E.g. (2) qwen/qwen-image model requires a custom model called `guidance` which can be specified here.
 - Multiple providers per producer can be specified mainly for "fallback" logic. The main provider is marked by {priority = "main"}
+- As in the settings, you can also specify system prompts, variables etc. (See the above defaults section) using the configFile attribute for providers.
 
 Specify during query
 ```bash
@@ -398,6 +467,7 @@ tutopanda edit --movieId=q12345 --providers=path/To/providers.json
           "priority": "main",
           "provider": "openai",
           "model": "openai/gpt5",
+          "configFile": "script-producer.toml",
           "customAttributes": {
             "reasoning": "low"
           }  

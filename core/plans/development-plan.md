@@ -107,19 +107,51 @@ This roadmap breaks the storage + execution stack into milestones that each deli
   - Core: unit tests covering blob dedupe + manifest update when new hash differs.
   - CLI: integration test verifying new manifest appears and `current.json` points to revision using mock artefacts.
 
-## Milestone 6.5 – Live Provider Integrations
+## Milestone 6.5 – Registry Live Mode & Config Bridge
 - **Providers package**
-  - Implement live handlers for the initial provider/model pairs (OpenAI script/prompt, Replicate image/video/music/audio).
-  - Add provider-specific client wrappers (OpenAI, Replicate, ElevenLabs) plus retry/rate-limit utilities.
-  - Document required environment variables and update mappings to select live factories when `providerMode` is `live`.
+  - Extend the registry with `resolveMany`, warm-start orchestration, and environment-aware handler selection (`mock` vs `live`).
+  - Define provider descriptor/builders that accept parsed configuration payloads (`providerConfig`, raw attachments) without imposing semantics.
+  - Document the enriched `ProviderJobContext` contract and update mock factories to satisfy the new signature.
+  - Replace the current `providers/src/catalog.ts` with a mapping of `(provider, model, environment)` → handler factory, keeping ownership of concrete implementations inside the providers package.
+  - Deprecate `providers/src/catalog.ts`; consume the canonical catalog exported from `tutopanda-core` so provider metadata ownership lives entirely in core.
 - **Core updates**
-  - Teach the runner to choose between mock and live handlers per job (CLI flag, per-movie config, or environment toggle).
-  - Ensure provider metadata (provider slug, model id, cost class) is emitted into artefact events and manifests.
+  - Teach the runner/`createProviderProduce` wrapper to cache resolved bindings, pass through parsed configs, and record provider metadata on artefact events.
+  - Ensure job diagnostics capture provider mode (`mock`/`live`) and selected model for later manifest diffs.
 - **CLI work**
-  - Add user-facing options for selecting providers/models, validating availability via the registry, and surfacing cost warnings.
+  - Parse per-provider config files (JSON/TOML) during `query`/`edit`, populate `providerConfig`/`rawAttachments`, and surface validation errors before execution.
+  - Expose configuration summaries in dry-run output so users can confirm provider variants prior to live execution.
 - **Tests**
-  - Providers: integration tests for each live handler using mocked HTTP (e.g., MSW) plus smoketest gating for real API calls behind an explicit flag.
-  - Core/CLI: regression test ensuring mixed-mode runs (some live, some mock) resolve correctly and persist provider metadata.
+  - Providers: Vitest coverage for `resolveMany`, warm-start scheduling, and error propagation when secrets/config are missing.
+  - Core/CLI: integration test that runs a dry-run using the richer context payload and asserts artefact diagnostics include provider metadata.
+
+## Milestone 6.6 – OpenAI Responses Handler
+- **Providers package**
+  - Implement the OpenAI LLM handler using the Vercel AI SDK v6 Responses API, including prompt templating, JSON-schema enforcement, multi-artefact mapping, and diagnostics.
+  - Add secret resolution, retry/backoff, and telemetry hooks (latency, token usage) specific to OpenAI.
+- **Core updates**
+  - Wire provider diagnostics into manifest entries so OpenAI runs record response IDs and usage.
+  - Provide shared helpers for JSON-path extraction used by producers to split multi-artefact payloads.
+- **CLI work**
+  - Finalise config ingestion for OpenAI-driven producers (system prompts, JSON schema files, variable bindings) and ensure `--dryrun` showcases generated mock artefacts with the same layout.
+  - Add a `tutopanda providers:list` preview (or augment existing summaries) that confirms OpenAI variants are resolvable with the current secrets.
+- **Tests**
+  - Providers: unit tests with mocked OpenAI Responses API (MSW or fetch stubs) covering success, schema validation errors, and retryable failures.
+  - Core/CLI: regression test running `query --dryrun` using an OpenAI-backed plan to verify prompt templating and artefact mapping behave as expected.
+
+## Milestone 6.7 – Replicate & Audio/Video Providers
+- **Providers package**
+  - Implement Replicate handlers for image/video/music/audio producers, including job polling, cancellation, and blob download support.
+  - Add ElevenLabs (or alternative TTS) handler with configuration bridge for voice/emotion settings and result normalisation.
+  - Update registry mappings so each producer lists primary + fallback live handlers by environment (`local` vs `cloud`).
+- **Core updates**
+  - Ensure blob persistence paths handle streamed downloads from Replicate and audio providers without blocking the event loop.
+  - Record provider-specific diagnostics (prediction IDs, voice IDs, etc.) alongside artefact events for later debugging.
+- **CLI work**
+  - Surface provider selection flags/overrides (per producer) and cost warnings when switching from mock to live execution.
+  - Document required environment variables and add CLI preflight checks that block live runs when secrets are missing or quotas are exhausted.
+- **Tests**
+  - Providers: mocked HTTP integration tests for Replicate/ELEVENLabs flows (create/poll/cancel) plus fixture-based blob persistence tests.
+  - Core/CLI: mixed-mode regression test (some OpenAI, some Replicate mocked) verifying manifests include provider metadata and blobs land on disk.
 
 ## Milestone 7 – End-to-End Regeneration Loop
 - **Core additions**
