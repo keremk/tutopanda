@@ -433,7 +433,7 @@ tutopanda inspect --movieId=q12345 --errors
 ```
 ## Selecting Producer Implementations
 - In the default settings we mentioned how user can specify the default producer implementations (provider, model). Here we showing how these can be changed per generation or regeneration.
-> The implementation of this will use the providers package APIs to ask for the correct function given (provider, model, environment="local")
+> The implementation of this will use the providers package APIs to ask for the correct function given `(provider, model)`; the CLI automatically tags the request with `environment="local"` today.
 
 ### Specifying Provider & Models
 - Users should be able to specify different (provider, model) pairs for each producer type with a fallback pair and for each segment generation.
@@ -441,7 +441,7 @@ tutopanda inspect --movieId=q12345 --errors
 - The specified providers override the existing ones.
 - Per (provider, model) custom attributes can also be specified here.
 - Producer names should match the available producer kinds for the current setup otherwise it returns error with a message saying which producer(s) did not match.
-- If a given (provider, model, environment="local") is not available, again an error is returned saying which.
+- If a given `(provider, model)` is not available for the `local` environment, an error is returned saying which pair failed resolution.
 - Some (provider, model) may require custom attributes or different values enumerations for an already specified attribute. Adding customAttributes here will override the top level settings.config.
   - E.g. (1) `size` may be specified at the General Settings level but the model is expecting a different value, or we want to limit that model to a lower size
   - E.g. (2) qwen/qwen-image model requires a custom model called `guidance` which can be specified here.
@@ -488,4 +488,3 @@ tutopanda edit --movieId=q12345 --providers=path/To/providers.json
 - For regenerations, `tutopanda inspect` exports prompts/timeline to TOML/JSON for editing. When the user runs `tutopanda edit`, the CLI hashes each edited prompt individually, writes them back to the structured prompt files, and hands the hashes to core so only changed segments rerun.
 - The CLI never writes to the content-addressed blob store directly; it delegates all persistence of artefacts to the core storage helpers.
 - TOML/JSON exchanges are strictly CLI–user interfaces. Core services see structured prompt files and hashes, not TOML payloads.
-

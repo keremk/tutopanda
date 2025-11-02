@@ -11,7 +11,7 @@ const blobKinds = new Set<ArtifactKind>([
   'FinalVideo',
 ]);
 
-const mimeTypes: Partial<Record<ArtifactKind, string>> = {
+const expectedMimeTypes: Partial<Record<ArtifactKind, string>> = {
   SegmentAudio: 'audio/wav',
   MusicTrack: 'audio/mpeg',
   SegmentImage: 'image/png',
@@ -23,69 +23,127 @@ const mimeTypes: Partial<Record<ArtifactKind, string>> = {
 export function createMockArtefacts(request: ProviderJobContext): ProducedArtefact[] {
   return request.produces.map((artefactId, index) => {
     const kind = parseArtifactKind(artefactId);
-    const diagnostics = {
-      provider: request.provider,
-      attempt: request.attempt,
-      index,
-    };
-
-    const metadata = serializeMetadata({
+    const expectedMimeType = kind ? expectedMimeTypes[kind] : undefined;
+    const mockResponse = createMockResponse({
       provider: request.provider,
       model: request.model,
-      environment: request.context.environment ?? 'local',
-      jobId: request.jobId,
-      produces: artefactId,
-      inputs: request.inputs,
-      providerConfig: request.context.providerConfig,
-      attachments: request.context.rawAttachments,
-      extras: request.context.extras,
+      artefactId,
+      kind,
+      index,
     });
-
-    const mimeType = kind && blobKinds.has(kind)
-      ? mimeTypes[kind] ?? 'application/octet-stream'
-      : 'text/plain';
+    const report = serializeReport({
+      request,
+      artefactId,
+      kind,
+      index,
+      expectedMimeType,
+      mockResponse,
+    });
 
     return {
       artefactId,
       status: 'succeeded',
-      blob: { data: Buffer.from(metadata, 'utf8'), mimeType },
-      diagnostics,
+      inline: !kind || !blobKinds.has(kind) ? mockResponse : undefined,
+      blob: {
+        data: Buffer.from(report, 'utf8'),
+        mimeType: 'text/plain',
+      },
+      diagnostics: {
+        provider: request.provider,
+        model: request.model,
+        expectedMimeType,
+        attempt: request.attempt,
+        index,
+      },
     };
   });
 }
 
-function serializeMetadata(meta: {
-  provider: string;
-  model: string;
-  environment: string;
-  jobId: string;
-  produces: string;
-  inputs: string[];
-  providerConfig?: unknown;
-  attachments?: ProviderJobContext['context']['rawAttachments'];
-  extras?: Record<string, unknown> | undefined;
+function serializeReport(args: {
+  request: ProviderJobContext;
+  artefactId: string;
+  kind?: ArtifactKind;
+  index: number;
+  expectedMimeType?: string;
+  mockResponse: string;
 }): string {
-  const attachmentSummaries = (meta.attachments ?? []).map((attachment) => ({
+  const { request, artefactId, kind, index, expectedMimeType, mockResponse } = args;
+  const metadata = {
+    provider: request.provider,
+    model: request.model,
+    environment: request.context.environment ?? 'local',
+    jobId: request.jobId,
+    produces: artefactId,
+    inputs: request.inputs,
+    providerConfig: request.context.providerConfig,
+    attachments: request.context.rawAttachments,
+    extras: request.context.extras,
+  };
+
+  const attachmentSummaries = (metadata.attachments ?? []).map((attachment) => ({
     name: attachment.name,
     format: attachment.format,
     preview: attachment.contents.slice(0, 200),
   }));
 
-  const payload = {
-    description: 'Mock provider execution output',
-    provider: meta.provider,
-    model: meta.model,
-    environment: meta.environment,
-    jobId: meta.jobId,
-    produces: meta.produces,
-    inputs: meta.inputs,
-    providerConfig: meta.providerConfig,
-    attachments: attachmentSummaries,
-    extras: meta.extras,
-    note: 'This artefact was generated in mock mode. No external API was called.',
-  } satisfies Record<string, unknown>;
+  const lines = [
+    '# Mock Provider Invocation',
+    '',
+    `Provider: ${metadata.provider}`,
+    `Model: ${metadata.model}`,
+    `Environment: ${metadata.environment}`,
+    `Job ID: ${metadata.jobId}`,
+    `Artefact: ${metadata.produces}`,
+    `Attempt: ${request.attempt}`,
+    `Invocation Index: ${index}`,
+    kind ? `Artifact Kind: ${kind}` : 'Artifact Kind: unknown',
+    expectedMimeType
+      ? `Expected Output Mime Type: ${expectedMimeType} (mock substituted with text/plain)`
+      : 'Expected Output Mime Type: text/plain',
+    '',
+    'Inputs:',
+    formatList(metadata.inputs),
+    '',
+    'Provider Config:',
+    formatValue(metadata.providerConfig),
+    '',
+    'Attachments:',
+    formatAttachments(metadata.attachments ?? []),
+    '',
+    'Extras:',
+    formatValue(metadata.extras),
+    '',
+    'Attachment Summaries:',
+    formatValue(attachmentSummaries),
+    '',
+    'Mock Response:',
+    indent(mockResponse),
+    '',
+    'Note: This artefact was generated in mock mode. No external API was called.',
+  ];
 
-  return JSON.stringify(payload, null, 2);
+  return formatSection(lines);
+}
+
+function createMockResponse(args: {
+  provider: string;
+  model: string;
+  artefactId: string;
+  kind?: ArtifactKind;
+  index: number;
+}): string {
+  const { provider, model, artefactId, kind, index } = args;
+  const base = `${provider}/${model}`;
+  if (!kind || !blobKinds.has(kind)) {
+    return `Mock response for ${artefactId} (#${index + 1}) generated by ${base}.`;
+  }
+
+  return [
+    `Mock binary artefact placeholder for ${artefactId} (#${index + 1}).`,
+    `Original output kind: ${kind}.`,
+    `Provider: ${base}.`,
+    'Expected a binary payload, substituted with diagnostic text.',
+  ].join(' ');
 }
 
 function parseArtifactKind(artefactId: string): ArtifactKind | undefined {
@@ -94,4 +152,61 @@ function parseArtifactKind(artefactId: string): ArtifactKind | undefined {
     return undefined;
   }
   return match[1] as ArtifactKind;
+}
+
+function formatSection(lines: string[]): string {
+  return lines.join('\n').trimEnd() + '\n';
+}
+
+function formatList(items: string[]): string {
+  if (!items || items.length === 0) {
+    return '  (none)';
+  }
+  return items.map((item) => `  - ${item}`).join('\n');
+}
+
+function formatAttachments(attachments: ProviderJobContext['context']['rawAttachments']): string {
+  if (!attachments || attachments.length === 0) {
+    return '  (none)';
+  }
+  const lines: string[] = [];
+  for (const attachment of attachments) {
+    lines.push(`  - ${attachment.name} (${attachment.format})`);
+    lines.push(indent(truncate(attachment.contents, 800)));
+  }
+  return lines.join('\n');
+}
+
+function formatValue(value: unknown): string {
+  if (value === undefined) {
+    return '  (none)';
+  }
+  if (typeof value === 'string') {
+    if (value.trim().length === 0) {
+      return '  (empty string)';
+    }
+    return indent(truncate(value, 800));
+  }
+  try {
+    const json = JSON.stringify(value, null, 2);
+    return json ? indent(truncate(json, 2000)) : '  (none)';
+  } catch {
+    return '  (unserializable value)';
+  }
+}
+
+function indent(value: string, spaces = 2): string {
+  const padding = ' '.repeat(spaces);
+  return value
+    .split('\n')
+    .map((line) => `${padding}${line}`)
+    .join('\n');
+}
+
+function truncate(value: string, limit: number): string {
+  if (value.length <= limit) {
+    return value;
+  }
+  const remaining = value.length - limit;
+  return `${value.slice(0, limit)}... (truncated ${remaining} chars)`;
 }

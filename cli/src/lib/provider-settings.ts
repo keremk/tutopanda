@@ -39,6 +39,8 @@ const KNOWN_PROVIDER_NAMES: readonly ProviderName[] = [
   'internal',
 ];
 
+const CLIENT_ENVIRONMENT: ProviderEnvironment = 'local';
+
 interface RawSettings {
   general?: unknown;
   producers?: RawProducerSetting[];
@@ -54,7 +56,6 @@ interface RawProviderOption {
   priority?: string;
   provider: string;
   model: string;
-  environment?: string;
   configFile?: string;
   customAttributes?: Record<string, unknown>;
 }
@@ -188,14 +189,12 @@ export function providerOptionsFromJSON(json: unknown): ProviderOptionsMap {
       if (!isProviderName(providerName) || typeof item.model !== 'string') {
         continue;
       }
-      const environmentValue =
-        typeof item.environment === 'string' ? item.environment : undefined;
 
       entries.push({
         priority: item.priority === 'fallback' ? 'fallback' : 'main',
         provider: providerName,
         model: item.model,
-        environment: normalizeEnvironment(environmentValue),
+        environment: CLIENT_ENVIRONMENT,
         config: item.config,
         attachments: Array.isArray(item.attachments)
           ? item.attachments
@@ -272,7 +271,7 @@ async function loadProviderOption(
   }
 
   const priority = raw.priority === 'fallback' ? 'fallback' : 'main';
-  const environment = normalizeEnvironment(raw.environment);
+  const environment: ProviderEnvironment = CLIENT_ENVIRONMENT;
 
   let config: unknown;
   const attachments: ProviderAttachment[] = [];
@@ -352,10 +351,6 @@ function normalizeStoredAttachment(value: unknown): ProviderAttachment | undefin
   return { name, contents, format };
 }
 
-function normalizeEnvironment(value: string | undefined): ProviderEnvironment {
-  return value === 'cloud' ? 'cloud' : 'local';
-}
-
 function isProducerKind(value: string | undefined): value is ProducerKind {
   return typeof value === 'string' && (KNOWN_PRODUCERS as readonly string[]).includes(value);
 }
@@ -387,7 +382,6 @@ const DEFAULT_PRODUCERS: RawProducerSetting[] = [
         priority: 'main',
         provider: 'openai',
         model: 'openai/gpt5',
-        environment: 'cloud',
         configFile: 'script-producer.toml',
       },
     ],
@@ -399,7 +393,6 @@ const DEFAULT_PRODUCERS: RawProducerSetting[] = [
         priority: 'main',
         provider: 'openai',
         model: 'openai/gpt5-mini',
-        environment: 'cloud',
         configFile: 'text-to-music-prompt-producer.toml',
       },
     ],
@@ -411,7 +404,6 @@ const DEFAULT_PRODUCERS: RawProducerSetting[] = [
         priority: 'main',
         provider: 'replicate',
         model: 'stability-ai/stable-audio-2.5',
-        environment: 'cloud',
       },
     ],
   },
@@ -422,13 +414,11 @@ const DEFAULT_PRODUCERS: RawProducerSetting[] = [
         priority: 'main',
         provider: 'replicate',
         model: 'minimax/speech-02-hd',
-        environment: 'cloud',
       },
       {
         priority: 'fallback',
         provider: 'replicate',
         model: 'elevenlabs/v3',
-        environment: 'cloud',
       },
     ],
   },
@@ -439,7 +429,6 @@ const DEFAULT_PRODUCERS: RawProducerSetting[] = [
         priority: 'main',
         provider: 'openai',
         model: 'openai/gpt5-mini',
-        environment: 'cloud',
         configFile: 'text-to-image-prompt-producer.toml',
       },
     ],
@@ -451,7 +440,6 @@ const DEFAULT_PRODUCERS: RawProducerSetting[] = [
         priority: 'main',
         provider: 'replicate',
         model: 'bytedance/seedream-4',
-        environment: 'cloud',
       },
     ],
   },
@@ -462,7 +450,6 @@ const DEFAULT_PRODUCERS: RawProducerSetting[] = [
         priority: 'main',
         provider: 'openai',
         model: 'openai/gpt5-mini',
-        environment: 'cloud',
         configFile: 'text-to-video-prompt-producer.toml',
       },
     ],
@@ -474,13 +461,11 @@ const DEFAULT_PRODUCERS: RawProducerSetting[] = [
         priority: 'main',
         provider: 'replicate',
         model: 'bytedance/seedance-1-pro-fast',
-        environment: 'cloud',
       },
       {
         priority: 'fallback',
         provider: 'replicate',
         model: 'bytedance/seedance-1-lite',
-        environment: 'cloud',
       },
     ],
   },
@@ -491,7 +476,6 @@ const DEFAULT_PRODUCERS: RawProducerSetting[] = [
         priority: 'main',
         provider: 'openai',
         model: 'openai/gpt5-mini',
-        environment: 'cloud',
         configFile: 'image-to-video-prompt-producer.toml',
       },
     ],
@@ -503,7 +487,6 @@ const DEFAULT_PRODUCERS: RawProducerSetting[] = [
         priority: 'main',
         provider: 'replicate',
         model: 'bytedance/seedream-4',
-        environment: 'cloud',
       },
     ],
   },
@@ -514,7 +497,6 @@ const DEFAULT_PRODUCERS: RawProducerSetting[] = [
         priority: 'main',
         provider: 'replicate',
         model: 'bytedance/seedance-1-pro-fast',
-        environment: 'cloud',
       },
     ],
   },
@@ -525,7 +507,6 @@ const DEFAULT_PRODUCERS: RawProducerSetting[] = [
         priority: 'main',
         provider: 'internal',
         model: 'tutopanda/timeline-assembler',
-        environment: 'local',
       },
     ],
   },

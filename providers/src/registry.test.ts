@@ -1,3 +1,4 @@
+import { Buffer } from 'node:buffer';
 import { describe, expect, it } from 'vitest';
 import { createProviderRegistry } from './index.js';
 
@@ -27,7 +28,13 @@ describe('createProviderRegistry', () => {
     });
 
     expect(result.artefacts).toHaveLength(1);
-    expect(result.artefacts[0].inline).toContain('Mock');
+    const artefact = result.artefacts[0];
+    expect(artefact.inline).toContain('Mock response');
+    expect(artefact.blob?.mimeType).toBe('text/plain');
+    const payload = typeof artefact.blob?.data === 'string'
+      ? artefact.blob.data
+      : Buffer.from(artefact.blob!.data).toString('utf8');
+    expect(payload).toContain('Mock Provider Invocation');
   });
 
   it('produces blob artefacts for media outputs', async () => {
@@ -53,8 +60,13 @@ describe('createProviderRegistry', () => {
     });
 
     expect(result.artefacts).toHaveLength(1);
-    expect(result.artefacts[0].blob?.mimeType).toBe('video/mp4');
-    expect(result.artefacts[0].blob?.data).toBeDefined();
+    const artefact = result.artefacts[0];
+    expect(artefact.inline).toBeUndefined();
+    expect(artefact.blob?.mimeType).toBe('text/plain');
+    const payload = typeof artefact.blob?.data === 'string'
+      ? artefact.blob.data
+      : Buffer.from(artefact.blob!.data).toString('utf8');
+    expect(payload).toContain('Mock binary artefact placeholder');
   });
 
   it('caches handlers across resolveMany calls', () => {

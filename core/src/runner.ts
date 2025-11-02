@@ -275,12 +275,20 @@ async function materializeArtefacts(
     const status = normalizeStatus(artefact.status);
     const output: { blob?: BlobRef; inline?: string } = {};
 
-    if (artefact.blob && status === 'succeeded') {
-      output.blob = await persistBlob(context.storage, context.movieId, artefact.blob);
-    }
-
     if (artefact.inline !== undefined) {
       output.inline = artefact.inline;
+    }
+
+    const blobPayload = artefact.blob
+      ?? (artefact.inline !== undefined
+        ? {
+            data: artefact.inline,
+            mimeType: 'text/plain',
+          }
+        : undefined);
+
+    if (blobPayload && status === 'succeeded') {
+      output.blob = await persistBlob(context.storage, context.movieId, blobPayload);
     }
 
     const event: ArtefactEvent = {

@@ -24,7 +24,7 @@ The CLI never talks to provider SDKs directly. All interactions flow through the
 
 ## Inputs & Data Sources
 
-- **CLI settings** (`~/.tutopanda/default-settings.json` + per-run overrides) declare producer → provider priorities and custom attributes. This file may include fallbacks, environment hints, and per-provider config files.
+- **CLI settings** (`~/.tutopanda/default-settings.json` + per-run overrides) declare producer → provider priorities and custom attributes. This file may include fallbacks and per-provider config files; the CLI determines the execution environment itself.
 - **Execution plan** (`ExecutionPlan` from `tutopanda-core`) lists jobs by producer kind, including the `provider` and `providerModel` selected during planning.
 - **Manifest & event log** ensure the runner can detect incremental changes and persist artefacts.
 - **Secrets** come from the CLI runtime (typically environment variables) and are passed to the provider registry via a `secretResolver`.
@@ -37,12 +37,12 @@ The CLI never talks to provider SDKs directly. All interactions flow through the
 
 2. **Plan Loading**
    - Whenever the user runs `tutopanda query <prompt>` or `tutopanda edit --movieId=<id>`, the CLI invokes `generatePlan` from `tutopanda-core` to produce the fresh `ExecutionPlan` + manifest snapshot that will seed the run.
-   - The CLI reads the active settings JSON, merges overrides, and eagerly loads every referenced provider config file (TOML/JSON/text) so each producer has a concrete `(provider, model, environment, config)` tuple available at runtime. These selections are written to `providers.json` alongside the movie manifest for subsequent edits.
+  - The CLI reads the active settings JSON, merges overrides, and eagerly loads every referenced provider config file (TOML/JSON/text) so each producer has a concrete `(provider, model, config)` tuple available at runtime. The CLI tags every variant with `environment: 'local'` today (cloud runs will reuse the same mechanism later). These selections are written to `providers.json` alongside the movie manifest for subsequent edits.
    - `query` creates a brand-new movie directory, applies shortcut overrides, and stores the computed plan as the initial state before any providers run.
    - `edit` reloads the stored `config.json` / `providers.json`, applies additional overrides (including edited TOML), and regenerates the plan so revisions start from the current manifest.
 
 3. **Provider Resolution**
-   - CLI maps each producer in the plan to the concrete `(provider, model, environment)` entry defined in settings (primary + fallbacks) and attaches the parsed configuration payload plus raw attachment contents.
+  - CLI maps each producer in the plan to the concrete `(provider, model)` entry defined in settings (primary + fallbacks), stamps `environment: 'local'`, and attaches the parsed configuration payload plus raw attachment contents.
    - It deduplicates those triples and calls `registry.resolveMany` once up front; this populates the handler cache and allows warm start to surface missing secrets before execution begins.
 
 4. **Runner Execution**
@@ -70,7 +70,7 @@ sequenceDiagram
 ```
 
 - `warmStart` is optional; when supported the CLI runs it in parallel prior to starting the runner to surface secret/config issues early.
-- Resolution errors (missing provider, invalid environment, unresolvable fallback) are thrown before the runner starts, failing fast.
+- Resolution errors (missing provider variant or unresolvable fallback) are thrown before the runner starts, failing fast.
 
 ## Data Structures
 
@@ -81,7 +81,7 @@ interface ProviderOption {
   priority: 'main' | 'fallback';
   provider: ProviderName;
   model: string;
-  environment: 'local' | 'cloud';
+  environment: 'local' | 'cloud';    // currently always 'local' when emitted by the CLI
   config?: unknown;                  // parsed TOML/JSON payload
   attachments: ProviderAttachment[]; // raw file contents passed through verbatim
   customAttributes?: Record<string, unknown>;
@@ -100,8 +100,8 @@ interface ProviderOption {
    {
      "producer": "ScriptProducer",
      "providers": [
-       { "priority": "main", "provider": "openai", "model": "openai/gpt5", "environment": "cloud" },
-       { "priority": "fallback", "provider": "replicate", "model": "google/gemini-2.5-flash", "environment": "cloud" }
+       { "priority": "main", "provider": "openai", "model": "openai/gpt5" },
+       { "priority": "fallback", "provider": "replicate", "model": "google/gemini-2.5-flash" }
      ]
    }
    ```
@@ -115,7 +115,7 @@ interface ProviderOption {
 
 ### Audio Producer Fallback Trigger
 
-1. Primary ElevenLabs voice (`environment: "cloud"`) hits a 429; handler throws `ProviderFailure` flagged as retryable.
+1. Primary ElevenLabs voice hits a 429; handler throws `ProviderFailure` flagged as retryable.
 2. Produce wrapper catches the failure, records diagnostics, and invokes fallback variant (Replicate `minimax/speech-02-hd`).
 3. Fallback succeeds. CLI surfaces in summary:
    ```
@@ -143,7 +143,7 @@ interface ProviderOption {
 ## Observability & Diagnostics
 
 - CLI wraps registry hooks to surface progress:
-  - `provider.invoke.start` → spinner/log entry with provider/model/environment.
+  - `provider.invoke.start` → spinner/log entry with provider/model/environment (currently `environment` is always `'local'`).
   - `provider.invoke.retry` → warning with reason (rate limit, transient error).
   - `provider.invoke.fallback` → info entry citing the new variant.
   - `provider.invoke.error` → bubbled up as runner job failure; CLI suggests retry or configuration fix.
@@ -164,7 +164,7 @@ interface ProviderOption {
 
 ## Next Steps
 
-1. Extend CLI configuration parsing to support `environment`, `fallbacks`, and per-provider overrides.
+1. Extend CLI configuration parsing to support additional fallback metadata and per-provider overrides.
 2. Implement `resolveMany` usage in `cli/src/lib/build.ts`, including warm start and caching.
 3. Add observability wiring to forward provider telemetry into the CLI logger for immediate feedback.
 4. Document user-facing flags for selecting provider variants and running hybrid mock/live builds.

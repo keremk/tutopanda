@@ -98,6 +98,11 @@ describe('createRunner', () => {
     expect(result.status).toBe('succeeded');
     expect(result.jobs).toHaveLength(2);
 
+    const firstJob = result.jobs.find((job) => job.jobId === 'job-1');
+    expect(firstJob?.artefacts[0].output.inline).toBe('Once upon a time');
+    expect(firstJob?.artefacts[0].output.blob).toBeDefined();
+    expect(firstJob?.artefacts[0].output.blob?.mimeType).toBe('text/plain');
+
     const manifest = await result.buildManifest();
     expect(manifest.revision).toBe('rev-0001');
     expect(Object.keys(manifest.artefacts)).toContain('Artifact:NarrationScript');
