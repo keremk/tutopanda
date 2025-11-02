@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { TextEncoder } from 'util';
 import { createRunner } from './runner.js';
 import { createEventLog } from './event-log.js';
 import { createManifestService } from './manifest.js';

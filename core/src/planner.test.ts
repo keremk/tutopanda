@@ -29,7 +29,7 @@ const testCatalog: ProducerCatalog = {
     costClass: 'mid',
     medianLatencySec: 12,
   },
-  MusicProducer: {
+  TextToMusicProducer: {
     provider: 'replicate',
     providerModel: 'stability-ai/stable-audio-2.5',
     rateKey: 'music:stable-audio-2.5',

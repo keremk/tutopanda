@@ -1,6 +1,6 @@
 import { mkdtemp, readFile, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { runInit } from './init.js';
 import { readCliConfig } from '../lib/cli-config.js';
@@ -23,16 +23,24 @@ async function createTempRoot(): Promise<string> {
 }
 
 describe('runInit', () => {
-  it('creates builds folder, default settings file, and CLI config', async () => {
+  it('creates builds folder, default settings file, config files, and CLI config', async () => {
     const root = await createTempRoot();
     const result = await runInit({ rootFolder: root });
 
     const buildsStats = await stat(result.buildsFolder);
     expect(buildsStats.isDirectory()).toBe(true);
 
-    const defaultSettings = JSON.parse(await readFile(result.defaultSettingsPath, 'utf8'));
-    expect(defaultSettings.General).toBeDefined();
-    expect(defaultSettings.Image.ImagesPerSegment).toBe(2);
+    const defaultSettings = JSON.parse(await readFile(result.defaultSettingsPath, 'utf8')) as {
+      general: Record<string, unknown>;
+      producers: unknown[];
+    };
+    expect(defaultSettings.general).toBeDefined();
+    expect(defaultSettings.general.useVideo).toBe(false);
+    expect(Array.isArray(defaultSettings.producers)).toBe(true);
+
+    const settingsDir = resolve(result.defaultSettingsPath, '..');
+    const scriptConfig = await readFile(join(settingsDir, 'script-producer.toml'), 'utf8');
+    expect(scriptConfig).toContain('system_prompt');
 
     const cliConfig = await readCliConfig(result.cliConfigPath);
     expect(cliConfig?.storage.root).toBe(result.rootFolder);

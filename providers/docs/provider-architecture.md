@@ -71,51 +71,41 @@ This package contains the registered producers for different providers of models
 - Allow future providers (e.g. FAL or custom pipelines) to plug in without touching existing call sites.
 
 ## Package Topology
-- `providers/src/mappings.ts` remains the canonical registry. Each entry declares a `ProducerKind`, the supported `(provider, model)` pairs, and factories for both live and mock implementations.
+- `providers/src/mappings.ts` remains the canonical registry. Each entry declares the supported `(provider, model, environment)` triples and factories for both live and mock implementations.
 - `providers/src/producers/<domain>/` groups handlers by artefact domain (script, prompt, image, video, audio, music). Each handler exports a `createProducer` factory that accepts a shared runtime context.
 - `providers/src/common/` contains thin SDK wrappers (OpenAI, Replicate, ElevenLabs, etc.) and shared utilities such as retry helpers or response normalization. These wrappers own HTTP client configuration and rate limiting.
 - `providers/src/index.ts` exports `createProviderRegistry` and associated types so the CLI and server packages can resolve handlers at runtime.
 
-## Producer Descriptors (owned by core)
-- `tutopanda-core` will expose a `producerCatalog` describing every logical producer. Each entry includes `provider` and `providerModel` metadata (currently missing) plus allowed fallbacks. The catalog is used during blueprint expansion so every `ProducerGraphNode` carries `{ kind, provider, providerModel }`.
-- CLI and server runners already receive `ProducerGraphNode` objects from the planner; once the metadata is present they can perform a direct lookup against the providers registry without hard-coding defaults.
-- Per-movie overrides (e.g. “use `seedream-4` instead of `imagen-4`”) are persisted as part of the input configuration. The planner surfaces the chosen `(provider, model)` in the job context so downstream metrics remain accurate.
+## Producer Descriptors (owned by the CLI)
+- The CLI materialises a producer catalog at runtime based on the active settings file. Each entry includes the `(provider, model)` to use plus user-defined fallbacks.
+- Planner output (`ProducerGraphNode`) carries the chosen provider/model combination so the execution plan is fully explicit.
+- Per-movie overrides (e.g. “use `seedream-4` instead of `imagen-4`”) are persisted alongside the movie (`config.json` + `providers.json`) so later edits replay the exact same selections unless the user supplies new overrides.
 
 ## Provider Registry and Resolution
 - `createProviderRegistry(options)` loads `mappings.ts`, instantiates provider clients, and wires factories. Options declare runtime mode (`live | mock`), telemetry hooks, and secret providers (environment variables, Vercel secure store, etc.).
-- The registry exposes a `resolve(descriptor, context)` method. `descriptor` includes `{ kind, provider, model }` from the plan; `context` conveys run-specific flags (dry run, tracing ids, deadlines).
+- The registry exposes `resolve` / `resolveMany` helpers that accept `{ provider, model, environment }` descriptors.
 - Registry lookups return a `ProducerHandler` object:
   ```ts
 interface ProducerHandler<I, O = ProducerResult> {
-  readonly kind: ProducerKind;
   readonly provider: ProviderName;
   readonly model: string;
-  invoke(request: ProducerRequest<I>): Promise<O>;
+  readonly environment: 'local' | 'cloud';
+  readonly mode: 'mock' | 'live';
+  invoke(request: ProviderRequest<I>): Promise<O>;
   warmStart?(env: WarmStartContext): Promise<void>;
 }
 ```
 - `warmStart` is an optional lifecycle hook. When present the registry calls it during worker boot with a `WarmStartContext` (logger, caches, timeout budget) so handlers can pre-initialize heavyweight resources (e.g. refresh tokens, pre-create SDK sessions) without delaying the first `invoke`. Runners may skip it in fast-path test environments.
 - `mappings.ts` is implemented as data plus factories:
   ```ts
-  export const producerMappings: ProviderMappings = {
-    ScriptProducer: {
-      live: {
-        openai: { 'openai/GPT-5': (ctx) => createOpenAIScriptProducer(ctx) },
-        replicate: { 'google/gemini-2.5-flash': (ctx) => createGeminiScriptProducer(ctx) },
-      },
-      mock: createMockScriptProducer,
+  export const providerImplementations = [
+    {
+      match: { provider: '*', model: '*', environment: '*' },
+      mode: 'mock',
+      factory: createMockProducerHandler(),
     },
-    TextToImageProducer: {
-      live: {
-        replicate: {
-          'bytedance/seedream-4': (ctx) => createSeedreamProducer(ctx),
-          'tencent/hunyuan-image-3': (ctx) => createHunyuanProducer(ctx),
-        },
-      },
-      mock: createMockImageProducer,
-    },
-    // …remaining producers
-  };
+    // live handlers registered alongside the mock default
+  ];
   ```
 
 ## Execution Contract
@@ -134,7 +124,7 @@ interface ProducerHandler<I, O = ProducerResult> {
 
 ## Mock & Test Producers
 - Every mapping entry declares a `mock` factory returning deterministic artefacts for integration tests and sandboxes. Mock factories live under `providers/src/producers/<domain>/mock` to keep them separate from the live code.
-- Runtime mode is determined per job: a CLI flag like `--use-mock=ScriptProducer,MusicProducer` maps to registry overrides so we can mix real and fake producers within a run.
+- Runtime mode is determined per job: a CLI flag like `--use-mock=ScriptProducer,TextToMusicProducer` maps to registry overrides so we can mix real and fake producers within a run.
 - Mock handlers return the same `ProducerResult` shape as live handlers and annotate responses with `meta.mocked = true` so manifests and audits can record the origin.
 
 ## Future Extensions

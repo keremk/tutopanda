@@ -112,14 +112,15 @@ This roadmap breaks the storage + execution stack into milestones that each deli
   - Extend the registry with `resolveMany`, warm-start orchestration, and environment-aware handler selection (`mock` vs `live`).
   - Define provider descriptor/builders that accept parsed configuration payloads (`providerConfig`, raw attachments) without imposing semantics.
   - Document the enriched `ProviderJobContext` contract and update mock factories to satisfy the new signature.
-  - Replace the current `providers/src/catalog.ts` with a mapping of `(provider, model, environment)` → handler factory, keeping ownership of concrete implementations inside the providers package.
-  - Deprecate `providers/src/catalog.ts`; consume the canonical catalog exported from `tutopanda-core` so provider metadata ownership lives entirely in core.
+- Replace the current `providers/src/catalog.ts` with a mapping of `(provider, model, environment)` → handler factory, keeping ownership of concrete implementations inside the providers package.
+  - Have the CLI supply the producer→provider catalog when planning; providers only map execution handlers by `(provider, model, environment)`.
 - **Core updates**
   - Teach the runner/`createProviderProduce` wrapper to cache resolved bindings, pass through parsed configs, and record provider metadata on artefact events.
   - Ensure job diagnostics capture provider mode (`mock`/`live`) and selected model for later manifest diffs.
 - **CLI work**
-  - Parse per-provider config files (JSON/TOML) during `query`/`edit`, populate `providerConfig`/`rawAttachments`, and surface validation errors before execution.
-  - Expose configuration summaries in dry-run output so users can confirm provider variants prior to live execution.
+  - Adopt the new settings schema (flat `general` section + `producers` array), scaffolding default JSON/TOML files during `tutopanda init`.
+  - Parse per-provider config files during `query`/`edit`, populate `providerConfig`/`rawAttachments`, and surface validation errors before execution.
+  - Persist provider selections alongside each movie (`providers.json`) and surface configuration summaries in dry-run output so users can confirm provider variants prior to live execution.
 - **Tests**
   - Providers: Vitest coverage for `resolveMany`, warm-start scheduling, and error propagation when secrets/config are missing.
   - Core/CLI: integration test that runs a dry-run using the richer context payload and asserts artefact diagnostics include provider metadata.

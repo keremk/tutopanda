@@ -1,19 +1,18 @@
-import type { ProducerKind } from 'tutopanda-core';
 import { createMockArtefacts } from './mock-output.js';
 import type {
   HandlerFactory,
+  HandlerFactoryInit,
   ProducerHandler,
-  ProviderDescriptor,
   ProviderJobContext,
   ProviderResult,
 } from './types.js';
 
-export function createMockProducerHandler(kind: ProducerKind): HandlerFactory {
-  return (descriptor: ProviderDescriptor): ProducerHandler => ({
-    kind,
+export function createMockProducerHandler(): HandlerFactory {
+  return ({ descriptor, mode }: HandlerFactoryInit): ProducerHandler => ({
     provider: descriptor.provider,
     model: descriptor.model,
-    mode: 'mock',
+    environment: descriptor.environment,
+    mode,
     async invoke(request: ProviderJobContext): Promise<ProviderResult> {
       const artefacts = createMockArtefacts(request);
       return {

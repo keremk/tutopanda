@@ -1,12 +1,10 @@
 import { readFile } from 'node:fs/promises';
-import { resolve } from 'node:path';
-import { parseProjectConfig } from 'tutopanda-core';
+import { resolve, join } from 'node:path';
+import { parseProjectConfig, type ProjectConfig } from 'tutopanda-core';
 import { readCliConfig } from '../lib/cli-config.js';
 import {
-  loadProjectConfig,
   mergeProjectConfig,
   applyShortcutOverrides,
-  parseProjectConfigOverrides,
 } from '../lib/project-config.js';
 import { formatMovieId } from './query.js';
 import { generatePlan } from '../lib/planner.js';
@@ -19,6 +17,14 @@ import {
   executeBuild,
   type BuildSummary,
 } from '../lib/build.js';
+import {
+  loadSettings,
+  loadSettingsOverrides,
+  mergeProviderOptions,
+  providerOptionsFromJSON,
+  applyProviderShortcutOverrides,
+} from '../lib/provider-settings.js';
+import { expandPath } from '../lib/path.js';
 
 export interface EditOptions {
   movieId: string;
@@ -59,12 +65,14 @@ export async function runEdit(options: EditOptions): Promise<EditResult> {
   const basePath = cliConfig.storage.basePath;
   const movieDir = resolve(storageRoot, basePath, storageMovieId);
 
-  let projectConfig = await loadMovieProjectConfig(movieDir, cliConfig.defaultSettingsPath);
+  const baseSettings = await loadSettings(cliConfig.defaultSettingsPath);
+  let projectConfig = await loadMovieProjectConfig(movieDir, baseSettings.projectConfig);
+  let providerOptions = (await loadStoredProviderOptions(movieDir)) ?? baseSettings.providerOptions;
 
   if (options.settingsPath) {
-    const overridesRaw = await readFile(resolve(options.settingsPath), 'utf8');
-    const parsedOverrides = parseProjectConfigOverrides(JSON.parse(overridesRaw));
-    projectConfig = mergeProjectConfig(projectConfig, parsedOverrides);
+    const overrides = await loadSettingsOverrides(expandPath(options.settingsPath));
+    projectConfig = mergeProjectConfig(projectConfig, overrides.projectConfig);
+    providerOptions = mergeProviderOptions(providerOptions, overrides.providerOptions);
   }
 
   projectConfig = applyShortcutOverrides(projectConfig, {
@@ -78,10 +86,14 @@ export async function runEdit(options: EditOptions): Promise<EditResult> {
     size: options.size,
   });
 
+  providerOptions = applyProviderShortcutOverrides(providerOptions, {
+    voice: options.voice,
+  });
+
   let prompt = await readExistingPrompt(movieDir);
 
   if (options.inputsPath) {
-    const toml = await readFile(resolve(options.inputsPath), 'utf8');
+    const toml = await readFile(expandPath(options.inputsPath), 'utf8');
     const promptMap = parsePromptsToml(toml);
     if (promptMap.inquiry !== undefined) {
       prompt = promptMap.inquiry;
@@ -96,6 +108,7 @@ export async function runEdit(options: EditOptions): Promise<EditResult> {
   const planResult = await generatePlan({
     cliConfig,
     projectConfig,
+    providerOptions,
     prompt,
     movieId: storageMovieId,
     isNew: false,
@@ -106,6 +119,7 @@ export async function runEdit(options: EditOptions): Promise<EditResult> {
         movieId: storageMovieId,
         plan: planResult.plan,
         manifest: planResult.manifest,
+        providerOptions,
         storage: { rootDir: storageRoot, basePath },
       })
     : undefined;
@@ -117,6 +131,8 @@ export async function runEdit(options: EditOptions): Promise<EditResult> {
         plan: planResult.plan,
         manifest: planResult.manifest,
         manifestHash: planResult.manifestHash,
+        providerOptions,
+        logger: console,
       });
 
   return {
@@ -130,12 +146,21 @@ export async function runEdit(options: EditOptions): Promise<EditResult> {
   };
 }
 
-async function loadMovieProjectConfig(movieDir: string, fallbackConfigPath: string) {
+async function loadMovieProjectConfig(movieDir: string, fallbackConfig: ProjectConfig) {
   try {
     const contents = await readFile(resolve(movieDir, 'config.json'), 'utf8');
     return parseProjectConfig(JSON.parse(contents));
   } catch {
-    return loadProjectConfig(fallbackConfigPath);
+    return fallbackConfig;
+  }
+}
+
+async function loadStoredProviderOptions(movieDir: string) {
+  try {
+    const contents = await readFile(join(movieDir, 'providers.json'), 'utf8');
+    return providerOptionsFromJSON(JSON.parse(contents));
+  } catch {
+    return null;
   }
 }
 

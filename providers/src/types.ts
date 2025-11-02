@@ -1,22 +1,41 @@
 import type {
   ArtefactEventStatus,
   ProducedArtefact,
-  ProducerKind,
   ProviderName,
   RevisionId,
 } from 'tutopanda-core';
 
 export type ProviderMode = 'mock' | 'live';
+export type ProviderEnvironment = 'local' | 'cloud';
 
 export interface ProviderDescriptor {
-  kind: ProducerKind;
   provider: ProviderName;
   model: string;
+  environment: ProviderEnvironment;
+}
+
+export interface ProviderVariantMatch {
+  provider: ProviderName | '*';
+  model: string | '*';
+  environment: ProviderEnvironment | '*';
+}
+
+export interface ProviderAttachment {
+  name: string;
+  contents: string;
+  format: 'json' | 'toml' | 'text';
+}
+
+export interface ProviderContextPayload {
+  providerConfig?: unknown;
+  rawAttachments?: ProviderAttachment[];
+  environment?: ProviderEnvironment;
+  observability?: Record<string, unknown>;
+  extras?: Record<string, unknown>;
 }
 
 export interface ProviderJobContext {
   jobId: string;
-  producer: ProducerKind;
   provider: ProviderName;
   model: string;
   revision: RevisionId;
@@ -24,7 +43,7 @@ export interface ProviderJobContext {
   attempt: number;
   inputs: string[];
   produces: string[];
-  context: Record<string, unknown>;
+  context: ProviderContextPayload;
 }
 
 export interface ProviderResult {
@@ -33,21 +52,55 @@ export interface ProviderResult {
   diagnostics?: Record<string, unknown>;
 }
 
+/* eslint-disable no-unused-vars */
+export interface ProviderLogger {
+  info?(message: string, meta?: Record<string, unknown>): void;
+  warn?(message: string, meta?: Record<string, unknown>): void;
+  error?(message: string, meta?: Record<string, unknown>): void;
+  debug?(message: string, meta?: Record<string, unknown>): void;
+}
+
+export interface WarmStartContext {
+  logger?: ProviderLogger;
+}
+
 export interface ProducerHandler {
-  kind: ProducerKind;
   provider: ProviderName;
   model: string;
+  environment: ProviderEnvironment;
   mode: ProviderMode;
+  warmStart?(context: WarmStartContext): Promise<void>;
   invoke(request: ProviderJobContext): Promise<ProviderResult>;
 }
 
-export type HandlerFactory = (descriptor: ProviderDescriptor) => ProducerHandler;
+export interface HandlerFactoryInit {
+  descriptor: ProviderDescriptor;
+  mode: ProviderMode;
+}
+
+export type HandlerFactory = (init: HandlerFactoryInit) => ProducerHandler;
+
+export interface ProviderImplementation {
+  match: ProviderVariantMatch;
+  mode: ProviderMode;
+  factory: HandlerFactory;
+}
+
+export type ProviderImplementationRegistry = ProviderImplementation[];
 
 export interface ProviderRegistryOptions {
   mode?: ProviderMode;
+  logger?: ProviderLogger;
+}
+
+export interface ResolvedProviderHandler {
+  descriptor: ProviderDescriptor;
+  handler: ProducerHandler;
 }
 
 export interface ProviderRegistry {
   mode: ProviderMode;
   resolve(descriptor: ProviderDescriptor): ProducerHandler;
+  resolveMany(descriptors: ProviderDescriptor[]): ResolvedProviderHandler[];
+  warmStart?(bindings: ResolvedProviderHandler[]): Promise<void>;
 }

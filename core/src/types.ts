@@ -64,7 +64,7 @@ export interface InputSource<T = unknown> {
 // --- producers (GEN) ---
 export type ProducerKind =
   | "ScriptProducer"
-  | "TextToMusicPromptProducer" | "MusicProducer"
+  | "TextToMusicPromptProducer" | "TextToMusicProducer"
   | "AudioProducer"
   | "TextToImagePromptProducer" | "TextToImageProducer"
   | "TextToVideoPromptProducer" | "TextToVideoProducer"

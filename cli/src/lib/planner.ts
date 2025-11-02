@@ -18,15 +18,20 @@ import {
   type ExecutionPlan,
   type StorageContext,
 } from 'tutopanda-core';
-import { producerCatalog } from 'tutopanda-providers';
 import type { CliConfig } from './cli-config.js';
 import type { ProjectConfig } from 'tutopanda-core';
 import { deriveBlueprintAndInputs } from './project-config.js';
+import {
+  buildProducerCatalog,
+  providerOptionsToJSON,
+  type ProviderOptionsMap,
+} from './provider-settings.js';
 import { writePromptFile } from './prompts.js';
 
 export interface GeneratePlanOptions {
   cliConfig: CliConfig;
   projectConfig: ProjectConfig;
+  providerOptions: ProviderOptionsMap;
   prompt: string;
   movieId: string; // storage movie id (e.g., movie-q123)
   isNew: boolean;
@@ -42,7 +47,7 @@ export interface GeneratePlanResult {
 }
 
 export async function generatePlan(options: GeneratePlanOptions): Promise<GeneratePlanResult> {
-  const { cliConfig, projectConfig, prompt, movieId } = options;
+  const { cliConfig, projectConfig, providerOptions, prompt, movieId } = options;
   const storageRoot = cliConfig.storage.root;
   const basePath = cliConfig.storage.basePath;
   const movieDir = resolve(storageRoot, basePath, movieId);
@@ -58,6 +63,11 @@ export async function generatePlan(options: GeneratePlanOptions): Promise<Genera
   await initializeMovieStorage(storageContext, movieId);
 
   await writeFile(join(movieDir, 'config.json'), JSON.stringify(projectConfig, null, 2), 'utf8');
+  await writeFile(
+    join(movieDir, 'providers.json'),
+    JSON.stringify(providerOptionsToJSON(providerOptions), null, 2),
+    'utf8',
+  );
   await writePromptFile(movieDir, join('prompts', 'inquiry.txt'), prompt);
 
   const manifestService = createManifestService(storageContext);
@@ -75,11 +85,13 @@ export async function generatePlan(options: GeneratePlanOptions): Promise<Genera
     await eventLog.appendInput(movieId, event);
   }
 
+  const catalog = buildProducerCatalog(providerOptions);
+
   const plan = await planner.computePlan({
     movieId,
     manifest,
     eventLog,
-    blueprint: createProducerGraphFromConfig(blueprint, producerCatalog),
+    blueprint: createProducerGraphFromConfig(blueprint, catalog),
     targetRevision,
     pendingEdits: pendingEvents,
   });

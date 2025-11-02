@@ -21,8 +21,7 @@ The providers package is the single integration surface for model providers (Ope
 
 ## Source Layout
 
-- `providers/src/catalog.ts` remains the static defaults that mirror `tutopanda-core`'s `ProducerCatalog`. We will extend entries to list fallback variants and environment support.
-- `providers/src/mappings.ts` evolves from mock-only factories into a declarative map: `{ [producerKind]: { variants, liveFactory, mockFactory } }`.
+- `providers/src/mappings.ts` declares the mapping between `(provider, model, environment)` triples and the factories that produce concrete handlers (mock + live).
 - `providers/src/common/` hosts SDK adapters (Vercel AI SDK, Replicate client, ElevenLabs REST), retry utilities, schema validation, and type coercion helpers.
 - `providers/src/registry.ts` is upgraded to:
   - Track registry mode (`mock`, `live`, `hybrid`) with lazy instantiation of handlers.
@@ -35,69 +34,43 @@ The providers package is the single integration surface for model providers (Ope
 ```
 ┌───────────────────────┐        ┌────────────────────┐        ┌───────────────────────────┐
 │ CLI / Server runtime  │        │ Provider Registry  │        │ Provider Handler (LLM etc)│
-│  • load user config   │        │  • catalog + map   │        │  • concrete SDK impl      │
+│  • load user config   │        │  • provider map    │        │  • concrete SDK impl      │
 │  • build plan (core)  │  →→→   │  • resolve variant │  →→→   │  • produces artefacts      │
 │  • inject ProduceFn   │        │  • wrap w/ logging │        │  • returns ProviderResult  │
 └───────────────────────┘        └────────────────────┘        └───────────────────────────┘
 ```
 
-1. The CLI/server chooses variants (primary/fallback) per producer using its configuration + defaults from `catalog.ts`.
+1. The CLI/server chooses variants (primary/fallback) per producer using the user-provided settings (JSON + referenced TOML/JSON files) for that run.
 2. Before running the core `createRunner`, the runtime constructs a `ProduceFn` via `createProviderProduce(registry, resolutionPlan)`.
 3. For each job, `createRunner` calls `produce(ProduceRequest)` (see `core/src/runner.ts`). The produce wrapper looks up the appropriate provider binding (with fallbacks) and calls `handler.invoke`.
 4. `handler.invoke` performs the actual SDK call, returning a `ProviderResult` comprised of normalised `ProducedArtefact` entries. These flow back into the runner for storage/event logging.
 
 ## Variant Resolution
 
-### Declaring Variants
-
-- Extend `ProducerCatalog` entries to include:
-  ```ts
-  interface ProducerCatalogEntry {
-    provider: ProviderName;
-    providerModel: string;
-    environment: 'local' | 'cloud';
-    fallbacks?: ProviderFallbackEntry[];
-  }
-  interface ProviderFallbackEntry {
-    provider: ProviderName;
-    model: string;
-    environment?: 'local' | 'cloud';
-    strategy?: 'on-error' | 'parallel' | 'manual';
-  }
-  ```
-- `catalog.ts` supplies defaults; CLI/server configs can override or augment these entries per movie/build.
-
 ### Resolution APIs
 
-The registry exposes two read operations that clients call before execution:
+The registry API is intentionally small:
 
 ```ts
-type ResolveMode = 'primary-only' | 'with-fallbacks';
-
-interface ResolveDescriptor {
-  producer: ProducerKind;
-  variant: ProviderVariant; // includes provider, model, environment
-  fallbacks?: ProviderVariant[];
+interface ProviderDescriptor {
+  provider: ProviderName;
+  model: string;
+  environment: 'local' | 'cloud';
 }
 
-interface ResolveRequest {
-  descriptors: ResolveDescriptor[];
-  mode?: ResolveMode;
+interface ResolvedProviderHandler {
+  descriptor: ProviderDescriptor;
+  handler: ProducerHandler;
 }
 
-interface ResolvedBinding {
-  descriptor: ResolveDescriptor;
-  handlers: ProviderHandler[]; // first is primary, remainder are fallbacks
-}
-
-interface ResolveResponse {
-  bindings: ResolvedBinding[];
+interface ProviderRegistry {
+  resolve(descriptor: ProviderDescriptor): ProducerHandler;
+  resolveMany(descriptors: ProviderDescriptor[]): ResolvedProviderHandler[];
+  warmStart?(handlers: ResolvedProviderHandler[]): Promise<void>;
 }
 ```
 
-- `registry.resolveSingle(descriptor)` returns the first matching handler and throws a descriptive error if missing.
-- `registry.resolveMany(request)` returns `ResolveResponse` and defers handler instantiation until invocation (handlers retain lazy factories internally).
-- The CLI stores the `ResolvedBinding` map and feeds it into `createProviderProduce` so job execution uses resolved handlers without repeated lookups.
+The CLI hands the registry the exact triples it wants to execute (deduplicated). The registry locates the matching implementation (mock/live) and returns a handler ready to invoke.
 
 ### Job Payload Structure
 
@@ -106,14 +79,13 @@ Provider handlers receive all run-time data through `ProviderJobContext`. The CL
 ```ts
 interface ProviderJobContext {
   jobId: string;
-  producer: ProducerKind;
   provider: ProviderName;
   model: string;
   revision: RevisionId;
   layerIndex: number;
   attempt: number;
-  inputs: string[];                 // identifiers for required inputs/artefacts
-  produces: string[];               // artefact ids the job should emit
+  inputs: string[];     // identifiers for required inputs/artefacts
+  produces: string[];   // artefact ids the job should emit
   context: {
     providerConfig?: unknown;       // parsed JSON object built from CLI settings / TOML files (semantics owned by the handler)
     rawAttachments?: Array<{        // optional original documents if provider needs to re-hydrate raw text
@@ -123,7 +95,7 @@ interface ProviderJobContext {
     }>;
     environment?: 'local' | 'cloud';
     observability?: Record<string, unknown>; // trace ids, log level, etc.
-    extras?: Record<string, unknown>;        // future-proof escape hatch
+    extras?: Record<string, unknown>;        // planner metadata, custom attributes, ...
   };
 }
 ```
@@ -200,7 +172,7 @@ interface ProviderHandler {
 ## Deliverables & Next Steps
 
 - Implement the expanded registry, handler, and variant types.
-- Update `catalog.ts` and CLI configuration parsing to carry environment + fallback metadata.
+- Extend the mappings registry and CLI configuration parsing to carry environment + fallback metadata.
 - Extend `cli/src/lib/build.ts` (and the server equivalent) to pre-resolve bindings and wire produce fallbacks.
 - Migrate existing mock handlers to the new interface; add skeleton live handlers for OpenAI (via Vercel AI SDK) and Replicate referencing the requirements in `providers/docs/AI SDKs`.
 - Document provider capabilities in generated telemetry and manifest diagnostics to aid debugging.

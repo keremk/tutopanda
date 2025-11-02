@@ -5,16 +5,15 @@ describe('createProviderRegistry', () => {
   it('returns mock handlers by default', async () => {
     const registry = createProviderRegistry();
     const handler = registry.resolve({
-      kind: 'ScriptProducer',
       provider: 'openai',
       model: 'openai/GPT-5',
+      environment: 'cloud',
     });
 
     expect(handler.mode).toBe('mock');
 
     const result = await handler.invoke({
       jobId: 'job-123',
-      producer: 'ScriptProducer',
       provider: 'openai',
       model: 'openai/GPT-5',
       revision: 'rev-0001',
@@ -22,7 +21,9 @@ describe('createProviderRegistry', () => {
       attempt: 1,
       inputs: [],
       produces: ['Artifact:NarrationScript'],
-      context: {},
+      context: {
+        environment: 'cloud',
+      },
     });
 
     expect(result.artefacts).toHaveLength(1);
@@ -32,14 +33,13 @@ describe('createProviderRegistry', () => {
   it('produces blob artefacts for media outputs', async () => {
     const registry = createProviderRegistry();
     const handler = registry.resolve({
-      kind: 'ImageToVideoProducer',
       provider: 'replicate',
       model: 'bytedance/seedance-1-lite',
+      environment: 'cloud',
     });
 
     const result = await handler.invoke({
       jobId: 'job-video',
-      producer: 'ImageToVideoProducer',
       provider: 'replicate',
       model: 'bytedance/seedance-1-lite',
       revision: 'rev-0002',
@@ -47,11 +47,32 @@ describe('createProviderRegistry', () => {
       attempt: 1,
       inputs: ['Artifact:StartImage'],
       produces: ['Artifact:SegmentVideo[segment=0]'],
-      context: {},
+      context: {
+        environment: 'cloud',
+      },
     });
 
     expect(result.artefacts).toHaveLength(1);
     expect(result.artefacts[0].blob?.mimeType).toBe('video/mp4');
     expect(result.artefacts[0].blob?.data).toBeDefined();
+  });
+
+  it('caches handlers across resolveMany calls', () => {
+    const registry = createProviderRegistry();
+    const descriptors = [
+      {
+        provider: 'openai' as const,
+        model: 'openai/GPT-5',
+        environment: 'cloud' as const,
+      },
+      {
+        provider: 'openai' as const,
+        model: 'openai/GPT-5',
+        environment: 'cloud' as const,
+      },
+    ];
+
+    const [first, second] = registry.resolveMany(descriptors);
+    expect(first.handler).toBe(second.handler);
   });
 });

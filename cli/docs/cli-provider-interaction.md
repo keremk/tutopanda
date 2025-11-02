@@ -37,13 +37,13 @@ The CLI never talks to provider SDKs directly. All interactions flow through the
 
 2. **Plan Loading**
    - Whenever the user runs `tutopanda query <prompt>` or `tutopanda edit --movieId=<id>`, the CLI invokes `generatePlan` from `tutopanda-core` to produce the fresh `ExecutionPlan` + manifest snapshot that will seed the run.
-   - `query` creates a brand-new movie directory, merges default settings with inline overrides, and stores the computed plan as the initial state before any providers run.
-   - `edit` loads the existing movie config/prompts first, applies overrides (including any TOML edits), and regenerates the plan so revisions start from the current manifest.
-   - If the plan references producers without explicit provider data, CLI merges defaults from `tutopanda-providers` `producerCatalog`.
+   - The CLI reads the active settings JSON, merges overrides, and eagerly loads every referenced provider config file (TOML/JSON/text) so each producer has a concrete `(provider, model, environment, config)` tuple available at runtime. These selections are written to `providers.json` alongside the movie manifest for subsequent edits.
+   - `query` creates a brand-new movie directory, applies shortcut overrides, and stores the computed plan as the initial state before any providers run.
+   - `edit` reloads the stored `config.json` / `providers.json`, applies additional overrides (including edited TOML), and regenerates the plan so revisions start from the current manifest.
 
 3. **Provider Resolution**
-   - CLI maps each producer in the plan to a `ProviderVariant` (provider, model, environment) and optional fallback variants using the configuration document.
-   - It sends a batch request to `registry.resolveMany` to obtain handler bindings up front (handles warm start and error surfacing early).
+   - CLI maps each producer in the plan to the concrete `(provider, model, environment)` entry defined in settings (primary + fallbacks) and attaches the parsed configuration payload plus raw attachment contents.
+   - It deduplicates those triples and calls `registry.resolveMany` once up front; this populates the handler cache and allows warm start to surface missing secrets before execution begins.
 
 4. **Runner Execution**
    - CLI composes a `ProduceFn` via `createProviderProduce(registry, resolutionCache, observabilityHooks)` and injects it into `createRunner`.
@@ -75,27 +75,21 @@ sequenceDiagram
 ## Data Structures
 
 ```ts
-// Derived from CLI configuration
-interface CliProviderPreference {
-  producer: ProducerKind;
-  primary: ProviderVariant;
-  fallbacks: ProviderVariant[];
-}
+type ProviderOptionsMap = Map<ProducerKind, ProviderOption[]>;
 
-interface ProviderVariant {
+interface ProviderOption {
+  priority: 'main' | 'fallback';
   provider: ProviderName;
   model: string;
   environment: 'local' | 'cloud';
-  overrides?: Record<string, unknown>; // parsed config objects merged into job.context.providerConfig
+  config?: unknown;                  // parsed TOML/JSON payload
+  attachments: ProviderAttachment[]; // raw file contents passed through verbatim
+  customAttributes?: Record<string, unknown>;
 }
-
-// Cached per run
-type ProviderBindingCache = Map<JobDescriptor['jobId'], ResolvedBinding>;
 ```
 
-- The CLI expands `overrides` (custom attributes, prompt configs, reasoning level, etc.) into `job.context` before handing the job to the handler.
-- When a provider needs the original file bytes (rather than just parsed data), the CLI also includes them under `job.context.rawAttachments` so handlers can rehydrate prompts verbatim.
-- For jobs generated via replay/edit flows, the CLI recomputes the cache only for changed producers.
+- Query/edit persist this map to `providers.json` so subsequent runs reuse the exact same settings unless overrides are provided.
+- When invoking handlers the CLI merges `config` + `customAttributes`, replays the raw attachment contents, and forwards any planner metadata under `context.extras.plannerContext`.
 
 ## Execution Flow Example
 

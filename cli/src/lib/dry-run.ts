@@ -10,7 +10,8 @@ import {
   type RunResult,
 } from 'tutopanda-core';
 import { createProviderRegistry } from 'tutopanda-providers';
-import { createProviderProduce } from './build.js';
+import { createProviderProduce, prepareProviderHandlers } from './build.js';
+import type { ProviderOptionsMap } from './provider-settings.js';
 
 export interface DryRunStatusCounts {
   succeeded: number;
@@ -37,6 +38,7 @@ interface ExecuteDryRunArgs {
   movieId: string;
   plan: ExecutionPlan;
   manifest: Manifest;
+  providerOptions: ProviderOptionsMap;
   storage?: {
     rootDir: string;
     basePath: string;
@@ -54,7 +56,9 @@ export async function executeDryRun(args: ExecuteDryRunArgs): Promise<DryRunSumm
   const eventLog = createEventLog(storage);
   const manifestService = createManifestService(storage);
   const registry = createProviderRegistry({ mode: 'mock' });
-  const produce = createProviderProduce(registry);
+  const preResolved = prepareProviderHandlers(registry, args.plan, args.providerOptions);
+  await registry.warmStart?.(preResolved);
+  const produce = createProviderProduce(registry, args.providerOptions, preResolved, console);
 
   const runResult = await runner.execute(args.plan, {
     movieId: args.movieId,

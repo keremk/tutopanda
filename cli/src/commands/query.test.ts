@@ -56,6 +56,9 @@ describe('runQuery', () => {
     const prompt = await readFile(join(movieDir, 'prompts', 'inquiry.txt'), 'utf8');
     expect(prompt.trim()).toBe('Tell me a story about the sea');
 
+    const providersConfig = JSON.parse(await readFile(join(movieDir, 'providers.json'), 'utf8'));
+    expect(providersConfig.ScriptProducer).toBeDefined();
+
     expect(result.build?.status).toBe('succeeded');
     expect(result.manifestPath).toBeDefined();
     const manifestStats = await stat(result.manifestPath!);

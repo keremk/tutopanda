@@ -1,11 +1,8 @@
-import { readFile } from 'node:fs/promises';
 import crypto from 'node:crypto';
 import { resolve } from 'node:path';
 import {
-  loadProjectConfig,
   mergeProjectConfig,
   applyShortcutOverrides,
-  parseProjectConfigOverrides,
 } from '../lib/project-config.js';
 import { readCliConfig } from '../lib/cli-config.js';
 import { generatePlan } from '../lib/planner.js';
@@ -17,6 +14,13 @@ import {
   executeBuild,
   type BuildSummary,
 } from '../lib/build.js';
+import {
+  loadSettings,
+  loadSettingsOverrides,
+  mergeProviderOptions,
+  applyProviderShortcutOverrides,
+} from '../lib/provider-settings.js';
+import { expandPath } from '../lib/path.js';
 
 export interface QueryOptions {
   prompt: string;
@@ -53,12 +57,14 @@ export async function runQuery(options: QueryOptions): Promise<QueryResult> {
     throw new Error('Tutopanda CLI is not initialized. Run "tutopanda init" first.');
   }
 
-  let projectConfig = await loadProjectConfig(cliConfig.defaultSettingsPath);
+  const baseSettings = await loadSettings(cliConfig.defaultSettingsPath);
+  let projectConfig = baseSettings.projectConfig;
+  let providerOptions = baseSettings.providerOptions;
 
   if (options.settingsPath) {
-    const overridesRaw = await readFile(resolve(options.settingsPath), 'utf8');
-    const parsedOverrides = parseProjectConfigOverrides(JSON.parse(overridesRaw));
-    projectConfig = mergeProjectConfig(projectConfig, parsedOverrides);
+    const overrides = await loadSettingsOverrides(expandPath(options.settingsPath));
+    projectConfig = mergeProjectConfig(projectConfig, overrides.projectConfig);
+    providerOptions = mergeProviderOptions(providerOptions, overrides.providerOptions);
   }
 
   projectConfig = applyShortcutOverrides(projectConfig, {
@@ -72,15 +78,19 @@ export async function runQuery(options: QueryOptions): Promise<QueryResult> {
     size: options.size,
   });
 
+  providerOptions = applyProviderShortcutOverrides(providerOptions, {
+    voice: options.voice,
+  });
+
   const movieId = generateMovieId();
   const storageMovieId = formatMovieId(movieId);
   const storageRoot = cliConfig.storage.root;
   const storageBasePath = cliConfig.storage.basePath;
-  const movieDir = resolve(storageRoot, storageBasePath, storageMovieId);
 
   const planResult = await generatePlan({
     cliConfig,
     projectConfig,
+    providerOptions,
     prompt: options.prompt,
     movieId: storageMovieId,
     isNew: true,
@@ -91,6 +101,7 @@ export async function runQuery(options: QueryOptions): Promise<QueryResult> {
         movieId: storageMovieId,
         plan: planResult.plan,
         manifest: planResult.manifest,
+        providerOptions,
         storage: { rootDir: storageRoot, basePath: storageBasePath },
       })
     : undefined;
@@ -103,6 +114,8 @@ export async function runQuery(options: QueryOptions): Promise<QueryResult> {
         plan: planResult.plan,
         manifest: planResult.manifest,
         manifestHash: planResult.manifestHash,
+        providerOptions,
+        logger: console,
       });
 
   return {
@@ -113,7 +126,7 @@ export async function runQuery(options: QueryOptions): Promise<QueryResult> {
     dryRun,
     build: buildResult?.summary,
     manifestPath: buildResult?.manifestPath,
-    storagePath: movieDir,
+    storagePath: resolve(storageRoot, storageBasePath, storageMovieId),
   };
 }
 

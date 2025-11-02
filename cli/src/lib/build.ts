@@ -12,8 +12,16 @@ import {
   type ProducerKind,
   type RunResult,
 } from 'tutopanda-core';
-import { createProviderRegistry, producerCatalog } from 'tutopanda-providers';
+import {
+  createProviderRegistry,
+  type ProviderContextPayload,
+  type ProviderEnvironment,
+  type ProducerHandler,
+  type ResolvedProviderHandler,
+  type ProviderDescriptor,
+} from 'tutopanda-providers';
 import type { CliConfig } from './cli-config.js';
+import type { ProviderOptionsMap, LoadedProviderOption } from './provider-settings.js';
 
 export interface ExecuteBuildOptions {
   cliConfig: CliConfig;
@@ -21,6 +29,10 @@ export interface ExecuteBuildOptions {
   plan: ExecutionPlan;
   manifest: Manifest;
   manifestHash: string | null;
+  providerOptions: ProviderOptionsMap;
+  logger?: {
+    info?(message: string): void;
+  };
 }
 
 export interface BuildSummary {
@@ -43,8 +55,6 @@ export interface ExecuteBuildResult {
   summary: BuildSummary;
 }
 
-const knownProducerKinds = new Set<ProducerKind>(Object.keys(producerCatalog) as ProducerKind[]);
-
 export async function executeBuild(options: ExecuteBuildOptions): Promise<ExecuteBuildResult> {
   const storage = createStorageContext({
     kind: 'local',
@@ -57,7 +67,9 @@ export async function executeBuild(options: ExecuteBuildOptions): Promise<Execut
   const eventLog = createEventLog(storage);
   const manifestService = createManifestService(storage);
   const registry = createProviderRegistry({ mode: 'mock' });
-  const produce = createProviderProduce(registry);
+  const preResolved = prepareProviderHandlers(registry, options.plan, options.providerOptions);
+  await registry.warmStart?.(preResolved);
+  const produce = createProviderProduce(registry, options.providerOptions, preResolved, options.logger ?? console);
   const runner = createRunner();
 
   const run = await runner.execute(options.plan, {
@@ -120,41 +132,175 @@ function summarizeRun(run: RunResult, manifestPath: string): BuildSummary {
 
 export function createProviderProduce(
   registry: ReturnType<typeof createProviderRegistry>,
+  providerOptions: ProviderOptionsMap,
+  preResolved: ResolvedProviderHandler[] = [],
+  logger: { info?(message: string): void } = {},
 ): ProduceFn {
+  const handlerCache = new Map<string, ProducerHandler>();
+
+  for (const binding of preResolved) {
+    const cacheKey = makeDescriptorKey(registry.mode, binding.descriptor.provider, binding.descriptor.model, binding.descriptor.environment);
+    handlerCache.set(cacheKey, binding.handler);
+  }
+
   return async (request) => {
     const producerName = request.job.producer;
-    if (typeof producerName !== 'string' || !knownProducerKinds.has(producerName as ProducerKind)) {
+    if (typeof producerName !== 'string') {
       return {
         jobId: request.job.jobId,
         status: 'skipped',
         artefacts: [],
-      };
+      } satisfies ProduceResult;
     }
 
-    const handler = registry.resolve({
-      kind: producerName as ProducerKind,
-      provider: request.job.provider,
-      model: request.job.providerModel,
-    });
+    const providerOption = resolveProviderOption(
+      providerOptions,
+      producerName,
+      request.job.provider,
+      request.job.providerModel,
+    );
+
+    const descriptorKey = makeDescriptorKey(
+      registry.mode,
+      providerOption.provider,
+      providerOption.model,
+      providerOption.environment,
+    );
+
+    let handler = handlerCache.get(descriptorKey);
+    if (!handler) {
+      handler = registry.resolve({
+        provider: providerOption.provider,
+        model: providerOption.model,
+        environment: providerOption.environment,
+      });
+      handlerCache.set(descriptorKey, handler);
+    }
+
+    const context = buildProviderContext(providerOption, request.job.context);
+
+    logger.info?.(
+      `provider.invoke.start ${providerOption.provider}/${providerOption.model} [${providerOption.environment}] -> ${request.job.produces.join(', ')}`,
+    );
 
     const response = await handler.invoke({
       jobId: request.job.jobId,
-      producer: producerName as ProducerKind,
-      provider: request.job.provider,
-      model: request.job.providerModel,
+      provider: providerOption.provider,
+      model: providerOption.model,
       revision: request.revision,
       layerIndex: request.layerIndex,
       attempt: request.attempt,
       inputs: request.job.inputs,
       produces: request.job.produces,
-      context: request.job.context ?? {},
+      context,
     });
+
+    logger.info?.(
+      `provider.invoke.end ${providerOption.provider}/${providerOption.model} [${providerOption.environment}]`,
+    );
+
+    const diagnostics = {
+      ...response.diagnostics,
+      provider: {
+        ...(response.diagnostics?.provider as Record<string, unknown> | undefined),
+        producer: producerName,
+        provider: providerOption.provider,
+        model: providerOption.model,
+        environment: providerOption.environment,
+        mode: handler.mode,
+      },
+    } satisfies Record<string, unknown>;
 
     return {
       jobId: request.job.jobId,
       status: response.status ?? 'succeeded',
       artefacts: response.artefacts,
-      diagnostics: response.diagnostics,
+      diagnostics,
     } satisfies ProduceResult;
   };
+}
+
+export function prepareProviderHandlers(
+  registry: ReturnType<typeof createProviderRegistry>,
+  plan: ExecutionPlan,
+  providerOptions: ProviderOptionsMap,
+): ResolvedProviderHandler[] {
+  const descriptorMap = new Map<string, ProviderDescriptor>();
+  for (const layer of plan.layers) {
+    for (const job of layer) {
+      if (typeof job.producer !== 'string') {
+        continue;
+      }
+      const option = resolveProviderOption(providerOptions, job.producer, job.provider, job.providerModel);
+      const key = makeDescriptorKey(registry.mode, option.provider, option.model, option.environment);
+      if (!descriptorMap.has(key)) {
+        descriptorMap.set(key, {
+          provider: option.provider,
+          model: option.model,
+          environment: option.environment,
+        });
+      }
+    }
+  }
+  return registry.resolveMany(Array.from(descriptorMap.values()));
+}
+
+function resolveProviderOption(
+  providerOptions: ProviderOptionsMap,
+  producer: string,
+  provider: string,
+  model: string,
+): LoadedProviderOption {
+  const options = providerOptions.get(producer as ProducerKind);
+  if (!options || options.length === 0) {
+    throw new Error(`No provider configuration defined for producer "${producer}".`);
+  }
+  const match = options.find((option) => option.provider === provider && option.model === model);
+  if (!match) {
+    throw new Error(`No provider configuration matches ${producer} -> ${provider}/${model}.`);
+  }
+  return match;
+}
+
+function buildProviderContext(
+  option: LoadedProviderOption,
+  jobContext: unknown,
+): ProviderContextPayload {
+  const baseConfig = normalizeProviderConfig(option);
+  const rawAttachments = option.attachments.length > 0 ? option.attachments : undefined;
+  const extras = isRecord(jobContext) && Object.keys(jobContext).length > 0 ? { plannerContext: jobContext } : undefined;
+
+  return {
+    providerConfig: baseConfig,
+    rawAttachments,
+    environment: option.environment,
+    observability: undefined,
+    extras,
+  } satisfies ProviderContextPayload;
+}
+
+function normalizeProviderConfig(option: LoadedProviderOption): unknown {
+  const { config, customAttributes } = option;
+  if (config && typeof config === 'object' && !Array.isArray(config)) {
+    return customAttributes
+      ? { ...config, customAttributes }
+      : config;
+  }
+  if (customAttributes) {
+    return { customAttributes, value: config };
+  }
+  return config;
+}
+
+function makeDescriptorKey(
+  mode: string,
+  provider: string,
+  model: string,
+  environment: ProviderEnvironment,
+): string {
+  return [mode, provider, model, environment].join('|');
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
