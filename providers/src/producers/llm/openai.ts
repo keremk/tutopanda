@@ -1,6 +1,13 @@
 import { Buffer } from 'node:buffer';
 import { createOpenAI } from '@ai-sdk/openai';
-import { generateText, type CallSettings, type JSONValue } from 'ai';
+import {
+  generateObject,
+  generateText,
+  jsonSchema,
+  type CallSettings,
+  type JSONSchema7,
+  type JSONValue,
+} from 'ai';
 import { readJsonPath } from 'tutopanda-core';
 import type { ArtefactEventStatus, ProducedArtefact } from 'tutopanda-core';
 import type {
@@ -79,10 +86,8 @@ export function createOpenAiLlmHandler(): HandlerFactory {
       const config = parseOpenAiConfig(request.context.providerConfig);
       const resolvedInputs = extractResolvedInputs(request.context.extras);
 
-      const systemPrompt = renderTemplate(config.systemPrompt, config.variables, resolvedInputs);
-      const userPrompt = config.userPrompt
-        ? renderTemplate(config.userPrompt, config.variables, resolvedInputs)
-        : undefined;
+      const prompts = renderPrompts(config, resolvedInputs);
+      const prompt = buildPrompt(prompts) || ' ';
 
       const callSettings: CallSettings = {
         temperature: config.temperature,
@@ -98,39 +103,54 @@ export function createOpenAiLlmHandler(): HandlerFactory {
       if (config.reasoning) {
         openAiOptions.reasoningEffort = config.reasoning;
       }
-      const providerOptions = Object.keys(openAiOptions).length > 0 ? { openai: openAiOptions } : undefined;
+      const providerOptions =
+        Object.keys(openAiOptions).length > 0 ? { openai: openAiOptions } : undefined;
 
-      const model = openai.responses(request.model);
-      const promptInput = userPrompt ?? '';
-
-      const baseOptions = {
-        model,
-        system: systemPrompt,
-        prompt: promptInput,
-        providerOptions,
+      const openAiModel = openai.responses(request.model);
+      const baseCallOptions = {
         ...callSettings,
-      } satisfies Record<string, unknown>;
+        ...(providerOptions ? { providerOptions } : {}),
+      } as CallSettings & { providerOptions?: Record<string, Record<string, JSONValue>> };
 
-      const generationOptions = config.responseFormat.type === 'json_schema'
-        ? {
-            ...baseOptions,
-            responseFormat: {
-              type: 'json',
-              schema: config.responseFormat.schema,
-            },
-          }
-        : {
-            ...baseOptions,
-            responseFormat: { type: 'text' },
-          };
+      let baseText: string;
+      let parsedPayload: JsonObject | undefined;
+      let responseMeta: Record<string, unknown> | undefined;
+      let usageMeta: Record<string, unknown> | undefined;
+      let warningsMeta: unknown[] | undefined;
 
-      const generation = await generateText(generationOptions as unknown as Parameters<typeof generateText>[0]);
-
-      const baseText = generation.text;
-      const parsedPayload =
-        config.responseFormat.type === 'json_schema'
-          ? safeParseJson(baseText)
-          : undefined;
+      if (config.responseFormat.type === 'json_schema') {
+        const normalizedSchema = normalizeJsonSchema(config.responseFormat.schema as JSONSchema7, {
+          title: config.responseFormat.name,
+          description: config.responseFormat.description,
+        });
+        const schema = jsonSchema(normalizedSchema);
+        const generation = await generateObject({
+          ...baseCallOptions,
+          model: openAiModel,
+          prompt,
+          system: prompts.system,
+          schema,
+          schemaName: config.responseFormat.name,
+          schemaDescription: config.responseFormat.description,
+          mode: 'json',
+        });
+        baseText = JSON.stringify(generation.object, null, 2);
+        parsedPayload = generation.object as JsonObject;
+        responseMeta = generation.response as Record<string, unknown> | undefined;
+        usageMeta = generation.usage as Record<string, unknown> | undefined;
+        warningsMeta = generation.warnings;
+      } else {
+        const generation = await generateText({
+          ...baseCallOptions,
+          model: openAiModel,
+          prompt,
+          system: prompts.system,
+        });
+        baseText = generation.text;
+        responseMeta = generation.response as Record<string, unknown> | undefined;
+        usageMeta = generation.usage as Record<string, unknown> | undefined;
+        warningsMeta = generation.warnings;
+      }
 
       const artefacts = config.artefactMapping.map((mapping) =>
         buildArtefact({
@@ -145,19 +165,19 @@ export function createOpenAiLlmHandler(): HandlerFactory {
         ? 'failed'
         : 'succeeded';
 
-      const diagnostics = {
+      const enrichedDiagnostics = {
         provider: 'openai',
         model: request.model,
-        response: sanitizeResponseMetadata(generation.response),
-        usage: generation.usage,
-        warnings: generation.warnings,
+        response: sanitizeResponseMetadata(responseMeta),
+        usage: usageMeta,
+        warnings: warningsMeta,
         textLength: baseText.length,
       } satisfies Record<string, unknown>;
 
       return {
         status,
         artefacts,
-        diagnostics,
+        diagnostics: enrichedDiagnostics,
       };
     }
 
@@ -273,18 +293,6 @@ function renderTemplate(
     const value = inputs[inputKey];
     return value === undefined || value === null ? '' : String(value);
   });
-}
-
-function safeParseJson(payload: string): JsonObject | undefined {
-  try {
-    const parsed = JSON.parse(payload);
-    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-      return parsed as JsonObject;
-    }
-    return undefined;
-  } catch {
-    return undefined;
-  }
 }
 
 function buildArtefact(args: {
@@ -408,6 +416,27 @@ function sanitizeResponseMetadata(metadata: unknown): Record<string, unknown> | 
   };
 }
 
+function renderPrompts(
+  config: OpenAiLlmConfig,
+  inputs: ResolvedInputs,
+): { system?: string; user?: string } {
+  const system = renderTemplate(config.systemPrompt, config.variables, inputs);
+  const user = config.userPrompt
+    ? renderTemplate(config.userPrompt, config.variables, inputs)
+    : undefined;
+  return { system, user };
+}
+
+function buildPrompt(rendered: { system?: string; user?: string }): string {
+  if (rendered.user && rendered.user.trim()) {
+    return rendered.user.trim();
+  }
+  if (rendered.system && rendered.system.trim()) {
+    return rendered.system.trim();
+  }
+  return '';
+}
+
 function readString(value: unknown, field: string): string {
   if (typeof value !== 'string' || value.trim().length === 0) {
     throw new Error(`${field} must be a non-empty string.`);
@@ -450,4 +479,111 @@ function readOptionalReasoning(value: unknown): OpenAiLlmConfig['reasoning'] {
     return reasoning;
   }
   throw new Error(`Unsupported reasoning level "${reasoning}".`);
+}
+
+function normalizeJsonSchema(
+  schema: JSONSchema7,
+  meta?: { title?: string; description?: string },
+): JSONSchema7 {
+  const clone = deepClone(schema);
+
+  function visit(node: JSONSchema7, isRoot: boolean): JSONSchema7 {
+    const next: JSONSchema7 = { ...node };
+
+    if (isRoot) {
+      if (meta?.title && !next.title) {
+        next.title = meta.title;
+      }
+      if (meta?.description && !next.description) {
+        next.description = meta.description;
+      }
+    }
+
+    const isObjectSchema =
+      includesType(next.type, 'object') ||
+      (!!next.properties && next.type === undefined);
+    if (isObjectSchema) {
+      if (next.additionalProperties === undefined) {
+        next.additionalProperties = false;
+      }
+      if (next.properties) {
+        next.properties = Object.fromEntries(
+          Object.entries(next.properties).map(([key, value]) => [
+            key,
+            typeof value === 'boolean' ? value : visit(value, false),
+          ]),
+        );
+      }
+    }
+
+    const isArraySchema =
+      includesType(next.type, 'array') || Array.isArray(next.items) || !!next.items;
+    if (isArraySchema && next.items) {
+      if (Array.isArray(next.items)) {
+        next.items = next.items.map((item) =>
+          typeof item === 'boolean' ? item : visit(item, false),
+        );
+      } else if (typeof next.items !== 'boolean') {
+        next.items = visit(next.items, false);
+      }
+    }
+
+    if (next.oneOf) {
+      next.oneOf = next.oneOf.map((entry) =>
+        typeof entry === 'boolean' ? entry : visit(entry, false),
+      );
+    }
+    if (next.anyOf) {
+      next.anyOf = next.anyOf.map((entry) =>
+        typeof entry === 'boolean' ? entry : visit(entry, false),
+      );
+    }
+    if (next.allOf) {
+      next.allOf = next.allOf.map((entry) =>
+        typeof entry === 'boolean' ? entry : visit(entry, false),
+      );
+    }
+    if (next.not && typeof next.not !== 'boolean') {
+      next.not = visit(next.not, false);
+    }
+
+    if (next.definitions) {
+      next.definitions = Object.fromEntries(
+        Object.entries(next.definitions).map(([key, value]) => [
+          key,
+          typeof value === 'boolean' ? value : visit(value, false),
+        ]),
+      );
+    }
+
+    if (next.$defs) {
+      next.$defs = Object.fromEntries(
+        Object.entries(next.$defs).map(([key, value]) => [
+          key,
+          typeof value === 'boolean' ? value : visit(value, false),
+        ]),
+      );
+    }
+
+    return next;
+  }
+
+  return visit(clone, true);
+}
+
+function includesType(
+  type: JSONSchema7['type'],
+  expected: string
+): boolean {
+  if (!type) {
+    return false;
+  }
+  if (Array.isArray(type)) {
+    return type.some((t) => t === expected);
+  }
+  return type === expected;
+}
+
+function deepClone<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T;
 }

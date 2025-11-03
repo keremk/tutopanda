@@ -1,0 +1,96 @@
+import { describe, expect, it } from 'vitest';
+import { createOpenAiLlmHandler } from '../../src/producers/llm/openai.js';
+import type { ProviderJobContext } from '../../src/types.js';
+
+const describeIfHasKey = process.env.OPENAI_API_KEY ? describe : describe.skip;
+
+describeIfHasKey('OpenAI structured integration', () => {
+  it('returns artefacts for structured JSON schema outputs', async () => {
+    const handler = createOpenAiLlmHandler()({
+      descriptor: {
+        provider: 'openai',
+        model: 'gpt-4.1-mini',
+        environment: 'local',
+      },
+      mode: 'live',
+      secretResolver: {
+        async getSecret(key) {
+          if (key === 'OPENAI_API_KEY') {
+            return process.env.OPENAI_API_KEY ?? null;
+          }
+          return null;
+        },
+      },
+      logger: undefined,
+    });
+
+    await handler.warmStart?.({ logger: undefined });
+
+    const request: ProviderJobContext = {
+      jobId: 'job-int-structured',
+      provider: 'openai',
+      model: 'gpt-4.1-mini',
+      revision: 'rev-int-structured',
+      layerIndex: 0,
+      attempt: 1,
+      inputs: [],
+      produces: ['Artifact:MovieSummary', 'Artifact:MovieTitle'],
+      context: {
+        providerConfig: {
+          systemPrompt: 'Return JSON with "summary" and "title" fields describing the topic.',
+          userPrompt: 'Topic: {{topic}}',
+          variables: {
+            topic: 'topic',
+          },
+          responseFormat: {
+            type: 'json_schema',
+            schema: {
+              type: 'object',
+              properties: {
+                summary: { type: 'string' },
+                title: { type: 'string' },
+              },
+              required: ['summary', 'title'],
+            },
+          },
+          artefactMapping: [
+            {
+              field: 'summary',
+              artefactId: 'Artifact:MovieSummary',
+              output: 'inline',
+            },
+            {
+              field: 'title',
+              artefactId: 'Artifact:MovieTitle',
+              output: 'inline',
+            },
+          ],
+        },
+        rawAttachments: [],
+        observability: undefined,
+        environment: 'local',
+        extras: {
+          resolvedInputs: {
+            topic: 'bioluminescent marine life',
+          },
+        },
+      },
+    };
+
+    const result = await handler.invoke(request);
+    console.log('OpenAI integration test result:', JSON.stringify(result));
+
+    expect(result.status).toBe('succeeded');
+    const ids = result.artefacts.map((a) => a.artefactId).sort();
+    expect(ids).toEqual(['Artifact:MovieSummary', 'Artifact:MovieTitle']);
+
+    const summary = result.artefacts.find(
+      (a) => a.artefactId === 'Artifact:MovieSummary'
+    );
+    const title = result.artefacts.find(
+      (a) => a.artefactId === 'Artifact:MovieTitle'
+    );
+    expect(summary?.inline && summary.inline.length).toBeTruthy();
+    expect(title?.inline && title.inline.length).toBeTruthy();
+  });
+});
