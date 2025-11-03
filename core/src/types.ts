@@ -174,6 +174,7 @@ export interface ManifestArtefactEntry {
   inline?: string;
   producedBy: Id;
   status: ArtefactEventStatus;
+  diagnostics?: Record<string, unknown>;
   createdAt: IsoDatetime;
 }
 

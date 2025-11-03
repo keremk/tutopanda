@@ -120,6 +120,7 @@ export async function runEdit(options: EditOptions): Promise<EditResult> {
         plan: planResult.plan,
         manifest: planResult.manifest,
         providerOptions,
+        resolvedInputs: planResult.resolvedInputs,
         storage: { rootDir: storageRoot, basePath },
       })
     : undefined;
@@ -132,6 +133,7 @@ export async function runEdit(options: EditOptions): Promise<EditResult> {
         manifest: planResult.manifest,
         manifestHash: planResult.manifestHash,
         providerOptions,
+        resolvedInputs: planResult.resolvedInputs,
         logger: console,
       });
 

@@ -34,6 +34,10 @@ export interface ProviderContextPayload {
   extras?: Record<string, unknown>;
 }
 
+export interface SecretResolver {
+  getSecret(key: string): Promise<string | null>;
+}
+
 export interface ProviderJobContext {
   jobId: string;
   provider: ProviderName;
@@ -52,7 +56,6 @@ export interface ProviderResult {
   diagnostics?: Record<string, unknown>;
 }
 
-/* eslint-disable no-unused-vars */
 export interface ProviderLogger {
   info?(message: string, meta?: Record<string, unknown>): void;
   warn?(message: string, meta?: Record<string, unknown>): void;
@@ -76,6 +79,8 @@ export interface ProducerHandler {
 export interface HandlerFactoryInit {
   descriptor: ProviderDescriptor;
   mode: ProviderMode;
+  secretResolver: SecretResolver;
+  logger?: ProviderLogger;
 }
 
 export type HandlerFactory = (init: HandlerFactoryInit) => ProducerHandler;
@@ -91,6 +96,7 @@ export type ProviderImplementationRegistry = ProviderImplementation[];
 export interface ProviderRegistryOptions {
   mode?: ProviderMode;
   logger?: ProviderLogger;
+  secretResolver?: SecretResolver;
 }
 
 export interface ResolvedProviderHandler {

@@ -126,18 +126,19 @@ This roadmap breaks the storage + execution stack into milestones that each deli
   - Core/CLI: integration test that runs a dry-run using the richer context payload and asserts artefact diagnostics include provider metadata.
 
 ## Milestone 6.6 – OpenAI Responses Handler
-- **Providers package**
-  - Implement the OpenAI LLM handler using the Vercel AI SDK v6 Responses API, including prompt templating, JSON-schema enforcement, multi-artefact mapping, and diagnostics.
-  - Add secret resolution, retry/backoff, and telemetry hooks (latency, token usage) specific to OpenAI.
 - **Core updates**
-  - Wire provider diagnostics into manifest entries so OpenAI runs record response IDs and usage.
-  - Provide shared helpers for JSON-path extraction used by producers to split multi-artefact payloads.
+  - Add a reusable JSON-path helper for mapping structured model outputs to artefact fields.
+  - Persist provider diagnostics (response identifiers, usage metrics) with artefact events so manifests capture OpenAI metadata.
+- **Providers package**
+  - Implement the OpenAI LLM handler on top of the Vercel AI SDK 6 Responses API: template prompts, forward JSON-schema response formats, parse payloads, and emit artefacts with detailed diagnostics.
+  - Honour workspace `secretResolver` for `OPENAI_API_KEY`, supporting warm-start validation without network calls.
 - **CLI work**
-  - Finalise config ingestion for OpenAI-driven producers (system prompts, JSON schema files, variable bindings) and ensure `--dryrun` showcases generated mock artefacts with the same layout.
-  - Add a `tutopanda providers:list` preview (or augment existing summaries) that confirms OpenAI variants are resolvable with the current secrets.
+  - Thread resolved CLI inputs into provider invocations (`context.extras.resolvedInputs`) so handlers can substitute variables without duplicating parsing logic.
+  - Extend the provider registry plumbing (`createProviderProduce`) to cache handlers, attach resolved inputs, and surface provider logs.
+  - Introduce `tutopanda providers:list` to summarise configured variants and report readiness (handler present, secrets available).
 - **Tests**
-  - Providers: unit tests with mocked OpenAI Responses API (MSW or fetch stubs) covering success, schema validation errors, and retryable failures.
-  - Core/CLI: regression test running `query --dryrun` using an OpenAI-backed plan to verify prompt templating and artefact mapping behave as expected.
+  - Providers: unit coverage for the OpenAI handler spanning successful JSON schema mapping, missing field handling, and secret errors.
+  - CLI: regression covering `runProvidersList` and ensuring OpenAI-backed `query --dryrun` exercises the new produce path.
 
 ## Milestone 6.7 – Replicate & Audio/Video Providers
 - **Providers package**

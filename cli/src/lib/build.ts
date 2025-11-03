@@ -30,6 +30,7 @@ export interface ExecuteBuildOptions {
   manifest: Manifest;
   manifestHash: string | null;
   providerOptions: ProviderOptionsMap;
+  resolvedInputs: Record<string, unknown>;
   logger?: {
     info?(message: string): void;
   };
@@ -69,7 +70,13 @@ export async function executeBuild(options: ExecuteBuildOptions): Promise<Execut
   const registry = createProviderRegistry({ mode: 'mock' });
   const preResolved = prepareProviderHandlers(registry, options.plan, options.providerOptions);
   await registry.warmStart?.(preResolved);
-  const produce = createProviderProduce(registry, options.providerOptions, preResolved, options.logger ?? console);
+  const produce = createProviderProduce(
+    registry,
+    options.providerOptions,
+    options.resolvedInputs,
+    preResolved,
+    options.logger ?? console,
+  );
   const runner = createRunner();
 
   const run = await runner.execute(options.plan, {
@@ -133,6 +140,7 @@ function summarizeRun(run: RunResult, manifestPath: string): BuildSummary {
 export function createProviderProduce(
   registry: ReturnType<typeof createProviderRegistry>,
   providerOptions: ProviderOptionsMap,
+  resolvedInputs: Record<string, unknown>,
   preResolved: ResolvedProviderHandler[] = [],
   logger: { info?(message: string): void } = {},
 ): ProduceFn {
@@ -177,7 +185,7 @@ export function createProviderProduce(
       handlerCache.set(descriptorKey, handler);
     }
 
-    const context = buildProviderContext(providerOption, request.job.context);
+    const context = buildProviderContext(providerOption, request.job.context, resolvedInputs);
 
     logger.info?.(
       `provider.invoke.start ${providerOption.provider}/${providerOption.model} [${providerOption.environment}] -> ${request.job.produces.join(', ')}`,
@@ -265,17 +273,25 @@ function resolveProviderOption(
 function buildProviderContext(
   option: LoadedProviderOption,
   jobContext: unknown,
+  resolvedInputs: Record<string, unknown>,
 ): ProviderContextPayload {
   const baseConfig = normalizeProviderConfig(option);
   const rawAttachments = option.attachments.length > 0 ? option.attachments : undefined;
-  const extras = isRecord(jobContext) && Object.keys(jobContext).length > 0 ? { plannerContext: jobContext } : undefined;
+  const extras: Record<string, unknown> = {};
+  if (isRecord(jobContext) && Object.keys(jobContext).length > 0) {
+    extras.plannerContext = jobContext;
+  }
+  if (Object.keys(resolvedInputs).length > 0) {
+    extras.resolvedInputs = resolvedInputs;
+  }
+  const extrasPayload = Object.keys(extras).length > 0 ? extras : undefined;
 
   return {
     providerConfig: baseConfig,
     rawAttachments,
     environment: option.environment,
     observability: undefined,
-    extras,
+    extras: extrasPayload,
   } satisfies ProviderContextPayload;
 }
 

@@ -1,0 +1,453 @@
+import { Buffer } from 'node:buffer';
+import { createOpenAI } from '@ai-sdk/openai';
+import { generateText, type CallSettings, type JSONValue } from 'ai';
+import { readJsonPath } from 'tutopanda-core';
+import type { ArtefactEventStatus, ProducedArtefact } from 'tutopanda-core';
+import type {
+  HandlerFactory,
+  HandlerFactoryInit,
+  ProducerHandler,
+  ProviderJobContext,
+  ProviderResult,
+} from '../../types.js';
+
+type JsonObject = Record<string, unknown>;
+
+interface OpenAiResponseFormat {
+  type: 'json_schema' | 'text';
+  schema?: JsonObject;
+  name?: string;
+  description?: string;
+}
+
+interface OpenAiArtefactMapping {
+  field?: string;
+  artefactId: string;
+  output: 'inline' | 'blob';
+  mediaType?: string;
+  statusField?: string;
+  kind?: string;
+}
+
+interface OpenAiLlmConfig {
+  systemPrompt: string;
+  userPrompt?: string;
+  variables?: Record<string, string>;
+  responseFormat: OpenAiResponseFormat;
+  temperature?: number;
+  maxOutputTokens?: number;
+  presencePenalty?: number;
+  frequencyPenalty?: number;
+  artefactMapping: OpenAiArtefactMapping[];
+  reasoning?: 'minimal' | 'low' | 'medium' | 'high';
+}
+
+type ResolvedInputs = Record<string, unknown>;
+
+export function createOpenAiLlmHandler(): HandlerFactory {
+  return (init: HandlerFactoryInit): ProducerHandler => {
+    const { descriptor, mode, secretResolver, logger } = init;
+    let client: ReturnType<typeof createOpenAI> | null = null;
+
+    async function ensureClient(): Promise<ReturnType<typeof createOpenAI>> {
+      if (client) {
+        return client;
+      }
+      const apiKey = await secretResolver.getSecret('OPENAI_API_KEY');
+      if (!apiKey) {
+        throw new Error('OPENAI_API_KEY is required to use the OpenAI provider.');
+      }
+      client = createOpenAI({ apiKey });
+      return client;
+    }
+
+    async function warmStart(): Promise<void> {
+      try {
+        await ensureClient();
+      } catch (error) {
+        logger?.error?.('providers.openai.warmStart.error', {
+          provider: descriptor.provider,
+          model: descriptor.model,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        throw error;
+      }
+    }
+
+    async function invoke(request: ProviderJobContext): Promise<ProviderResult> {
+      const openai = await ensureClient();
+      const config = parseOpenAiConfig(request.context.providerConfig);
+      const resolvedInputs = extractResolvedInputs(request.context.extras);
+
+      const systemPrompt = renderTemplate(config.systemPrompt, config.variables, resolvedInputs);
+      const userPrompt = config.userPrompt
+        ? renderTemplate(config.userPrompt, config.variables, resolvedInputs)
+        : undefined;
+
+      const callSettings: CallSettings = {
+        temperature: config.temperature,
+        maxOutputTokens: config.maxOutputTokens,
+        presencePenalty: config.presencePenalty,
+        frequencyPenalty: config.frequencyPenalty,
+      };
+
+      const openAiOptions: Record<string, JSONValue> = {};
+      if (config.responseFormat.type === 'json_schema') {
+        openAiOptions.strictJsonSchema = true;
+      }
+      if (config.reasoning) {
+        openAiOptions.reasoningEffort = config.reasoning;
+      }
+      const providerOptions = Object.keys(openAiOptions).length > 0 ? { openai: openAiOptions } : undefined;
+
+      const model = openai.responses(request.model);
+      const promptInput = userPrompt ?? '';
+
+      const baseOptions = {
+        model,
+        system: systemPrompt,
+        prompt: promptInput,
+        providerOptions,
+        ...callSettings,
+      } satisfies Record<string, unknown>;
+
+      const generationOptions = config.responseFormat.type === 'json_schema'
+        ? {
+            ...baseOptions,
+            responseFormat: {
+              type: 'json',
+              schema: config.responseFormat.schema,
+            },
+          }
+        : {
+            ...baseOptions,
+            responseFormat: { type: 'text' },
+          };
+
+      const generation = await generateText(generationOptions as unknown as Parameters<typeof generateText>[0]);
+
+      const baseText = generation.text;
+      const parsedPayload =
+        config.responseFormat.type === 'json_schema'
+          ? safeParseJson(baseText)
+          : undefined;
+
+      const artefacts = config.artefactMapping.map((mapping) =>
+        buildArtefact({
+          mapping,
+          parsedPayload,
+          baseText,
+          config,
+        }),
+      );
+
+      const status: ArtefactEventStatus = artefacts.some((artefact) => artefact.status === 'failed')
+        ? 'failed'
+        : 'succeeded';
+
+      const diagnostics = {
+        provider: 'openai',
+        model: request.model,
+        response: sanitizeResponseMetadata(generation.response),
+        usage: generation.usage,
+        warnings: generation.warnings,
+        textLength: baseText.length,
+      } satisfies Record<string, unknown>;
+
+      return {
+        status,
+        artefacts,
+        diagnostics,
+      };
+    }
+
+    return {
+      provider: descriptor.provider,
+      model: descriptor.model,
+      environment: descriptor.environment,
+      mode,
+      warmStart,
+      invoke,
+    };
+  };
+}
+
+function parseOpenAiConfig(raw: unknown): OpenAiLlmConfig {
+  if (!raw || typeof raw !== 'object') {
+    throw new Error('OpenAI provider configuration must be an object.');
+  }
+  const config = raw as Record<string, unknown>;
+  const systemPrompt = readString(config.systemPrompt, 'systemPrompt');
+  const userPrompt = readOptionalString(config.userPrompt);
+
+  const variables = readOptionalRecord(config.variables);
+
+  const responseFormat = parseResponseFormat(config.responseFormat);
+  const artefactMapping = parseArtefactMapping(config.artefactMapping);
+
+  return {
+    systemPrompt,
+    userPrompt,
+    variables,
+    responseFormat,
+    temperature: readOptionalNumber(config.temperature),
+    maxOutputTokens: readOptionalNumber(config.maxOutputTokens),
+    presencePenalty: readOptionalNumber(config.presencePenalty),
+    frequencyPenalty: readOptionalNumber(config.frequencyPenalty),
+    artefactMapping,
+    reasoning: readOptionalReasoning(config.reasoning),
+  };
+}
+
+function parseResponseFormat(raw: unknown): OpenAiResponseFormat {
+  if (!raw || typeof raw !== 'object') {
+    return { type: 'text' };
+  }
+  const format = raw as Record<string, unknown>;
+  const type = readString(format.type, 'responseFormat.type') as 'json_schema' | 'text';
+  if (type === 'json_schema') {
+    const schema = format.schema;
+    if (!schema || typeof schema !== 'object') {
+      throw new Error('responseFormat.schema must be provided when type is "json_schema".');
+    }
+    return {
+      type,
+      schema: schema as JsonObject,
+      name: readOptionalString(format.name),
+      description: readOptionalString(format.description),
+    };
+  }
+  return { type: 'text' };
+}
+
+function parseArtefactMapping(raw: unknown): OpenAiArtefactMapping[] {
+  if (!Array.isArray(raw) || raw.length === 0) {
+    throw new Error('artefactMapping must be a non-empty array.');
+  }
+  return raw.map((item, index) => {
+    if (!item || typeof item !== 'object') {
+      throw new Error(`artefactMapping[${index}] must be an object.`);
+    }
+    const mapping = item as Record<string, unknown>;
+    const output = readString(mapping.output, `artefactMapping[${index}].output`);
+    if (output !== 'inline' && output !== 'blob') {
+      throw new Error(`artefactMapping[${index}].output must be "inline" or "blob".`);
+    }
+    const field = readOptionalString(mapping.field);
+    const artefactId = readString(mapping.artefactId, `artefactMapping[${index}].artefactId`);
+    const statusField = readOptionalString(mapping.statusField);
+    const mediaType = readOptionalString(mapping.mediaType);
+    const kind = readOptionalString(mapping.kind);
+    return {
+      field,
+      artefactId,
+      output,
+      mediaType,
+      statusField,
+      kind,
+    };
+  });
+}
+
+function extractResolvedInputs(extras: Record<string, unknown> | undefined): ResolvedInputs {
+  const resolved = extras && typeof extras === 'object' ? (extras as Record<string, unknown>).resolvedInputs : undefined;
+  if (!resolved || typeof resolved !== 'object') {
+    return {};
+  }
+  return resolved as ResolvedInputs;
+}
+
+function renderTemplate(
+  template: string,
+  variables: Record<string, string> | undefined,
+  inputs: ResolvedInputs,
+): string {
+  if (!variables) {
+    return template;
+  }
+  return template.replace(/{{\s*([^}]+)\s*}}/g, (_, key: string) => {
+    const inputKey = variables[key.trim()];
+    if (!inputKey) {
+      return '';
+    }
+    const value = inputs[inputKey];
+    return value === undefined || value === null ? '' : String(value);
+  });
+}
+
+function safeParseJson(payload: string): JsonObject | undefined {
+  try {
+    const parsed = JSON.parse(payload);
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      return parsed as JsonObject;
+    }
+    return undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function buildArtefact(args: {
+  mapping: OpenAiArtefactMapping;
+  parsedPayload: unknown;
+  baseText: string;
+  config: OpenAiLlmConfig;
+}): ProducedArtefact {
+  const { mapping, parsedPayload, baseText, config } = args;
+  const diagnostics: Record<string, unknown> = {
+    field: mapping.field,
+    kind: mapping.kind,
+  };
+
+  let status: ArtefactEventStatus = 'succeeded';
+  let inline: string | undefined;
+  let blob: ProducedArtefact['blob'];
+
+  let sourceValue: unknown;
+
+  if (config.responseFormat.type === 'json_schema') {
+    if (mapping.field) {
+      const result = readJsonPath(parsedPayload, mapping.field);
+      if (result.exists) {
+        sourceValue = result.value;
+      } else {
+        diagnostics.missingField = mapping.field;
+        status = 'failed';
+      }
+    } else {
+      sourceValue = parsedPayload;
+    }
+  } else {
+    sourceValue = baseText;
+  }
+
+  if (mapping.statusField && config.responseFormat.type === 'json_schema') {
+    const statusResult = readJsonPath(parsedPayload, mapping.statusField);
+    if (statusResult.exists) {
+      const statusValue = String(statusResult.value).toLowerCase();
+      if (statusValue === 'failed') {
+        status = 'failed';
+      }
+      diagnostics.statusField = {
+        field: mapping.statusField,
+        value: statusResult.value,
+      };
+    }
+  }
+
+  const materialized = materializeValue(sourceValue);
+  if (!materialized.success) {
+    status = 'failed';
+    diagnostics.valueError = materialized.error;
+  } else if (mapping.output === 'inline') {
+    inline = materialized.text;
+  } else {
+    if (!mapping.mediaType) {
+      status = 'failed';
+      diagnostics.valueError = 'mediaType is required when output is "blob".';
+    } else if (!materialized.buffer) {
+      status = 'failed';
+      diagnostics.valueError = 'No binary payload available for blob artefact.';
+    } else {
+      blob = {
+        data: materialized.buffer,
+        mimeType: mapping.mediaType,
+      };
+    }
+  }
+
+  return {
+    artefactId: mapping.artefactId,
+    status,
+    inline,
+    blob,
+    diagnostics,
+  };
+}
+
+function materializeValue(value: unknown): {
+  success: boolean;
+  text?: string;
+  buffer?: Uint8Array | string;
+  error?: string;
+} {
+  if (value === null || value === undefined) {
+    return { success: false, error: 'Value is undefined or null.' };
+  }
+  if (typeof value === 'string') {
+    return {
+      success: true,
+      text: value,
+      buffer: value,
+    };
+  }
+  if (Array.isArray(value)) {
+    const joined = value.map((item) => (item === null || item === undefined ? '' : String(item))).join('\n');
+    return { success: true, text: joined, buffer: joined };
+  }
+  if (value instanceof Uint8Array) {
+    return { success: true, text: Buffer.from(value).toString('utf8'), buffer: value };
+  }
+  try {
+    const serialized = JSON.stringify(value, null, 2);
+    return { success: true, text: serialized, buffer: serialized };
+  } catch {
+    return { success: false, error: 'Unable to serialize value to JSON.' };
+  }
+}
+
+function sanitizeResponseMetadata(metadata: unknown): Record<string, unknown> | undefined {
+  if (!metadata || typeof metadata !== 'object') {
+    return undefined;
+  }
+  const response = metadata as Record<string, unknown>;
+  return {
+    id: response.id,
+    model: response.model,
+    createdAt: response.createdAt ?? response.created_at,
+  };
+}
+
+function readString(value: unknown, field: string): string {
+  if (typeof value !== 'string' || value.trim().length === 0) {
+    throw new Error(`${field} must be a non-empty string.`);
+  }
+  return value;
+}
+
+function readOptionalString(value: unknown): string | undefined {
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+  return String(value);
+}
+
+function readOptionalNumber(value: unknown): number | undefined {
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+  const numberValue = Number(value);
+  if (Number.isNaN(numberValue)) {
+    throw new Error(`Expected numeric value, received ${value}`);
+  }
+  return numberValue;
+}
+
+function readOptionalRecord(value: unknown): Record<string, string> | undefined {
+  if (!value || typeof value !== 'object') {
+    return undefined;
+  }
+  const entries = Object.entries(value as Record<string, unknown>).map(([key, val]) => [key, String(val)]);
+  return Object.fromEntries(entries);
+}
+
+function readOptionalReasoning(value: unknown): OpenAiLlmConfig['reasoning'] {
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+  const reasoning = String(value);
+  if (reasoning === 'minimal' || reasoning === 'low' || reasoning === 'medium' || reasoning === 'high') {
+    return reasoning;
+  }
+  throw new Error(`Unsupported reasoning level "${reasoning}".`);
+}

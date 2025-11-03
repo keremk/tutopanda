@@ -44,6 +44,7 @@ export interface GeneratePlanResult {
   manifest: Manifest;
   plan: ExecutionPlan;
   manifestHash: string | null;
+  resolvedInputs: Record<string, unknown>;
 }
 
 export async function generatePlan(options: GeneratePlanOptions): Promise<GeneratePlanResult> {
@@ -80,6 +81,7 @@ export async function generatePlan(options: GeneratePlanOptions): Promise<Genera
 
   const { blueprint, inputValues } = deriveBlueprintAndInputs(projectConfig);
   const pendingEvents = createInputEvents(prompt, inputValues, targetRevision);
+  const resolvedInputs = buildResolvedInputMap(pendingEvents);
 
   for (const event of pendingEvents) {
     await eventLog.appendInput(movieId, event);
@@ -106,6 +108,7 @@ export async function generatePlan(options: GeneratePlanOptions): Promise<Genera
     manifest,
     plan,
     manifestHash,
+    resolvedInputs,
   };
 }
 
@@ -149,6 +152,14 @@ function createInputEvents(
   }
   entries.push(makeInputEvent('InquiryPrompt', prompt, revision, now));
   return entries;
+}
+
+function buildResolvedInputMap(events: InputEvent[]): Record<string, unknown> {
+  const resolved = new Map<string, unknown>();
+  for (const event of events) {
+    resolved.set(event.id, event.payload);
+  }
+  return Object.fromEntries(resolved.entries());
 }
 
 function makeInputEvent(id: string, payload: unknown, revision: RevisionId, createdAt: string): InputEvent {

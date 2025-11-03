@@ -219,6 +219,24 @@ Added some sane defaults to use (some of them not yet defined, will define in la
 }
 ```
 
+## List Provider Variants
+Show the configured `(provider, model, environment)` pairs per producer and whether live handlers are ready (secrets present, implementation available).
+
+```bash
+tutopanda providers:list --settings=~/path/to/settings.json
+```
+
+- Uses the merged settings (default + overrides if `--settings` provided) to enumerate primary and fallback variants.
+- Resolves each variant through `tutopanda-providers` in live mode and runs warm-start to surface missing secrets.
+- Output example:
+  ```text
+  Provider configurations:
+  - ScriptProducer
+      [main] openai/openai/gpt5 (local) -> ready
+      [fallback] replicate/google/gemini-2.5-flash (local) -> error: No provider handler registered...
+  ```
+- This command is safe to run without network access; it only checks local configuration and environment variables (e.g. `OPENAI_API_KEY`).
+
 ### Default System Prompts
 - The LLM providers are further configured with 
   - systemPrompt

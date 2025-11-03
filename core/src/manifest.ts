@@ -217,6 +217,7 @@ async function collectLatestArtefacts(
       inline: event.output.inline,
       producedBy: event.producedBy,
       status: event.status,
+      diagnostics: event.diagnostics,
       createdAt: event.createdAt,
     });
   }

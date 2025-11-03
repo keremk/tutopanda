@@ -1,4 +1,5 @@
 import { providerImplementations } from './mappings.js';
+import process from 'node:process';
 import type {
   ProducerHandler,
   ProviderDescriptor,
@@ -8,11 +9,13 @@ import type {
   ProviderRegistryOptions,
   ProviderVariantMatch,
   ResolvedProviderHandler,
+  SecretResolver,
 } from './types.js';
 
 export function createProviderRegistry(options: ProviderRegistryOptions = {}): ProviderRegistry {
   const mode: ProviderMode = options.mode ?? 'mock';
   const logger = options.logger;
+  const secretResolver = options.secretResolver ?? createEnvSecretResolver();
   const handlerCache = new Map<string, ProducerHandler>();
 
   function resolve(descriptor: ProviderDescriptor): ProducerHandler {
@@ -29,7 +32,12 @@ export function createProviderRegistry(options: ProviderRegistryOptions = {}): P
       );
     }
 
-    const handler = implementation.factory({ descriptor, mode });
+    const handler = implementation.factory({
+      descriptor,
+      mode,
+      secretResolver,
+      logger,
+    });
     handlerCache.set(cacheKey, handler);
     return handler;
   }
@@ -79,4 +87,12 @@ function toCacheKey(mode: ProviderMode, descriptor: ProviderDescriptor): string 
     descriptor.model,
     descriptor.environment,
   ].join('|');
+}
+
+function createEnvSecretResolver(): SecretResolver {
+  return {
+    async getSecret(key: string): Promise<string | null> {
+      return process.env[key] ?? null;
+    },
+  };
 }

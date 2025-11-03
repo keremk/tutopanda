@@ -102,6 +102,7 @@ export async function runQuery(options: QueryOptions): Promise<QueryResult> {
         plan: planResult.plan,
         manifest: planResult.manifest,
         providerOptions,
+        resolvedInputs: planResult.resolvedInputs,
         storage: { rootDir: storageRoot, basePath: storageBasePath },
       })
     : undefined;
@@ -115,6 +116,7 @@ export async function runQuery(options: QueryOptions): Promise<QueryResult> {
         manifest: planResult.manifest,
         manifestHash: planResult.manifestHash,
         providerOptions,
+        resolvedInputs: planResult.resolvedInputs,
         logger: console,
       });
 

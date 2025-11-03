@@ -9,3 +9,4 @@ export * from './planner.js';
 export * from './revisions.js';
 export * from './schema/index.js';
 export * from './runner.js';
+export * from './json-path.js';

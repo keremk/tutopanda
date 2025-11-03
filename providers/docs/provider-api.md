@@ -41,7 +41,7 @@ The providers package is the single integration surface for model providers (Ope
 ```
 
 1. The CLI/server chooses variants (primary/fallback) per producer using the user-provided settings (JSON + referenced TOML/JSON files) for that run.
-2. Before running the core `createRunner`, the runtime constructs a `ProduceFn` via `createProviderProduce(registry, resolutionPlan)`.
+2. Before running the core `createRunner`, the runtime constructs a `ProduceFn` via `createProviderProduce(registry, providerOptions, resolvedInputs, resolutionPlan)`.
 3. For each job, `createRunner` calls `produce(ProduceRequest)` (see `core/src/runner.ts`). The produce wrapper looks up the appropriate provider binding (with fallbacks) and calls `handler.invoke`.
 4. `handler.invoke` performs the actual SDK call, returning a `ProviderResult` comprised of normalised `ProducedArtefact` entries. These flow back into the runner for storage/event logging.
 
@@ -156,7 +156,7 @@ interface ProviderHandler {
 ## Integration with `core/src/runner.ts`
 
 - `createRunner` expects a `ProduceFn` that obeys the `ProduceRequest → ProduceResult` contract.
-- `createProviderProduce(registry, resolutionCache)` produces such a function:
+- `createProviderProduce(registry, providerOptions, resolvedInputs, resolutionCache)` produces such a function:
   1. Derive the `ProviderVariant` for the job from `request.job.provider` + `.providerModel` + `.context.environment ?? 'local'`.
   2. Pull the pre-resolved handlers from the cache; if missing, call `registry.resolveSingle`.
   3. Execute the primary handler. When it resolves, transform `ProviderResult` directly into `ProduceResult`.

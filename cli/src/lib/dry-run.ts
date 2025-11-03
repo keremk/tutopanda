@@ -39,6 +39,7 @@ interface ExecuteDryRunArgs {
   plan: ExecutionPlan;
   manifest: Manifest;
   providerOptions: ProviderOptionsMap;
+  resolvedInputs: Record<string, unknown>;
   storage?: {
     rootDir: string;
     basePath: string;
@@ -58,7 +59,13 @@ export async function executeDryRun(args: ExecuteDryRunArgs): Promise<DryRunSumm
   const registry = createProviderRegistry({ mode: 'mock' });
   const preResolved = prepareProviderHandlers(registry, args.plan, args.providerOptions);
   await registry.warmStart?.(preResolved);
-  const produce = createProviderProduce(registry, args.providerOptions, preResolved, console);
+  const produce = createProviderProduce(
+    registry,
+    args.providerOptions,
+    args.resolvedInputs,
+    preResolved,
+    console,
+  );
 
   const runResult = await runner.execute(args.plan, {
     movieId: args.movieId,

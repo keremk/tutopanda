@@ -46,7 +46,7 @@ The CLI never talks to provider SDKs directly. All interactions flow through the
    - It deduplicates those triples and calls `registry.resolveMany` once up front; this populates the handler cache and allows warm start to surface missing secrets before execution begins.
 
 4. **Runner Execution**
-   - CLI composes a `ProduceFn` via `createProviderProduce(registry, resolutionCache, observabilityHooks)` and injects it into `createRunner`.
+  - CLI composes a `ProduceFn` via `createProviderProduce(registry, providerOptions, resolvedInputs, resolutionCache, observabilityHooks)` and injects it into `createRunner`.
    - During execution, the runner invokes the produce function per job; artefact persistence and manifest updates happen inside core.
 
 5. **Wrap-up**
@@ -89,7 +89,7 @@ interface ProviderOption {
 ```
 
 - Query/edit persist this map to `providers.json` so subsequent runs reuse the exact same settings unless overrides are provided.
-- When invoking handlers the CLI merges `config` + `customAttributes`, replays the raw attachment contents, and forwards any planner metadata under `context.extras.plannerContext`.
+- When invoking handlers the CLI merges `config` + `customAttributes`, replays the raw attachment contents, forwards any planner metadata under `context.extras.plannerContext`, and provides a `resolvedInputs` dictionary containing the latest CLI input values (prompt, audience, duration, etc.).
 
 ## Execution Flow Example
 

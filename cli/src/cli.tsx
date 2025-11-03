@@ -7,13 +7,16 @@ import { runInit } from './commands/init.js';
 import { runQuery } from './commands/query.js';
 import { runInspect } from './commands/inspect.js';
 import { runEdit } from './commands/edit.js';
+import { runProvidersList } from './commands/providers-list.js';
 import type { DryRunSummary } from './lib/dry-run.js';
 import type { BuildSummary } from './lib/build.js';
 
 const console = globalThis.console;
 
+type ProviderListOutputEntry = Awaited<ReturnType<typeof runProvidersList>>['entries'][number];
+
 const cli = meow(
-  `\nUsage\n  $ tutopanda <command> [options]\n\nCommands\n  init              Initialize Tutopanda CLI configuration\n  query <prompt>    Generate a plan for a new movie using defaults + overrides\n  inspect           Export prompts or timeline data for a movie\n  edit              Apply prompt/config edits and regenerate a movie\n\nExamples\n  $ tutopanda init --rootFolder=~/media/tutopanda --defaultSettings=~/media/tutopanda/default-settings.json\n  $ tutopanda query "Tell me about the Civil War" --style=Pixar --voice=Clara\n  $ tutopanda inspect --movieId=q123456 --prompts\n  $ tutopanda edit --movieId=q123456 --inputs=edited-prompts.toml\n`,
+  `\nUsage\n  $ tutopanda <command> [options]\n\nCommands\n  init                Initialize Tutopanda CLI configuration\n  query <prompt>      Generate a plan for a new movie using defaults + overrides\n  inspect             Export prompts or timeline data for a movie\n  edit                Apply prompt/config edits and regenerate a movie\n  providers:list      Show configured provider variants and readiness status\n\nExamples\n  $ tutopanda init --rootFolder=~/media/tutopanda --defaultSettings=~/media/tutopanda/default-settings.json\n  $ tutopanda query "Tell me about the Civil War" --style=Pixar --voice=Clara\n  $ tutopanda providers:list\n  $ tutopanda inspect --movieId=q123456 --prompts\n  $ tutopanda edit --movieId=q123456 --inputs=edited-prompts.toml\n`,
   {
     importMeta: import.meta,
     flags: {
@@ -98,6 +101,35 @@ async function main(): Promise<void> {
       } else if (result.build) {
         printBuildSummary(result.build, result.manifestPath);
         console.log(`Manifests and artefacts stored under: ${result.storagePath}`);
+      }
+      return;
+    }
+    case 'providers:list': {
+      const result = await runProvidersList({
+        settingsPath: flags.settings ?? flags.settingsPath,
+      });
+
+      if (result.entries.length === 0) {
+        console.log('No provider configurations found in the current settings.');
+        return;
+      }
+
+      const byProducer = new Map<string, ProviderListOutputEntry[]>();
+      for (const entry of result.entries) {
+        const bucket = byProducer.get(entry.producer) ?? [];
+        bucket.push(entry);
+        byProducer.set(entry.producer, bucket);
+      }
+
+      console.log('Provider configurations:');
+      for (const [producer, entries] of byProducer) {
+        console.log(`- ${producer}`);
+        for (const entry of entries) {
+          const statusLabel = entry.status === 'ready' ? 'ready' : `error: ${entry.message ?? 'unavailable'}`;
+          console.log(
+            `    [${entry.priority}] ${entry.provider}/${entry.model} (${entry.environment}) -> ${statusLabel}`,
+          );
+        }
       }
       return;
     }
