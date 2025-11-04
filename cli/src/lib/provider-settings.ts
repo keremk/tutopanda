@@ -440,6 +440,25 @@ const DEFAULT_PRODUCERS: RawProducerSetting[] = [
         priority: 'main',
         provider: 'replicate',
         model: 'bytedance/seedream-4',
+        configFile: 'text-to-image-producer.toml',
+      },
+      {
+        priority: 'fallback',
+        provider: 'replicate',
+        model: 'google/imagen-4',
+        configFile: 'text-to-image-producer.toml',
+      },
+      {
+        priority: 'fallback',
+        provider: 'replicate',
+        model: 'google/nano-banana',
+        configFile: 'text-to-image-producer.toml',
+      },
+      {
+        priority: 'fallback',
+        provider: 'replicate',
+        model: 'tencent/hunyuan-image-3',
+        configFile: 'text-to-image-producer.toml',
       },
     ],
   },
@@ -517,6 +536,7 @@ async function writeDefaultConfigFiles(settingsDir: string): Promise<void> {
     'script-producer.toml': DEFAULT_SCRIPT_PROMPT,
     'text-to-music-prompt-producer.toml': DEFAULT_TEXT_TO_MUSIC_PROMPT,
     'text-to-image-prompt-producer.toml': DEFAULT_TEXT_TO_IMAGE_PROMPT,
+    'text-to-image-producer.toml': DEFAULT_TEXT_TO_IMAGE_PRODUCER,
     'text-to-video-prompt-producer.toml': DEFAULT_TEXT_TO_VIDEO_PROMPT,
     'image-to-video-prompt-producer.toml': DEFAULT_IMAGE_TO_VIDEO_PROMPT,
   };
@@ -574,6 +594,26 @@ textFormat = "text"
 systemPrompt = """
 Generate a vivid scene description suitable for high-quality illustration.
 """
+`;
+
+const DEFAULT_TEXT_TO_IMAGE_PRODUCER = `# Text to Image Producer Configuration
+promptKey = "prompt"
+negativePromptKey = "negative_prompt"
+aspectRatioKey = "aspect_ratio"
+imageCountKey = "max_images"
+sizeKey = "size"
+outputMimeType = "image/png"
+
+[defaults]
+negative_prompt = "blurry, distorted, watermark, low contrast"
+guidance_scale = 3.0
+num_inference_steps = 30
+aspect_ratio = "16:9"
+image_input = []
+max_images = 1
+size = "1K"
+sequential_image_generation = "disabled"
+enhance_prompt = true
 `;
 
 const DEFAULT_TEXT_TO_VIDEO_PROMPT = `# Text to Video Prompt Configuration

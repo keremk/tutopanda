@@ -31,6 +31,8 @@ cd cli && pnpm vitest run --pool=threads --poolOptions.threads.singleThread
 
 > **Agent Rule**: When cross-package types or builds are needed, rely on the workspace packages' documented build outputs (`dist/`) or ask the user for guidance. Do not create ad-hoc shims or shortcuts; pause and ask if unsure.
 
+> **Agent Rule**: Never delete files without explicit confirmation from the user.
+
 ## Coding Style & Naming Conventions
 Write strict TypeScript and prefer functional React components with kebab-case filenames. Route segment folders in `src/app` should follow Next.js rules (`(group)`, `[param]`, etc.). Use Tailwind utilities and the design tokens defined in `tailwind.config.ts` instead of ad-hoc CSS. Internal imports should use the configured aliases such as `@/components/*` and `@/lib/*`. Reuse helpers from `src/lib` before adding new utilities, and keep new files two-space indented to match the existing style.
 

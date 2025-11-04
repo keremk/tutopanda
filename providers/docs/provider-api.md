@@ -1,80 +1,110 @@
-# Provider API Architecture
+# Provider API Overview
 
-The providers package is the single integration surface for model providers (OpenAI, Replicate, internal processors, etc.). Both the CLI and the server resolve their producer handlers exclusively through this package, avoiding any direct SDK usage outside of `tutopanda-providers`.
+The providers package exposes a compact TypeScript surface so the CLI (and later the server runtime) can execute third-party AI services without embedding SDK logic everywhere else. This document describes the implemented contracts as of today.
 
-## Objectives
-
-- Select the correct implementation for a `(producer, provider, model, environment)` variant at runtime.
-- Allow primary + fallback variants to be defined in configuration and resolved at execution time without hard-coding.
-- Normalise provider-specific SDK contracts into the `ProduceFn` expectations used by `core/src/runner.ts`.
-- Centralise cross-cutting concerns (auth, retries, logging, metrics, cancellation) so CLI and server code paths stay thin.
-- Support both mock executions (for tests/dry runs) and live executions through the same interface.
-
-## Shared Terminology
-
-| Term | Description |
-| --- | --- |
-| **Provider Variant** | Tuple of `(provider, model, environment)` describing a concrete implementation. `environment` is `local` or `cloud`, allowing different execution paths (e.g. Replicate via direct token vs. hosted service). |
-| **Producer Kind** | Logical producer defined in core (e.g. `ScriptProducer`). Producer kinds are environment-agnostic and may map to multiple provider variants. |
-| **Provider Binding** | Resolved executable handler for a single variant, including lifecycle hooks, metadata, and invocation method. |
-| **Registry** | The object returned by `createProviderRegistry`. It owns variant discovery, instantiation, caching, and enrichment (logging, rate limits, etc.). |
-
-## Source Layout
-
-- `providers/src/mappings.ts` declares the mapping between `(provider, model, environment)` triples and the factories that produce concrete handlers (mock + live).
-- `providers/src/common/` hosts SDK adapters (Vercel AI SDK, Replicate client, ElevenLabs REST), retry utilities, schema validation, and type coercion helpers.
-- `providers/src/registry.ts` is upgraded to:
-  - Track registry mode (`mock`, `live`, `hybrid`) with lazy instantiation of handlers.
-  - Expose richer resolution APIs (single variant, batch, capability introspection).
-  - Enforce separation between plan resolution and handler invocation.
-- `providers/src/types.ts` is augmented with environment-aware types, variant descriptors, handler context, and structured diagnostics.
-
-## Runtime Architecture
-
-```
-┌───────────────────────┐        ┌────────────────────┐        ┌───────────────────────────┐
-│ CLI / Server runtime  │        │ Provider Registry  │        │ Provider Handler (LLM etc)│
-│  • load user config   │        │  • provider map    │        │  • concrete SDK impl      │
-│  • build plan (core)  │  →→→   │  • resolve variant │  →→→   │  • produces artefacts      │
-│  • inject ProduceFn   │        │  • wrap w/ logging │        │  • returns ProviderResult  │
-└───────────────────────┘        └────────────────────┘        └───────────────────────────┘
-```
-
-1. The CLI/server chooses variants (primary/fallback) per producer using the user-provided settings (JSON + referenced TOML/JSON files) for that run.
-2. Before running the core `createRunner`, the runtime constructs a `ProduceFn` via `createProviderProduce(registry, providerOptions, resolvedInputs, resolutionPlan)`.
-3. For each job, `createRunner` calls `produce(ProduceRequest)` (see `core/src/runner.ts`). The produce wrapper looks up the appropriate provider binding (with fallbacks) and calls `handler.invoke`.
-4. `handler.invoke` performs the actual SDK call, returning a `ProviderResult` comprised of normalised `ProducedArtefact` entries. These flow back into the runner for storage/event logging.
-
-## Variant Resolution
-
-### Resolution APIs
-
-The registry API is intentionally small:
+## Registry Entry Point
 
 ```ts
+import { createProviderRegistry } from 'tutopanda-providers';
+
+const registry = createProviderRegistry({
+  mode: 'mock',              // or 'live'
+  logger,                    // optional ProviderLogger
+  secretResolver,            // optional SecretResolver
+});
+```
+
+`createProviderRegistry` wires the registry to the implementations declared in `src/mappings.ts` and returns:
+
+```ts
+interface ProviderRegistry {
+  readonly mode: ProviderMode;
+  resolve(descriptor: ProviderDescriptor): ProducerHandler;
+  resolveMany(descriptors: ProviderDescriptor[]): ResolvedProviderHandler[];
+  warmStart?(bindings: ResolvedProviderHandler[]): Promise<void>;
+}
+```
+
+- `mode` is fixed at construction (`'mock' | 'live'`).
+- `resolve` lazily instantiates and caches handlers for concrete descriptors.
+- `resolveMany` pre-resolves a batch of descriptors (the CLI uses this during warm-up).
+- `warmStart` runs each resolved handler’s optional `warmStart` hook.
+
+### Provider descriptors
+
+```ts
+type ProviderMode = 'mock' | 'live';
+type ProviderEnvironment = 'local' | 'cloud';
+
 interface ProviderDescriptor {
   provider: ProviderName;
   model: string;
-  environment: 'local' | 'cloud';
-}
-
-interface ResolvedProviderHandler {
-  descriptor: ProviderDescriptor;
-  handler: ProducerHandler;
-}
-
-interface ProviderRegistry {
-  resolve(descriptor: ProviderDescriptor): ProducerHandler;
-  resolveMany(descriptors: ProviderDescriptor[]): ResolvedProviderHandler[];
-  warmStart?(handlers: ResolvedProviderHandler[]): Promise<void>;
+  environment: ProviderEnvironment;
 }
 ```
 
-The CLI hands the registry the exact triples it wants to execute (deduplicated). The registry locates the matching implementation (mock/live) and returns a handler ready to invoke.
+Descriptors are provided by higher-level configuration (CLI `providers.json`, future server settings). The registry does not infer them.
 
-### Job Payload Structure
+## Implementation Registry
 
-Provider handlers receive all run-time data through `ProviderJobContext`. The CLI/server **only** load configuration files and pass them through verbatim—no package outside `tutopanda-providers` interprets provider-specific knobs (prompt templates, reasoning settings, TOML configs, etc.).
+`src/mappings.ts` is the canonical list of implementations. Today it contains:
+
+```ts
+export const providerImplementations: ProviderImplementationRegistry = [
+  {
+    match: { provider: '*', model: '*', environment: '*' },
+    mode: 'mock',
+    factory: createMockProducerHandler(),
+  },
+  {
+    match: { provider: 'openai', model: '*', environment: '*' },
+    mode: 'live',
+    factory: createOpenAiLlmHandler(),
+  },
+];
+```
+
+Key types:
+
+```ts
+interface ProviderImplementation {
+  match: ProviderVariantMatch;
+  mode: ProviderMode;
+  factory: HandlerFactory;
+}
+
+interface ProviderVariantMatch {
+  provider: ProviderName | '*';
+  model: string | '*';
+  environment: ProviderEnvironment | '*';
+}
+
+interface HandlerFactoryInit {
+  descriptor: ProviderDescriptor;
+  mode: ProviderMode;
+  secretResolver: SecretResolver;
+  logger?: ProviderLogger;
+}
+
+type HandlerFactory = (init: HandlerFactoryInit) => ProducerHandler;
+```
+
+The registry picks the first implementation whose matcher covers the descriptor and whose `mode` matches the registry mode.
+
+## Handler Contract
+
+```ts
+interface ProducerHandler {
+  readonly provider: ProviderName;
+  readonly model: string;
+  readonly environment: ProviderEnvironment;
+  readonly mode: ProviderMode;
+  warmStart?(context: WarmStartContext): Promise<void>;
+  invoke(request: ProviderJobContext): Promise<ProviderResult>;
+}
+```
+
+Supporting types (see `src/types.ts`):
 
 ```ts
 interface ProviderJobContext {
@@ -84,95 +114,86 @@ interface ProviderJobContext {
   revision: RevisionId;
   layerIndex: number;
   attempt: number;
-  inputs: string[];     // identifiers for required inputs/artefacts
-  produces: string[];   // artefact ids the job should emit
-  context: {
-    providerConfig?: unknown;       // parsed JSON object built from CLI settings / TOML files (semantics owned by the handler)
-    rawAttachments?: Array<{        // optional original documents if provider needs to re-hydrate raw text
-      name: string;
-      contents: string;
-      format: 'json' | 'toml' | 'text';
-    }>;
-    environment?: 'local' | 'cloud';
-    observability?: Record<string, unknown>; // trace ids, log level, etc.
-    extras?: Record<string, unknown>;        // planner metadata, custom attributes, ...
-  };
+  inputs: string[];
+  produces: string[];
+  context: ProviderContextPayload;
+}
+
+interface ProviderContextPayload {
+  providerConfig?: unknown;
+  rawAttachments?: ProviderAttachment[];
+  environment?: ProviderEnvironment;
+  observability?: Record<string, unknown>;
+  extras?: Record<string, unknown>;
+}
+
+interface ProviderAttachment {
+  name: string;
+  contents: string;
+  format: 'json' | 'toml' | 'text';
+}
+
+interface ProviderResult {
+  status?: ArtefactEventStatus;
+  artefacts: ProducedArtefact[];
+  diagnostics?: Record<string, unknown>;
 }
 ```
 
-- Handlers are responsible for validating and parsing `context.providerConfig` and related attachments.
-- If a provider needs to share computed prompts/templates across invocations, it owns the caching inside the handler factory—nothing in the CLI attempts to interpret those structures.
-- The CLI/server parse configuration files into plain data objects (e.g. TOML → JSON) but do not interpret the contents; handlers translate those objects into provider-specific payloads.
+- `providerConfig` is passed through verbatim from the CLI; handlers are free to interpret it.
+- `rawAttachments` contains any inline files (e.g. prompt templates) specified by the user.
+- `extras` currently carries resolved inputs from the planner and the original planner context; this will grow as more metadata is needed.
+- If `status` is omitted the runner treats the job as succeeded.
 
-## Handler Lifecycle
+`WarmStartContext` currently exposes an optional `logger`. The OpenAI handler uses warm start to fetch the API key before the first invocation.
 
-Each handler factory produces an object with the following surface:
+## Secrets and Logging
 
 ```ts
-interface ProviderHandler {
-  readonly kind: ProducerKind;
-  readonly provider: ProviderName;
-  readonly model: string;
-  readonly environment: 'local' | 'cloud';
-  readonly mode: ProviderMode;              // mock | live
-  readonly capabilities: ProviderCapabilityMap;
-  warmStart?(ctx: WarmStartContext): Promise<void>;  // optional pre-flight
-  invoke(job: ProviderJobContext): Promise<ProviderResult>;
-  abort?(jobId: string): Promise<void>;     // optional cancellation hook
+interface SecretResolver {
+  getSecret(key: string): Promise<string | null>;
+}
+
+interface ProviderLogger {
+  info?(message: string, meta?: Record<string, unknown>): void;
+  warn?(message: string, meta?: Record<string, unknown>): void;
+  error?(message: string, meta?: Record<string, unknown>): void;
+  debug?(message: string, meta?: Record<string, unknown>): void;
 }
 ```
 
-- `warmStart` is called during runtime boot (e.g. CLI `tutopanda query|edit` flows or server worker start) to pre-create SDK clients, fetch model metadata, or hydrate caches.
-- `invoke` receives the minimal context needed to call the provider:
-  - `job.inputs` & `job.produces` reference IDs; handlers resolve whichever payloads they need through shared utilities (e.g. blueprint metadata, stored artefacts).
-  - `job.context` carries parsed configuration objects plus optional raw attachments gathered by the CLI/server without applying provider-specific semantics.
-- Handlers must return raw artefacts only; persistence happens inside `core/src/runner.ts` via `materializeArtefacts`.
-- `abort` enables cooperative cancellation (e.g. aborting Replicate predictions when the user hits Ctrl+C).
+- Without a custom resolver the registry falls back to `process.env`.
+- Loggers are optional; when provided, handlers should prefix messages with a structured key (see the OpenAI implementation).
 
-## Cross-Cutting Concerns
+## Mock Mode
 
-- **Secrets**: Registry options accept a `secretResolver` interface:
-  ```ts
-  interface SecretResolver {
-    getSecret(key: string, opts?: SecretOptions): Promise<string | null>;
-  }
-  ```
-  Secrets are fetched when instantiating handlers and injected into SDK clients; they are never written to logs.
+Instantiating the registry with `mode: 'mock'` activates the wildcard mock implementation:
 
-- **Logging & Metrics**: Registry options include hooks:
-  ```ts
-  interface ObservabilityHooks {
-    onInvokeStart(ctx: InvokeTelemetryContext): void;
-    onInvokeEnd(ctx: InvokeTelemetryContext & { durationMs: number; result: ProviderResult }): void;
-    onInvokeError(ctx: InvokeTelemetryContext & { error: SerializedProviderError }): void;
-  }
-  ```
-  The CLI passes through the logger attached to `core/src/runner.ts` so users see progress updates (e.g. `provider.invoke.start` events).
+- `mock-producers.ts` returns handlers that generate deterministic artefacts using `mock-output.ts`.
+- Artefacts include inline summaries for text-based outputs and text blobs describing binary placeholders for media artefacts (audio, video, images, etc.).
+- Diagnostics capture the request metadata so downstream components can tell that the artefact originated from mock mode.
 
-- **Retry & Backoff**: Common utilities wrap `handler.invoke` with provider-specific retry policies (e.g. exponential backoff on `429` from Replicate, step-down retries for rate-limited LLM calls). Policies are chosen based on the `rateKey` from `ProducerCatalog`.
+This allows end-to-end CLI runs and tests without network calls or billing.
 
-- **Fallback Strategy**: The produce wrapper executes the first handler; on `ProviderFailure` flagged as retryable, it falls through to the next handler in the descriptor list. Each attempt records structured diagnostics so manifests capture both attempted providers and the final success/failure.
+## CLI Integration Snapshot
 
-## Integration with `core/src/runner.ts`
+`cli/src/lib/build.ts` demonstrates the intended call flow:
 
-- `createRunner` expects a `ProduceFn` that obeys the `ProduceRequest → ProduceResult` contract.
-- `createProviderProduce(registry, providerOptions, resolvedInputs, resolutionCache)` produces such a function:
-  1. Derive the `ProviderVariant` for the job from `request.job.provider` + `.providerModel` + `.context.environment ?? 'local'`.
-  2. Pull the pre-resolved handlers from the cache; if missing, call `registry.resolveSingle`.
-  3. Execute the primary handler. When it resolves, transform `ProviderResult` directly into `ProduceResult`.
-  4. On failure, attempt fallbacks (if any), attaching diagnostics to the eventual result.
-- The runner remains unaware of provider specifics; it only handles persistence, event logging, and manifest building.
+1. Instantiate the registry (`createProviderRegistry`).
+2. Gather unique descriptors from the execution plan and call `registry.resolveMany`.
+3. Optionally run `registry.warmStart` on the resolved bindings.
+4. Build the `ProduceFn` via `createProviderProduce` which:
+   - Looks up the appropriate handler (preferring the pre-resolved cache).
+   - Normalises the provider context (config + attachments + resolved inputs).
+   - Invokes the handler and writes provider metadata into the job diagnostics.
 
-## Modes & Testing
+The runner in `tutopanda-core` consumes the resulting `ProduceResult` without knowing about any provider SDK details.
 
-- **Mock mode** (`mode: 'mock'`): used by CLI dry runs and automated tests. Factories live under `providers/src/producers/<domain>/mock`. These handlers generate deterministic artefacts without hitting external services.
-- **Live mode** (`mode: 'live'`): instantiates real SDK clients. Requires secrets to be resolvable and is used by `tutopanda query/edit` when `--dryrun` is not specified.
-- **Hybrid mode** (future): could allow mixing live and mock handlers per producer during development/test scenarios if needed.
+## Current Coverage and Roadmap
 
-## Deliverables & Next Steps
+- **Live implementations:** `producers/llm/openai.ts` (OpenAI Responses).
+- **Mock implementation:** wildcard handler covers every descriptor in mock mode.
+- **Upcoming work:** audio, music, video, and start-image producers will reuse the same SDK surface; subsequent milestones will add Replicate handlers for those domains (see `providers/docs/AI-SDKs/replicate.md`).
+- **Future enhancements:** richer observability hooks, retry helpers, and mixed-mode execution can be added when required. Update this document whenever those features ship so downstream users have an accurate reference.
 
-- Implement the expanded registry, handler, and variant types.
-- Extend the mappings registry and CLI configuration parsing to carry environment + fallback metadata.
-- Extend `cli/src/lib/build.ts` (and the server equivalent) to pre-resolve bindings and wire produce fallbacks.
-- Migrate existing mock handlers to the new interface; add skeleton live handlers for OpenAI (via Vercel AI SDK) and Replicate referencing the requirements in `providers/docs/AI SDKs`.
-- Document provider capabilities in generated telemetry and manifest diagnostics to aid debugging.
+Treat this file as the canonical description of the provider API; keep snippets and type definitions in sync with `src/` as we expand support.

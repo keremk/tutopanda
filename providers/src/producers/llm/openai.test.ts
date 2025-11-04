@@ -27,11 +27,7 @@ vi.mock('ai', async () => {
   };
 });
 
-const secretResolver = {
-  async getSecret() {
-    return 'test-key';
-  },
-};
+const secretResolver = vi.fn<(key: string) => Promise<string>>(async () => 'test-key');
 
 function buildHandler(): ReturnType<HandlerFactory> {
   const factory = createOpenAiLlmHandler();
@@ -42,14 +38,147 @@ function buildHandler(): ReturnType<HandlerFactory> {
       environment: 'local',
     },
     mode: 'live',
-    secretResolver,
+    secretResolver: {
+      async getSecret(key: string) {
+        return secretResolver(key);
+      },
+    },
     logger: undefined,
   });
+
+  it('only initialises the OpenAI client once during warmStart + invoke', async () => {
+    const handler = buildHandler();
+    await handler.warmStart?.({ logger: undefined });
+    await handler.warmStart?.({ logger: undefined });
+
+    const request = createJobContext({
+      produces: ['Artifact:MovieSummary'],
+      context: {
+        providerConfig: {
+          systemPrompt: 'Summarise {{topic}}',
+          responseFormat: { type: 'text' },
+          artefactMapping: [
+            { artefactId: 'Artifact:MovieSummary', output: 'inline' },
+          ],
+        },
+        extras: {
+          resolvedInputs: {
+            topic: 'space',
+          },
+        },
+      },
+    });
+
+    mocks.generateText.mockResolvedValueOnce({
+      text: 'Placeholder text',
+      usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
+      warnings: [],
+      response: { id: 'resp', model: 'openai/gpt5', createdAt: '' },
+    });
+
+    await handler.invoke(request);
+
+    expect(secretResolver).toHaveBeenCalledTimes(1);
+    expect(mocks.createOpenAI).toHaveBeenCalledTimes(1);
+  });
+
+  it('throws when provider configuration is not an object', async () => {
+    const handler = buildHandler();
+    await handler.warmStart?.({ logger: undefined });
+
+    const request = createJobContext({
+      context: {
+        providerConfig: null,
+      },
+    });
+
+    await expect(handler.invoke(request)).rejects.toThrow('OpenAI provider configuration must be an object.');
+  });
+
+  it('throws when artefact mapping is empty', async () => {
+    const handler = buildHandler();
+    await handler.warmStart?.({ logger: undefined });
+
+    const request = createJobContext({
+      context: {
+        providerConfig: {
+          systemPrompt: 'Prompt',
+          responseFormat: { type: 'text' },
+          artefactMapping: [],
+        },
+      },
+    });
+
+    await expect(handler.invoke(request)).rejects.toThrow('artefactMapping must be a non-empty array.');
+  });
+}
+
+function createJobContext(overrides: Partial<ProviderJobContext> = {}): ProviderJobContext {
+  const baseContext: ProviderJobContext = {
+    jobId: 'job-base',
+    provider: 'openai',
+    model: 'openai/gpt5',
+    revision: 'rev-base',
+    layerIndex: 0,
+    attempt: 1,
+    inputs: [],
+    produces: ['Artifact:Default'],
+    context: {
+      providerConfig: {
+        systemPrompt: 'System prompt',
+        responseFormat: { type: 'text' as const },
+        artefactMapping: [
+          {
+            artefactId: 'Artifact:Default',
+            output: 'inline' as const,
+          },
+        ],
+      },
+      rawAttachments: [],
+      observability: undefined,
+      environment: 'local',
+      extras: {
+        resolvedInputs: {},
+      },
+    },
+  };
+
+  const overrideContext: Partial<ProviderJobContext['context']> = overrides.context ?? {};
+  const baseExtras = (baseContext.context.extras ?? {}) as Record<string, unknown>;
+  const overrideExtras = (overrideContext.extras ?? {}) as Record<string, unknown>;
+  const baseResolvedInputs = (baseExtras.resolvedInputs as Record<string, unknown> | undefined) ?? {};
+  const overrideResolvedInputs =
+    (overrideExtras.resolvedInputs as Record<string, unknown> | undefined) ?? {};
+
+  return {
+    ...baseContext,
+    ...overrides,
+    context: {
+      ...baseContext.context,
+      ...overrideContext,
+      providerConfig:
+        overrideContext.providerConfig ?? baseContext.context.providerConfig,
+      rawAttachments:
+        overrideContext.rawAttachments ?? baseContext.context.rawAttachments,
+      observability:
+        overrideContext.observability ?? baseContext.context.observability,
+      environment: overrideContext.environment ?? baseContext.context.environment,
+      extras: {
+        ...baseExtras,
+        ...overrideExtras,
+        resolvedInputs: {
+          ...baseResolvedInputs,
+          ...overrideResolvedInputs,
+        },
+      },
+    },
+  };
 }
 
 describe('createOpenAiLlmHandler', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    secretResolver.mockClear();
     mocks.responses.mockReturnValue('mock-model');
     mocks.createOpenAI.mockReturnValue({
       responses: mocks.responses,
@@ -79,14 +208,9 @@ describe('createOpenAiLlmHandler', () => {
     const handler = buildHandler();
     await handler.warmStart?.({ logger: undefined });
 
-    const request = {
+    const request = createJobContext({
       jobId: 'job-1',
-      provider: 'openai',
-      model: 'openai/gpt5',
       revision: 'rev-001',
-      layerIndex: 0,
-      attempt: 1,
-      inputs: [],
       produces: ['Artifact:MovieTitle', 'Artifact:NarrationScript'],
       context: {
         providerConfig: {
@@ -129,7 +253,7 @@ describe('createOpenAiLlmHandler', () => {
           },
         },
       },
-    } satisfies ProviderJobContext;
+    });
 
     const result = await handler.invoke(request);
 
@@ -175,14 +299,9 @@ describe('createOpenAiLlmHandler', () => {
     const handler = buildHandler();
     await handler.warmStart?.({ logger: undefined });
 
-    const request = {
+    const request = createJobContext({
       jobId: 'job-2',
-      provider: 'openai',
-      model: 'openai/gpt5',
       revision: 'rev-002',
-      layerIndex: 0,
-      attempt: 1,
-      inputs: [],
       produces: ['Artifact:Missing'],
       context: {
         providerConfig: {
@@ -196,7 +315,7 @@ describe('createOpenAiLlmHandler', () => {
           resolvedInputs: {},
         },
       },
-    } satisfies ProviderJobContext;
+    });
 
     const result = await handler.invoke(request);
     expect(result.status).toBe('failed');
@@ -218,14 +337,9 @@ describe('createOpenAiLlmHandler', () => {
     const handler = buildHandler();
     await handler.warmStart?.({ logger: undefined });
 
-    const request = {
+    const request = createJobContext({
       jobId: 'job-structured',
-      provider: 'openai',
-      model: 'openai/gpt5',
       revision: 'rev-structured',
-      layerIndex: 0,
-      attempt: 1,
-      inputs: [],
       produces: ['Artifact:MovieSummary', 'Artifact:MovieTitle'],
       context: {
         providerConfig: {
@@ -247,7 +361,7 @@ describe('createOpenAiLlmHandler', () => {
         },
         extras: { resolvedInputs: {} },
       },
-    } satisfies ProviderJobContext;
+    });
 
     const result = await handler.invoke(request);
     expect(result.status).toBe('succeeded');
@@ -286,14 +400,9 @@ describe('createOpenAiLlmHandler', () => {
     const handler = buildHandler();
     await handler.warmStart?.({ logger: undefined });
 
-    const request = {
+    const request = createJobContext({
       jobId: 'job-text',
-      provider: 'openai',
-      model: 'openai/gpt5',
       revision: 'rev-003',
-      layerIndex: 0,
-      attempt: 1,
-      inputs: [],
       produces: ['Artifact:MovieSummary'],
       context: {
         providerConfig: {
@@ -313,7 +422,7 @@ describe('createOpenAiLlmHandler', () => {
           },
         },
       },
-    } satisfies ProviderJobContext;
+    });
 
     const result = await handler.invoke(request);
     expect(result.status).toBe('succeeded');

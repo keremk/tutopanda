@@ -10,13 +10,9 @@ import {
 } from 'ai';
 import { readJsonPath } from 'tutopanda-core';
 import type { ArtefactEventStatus, ProducedArtefact } from 'tutopanda-core';
-import type {
-  HandlerFactory,
-  HandlerFactoryInit,
-  ProducerHandler,
-  ProviderJobContext,
-  ProviderResult,
-} from '../../types.js';
+import type { HandlerFactory } from '../../types.js';
+import { createProducerHandlerFactory } from '../../sdk/handler-factory.js';
+import type { ProducerInvokeArgs } from '../../sdk/types.js';
 
 type JsonObject = Record<string, unknown>;
 
@@ -49,11 +45,9 @@ interface OpenAiLlmConfig {
   reasoning?: 'minimal' | 'low' | 'medium' | 'high';
 }
 
-type ResolvedInputs = Record<string, unknown>;
-
 export function createOpenAiLlmHandler(): HandlerFactory {
-  return (init: HandlerFactoryInit): ProducerHandler => {
-    const { descriptor, mode, secretResolver, logger } = init;
+  return (init) => {
+    const { descriptor, secretResolver, logger } = init;
     let client: ReturnType<typeof createOpenAI> | null = null;
 
     async function ensureClient(): Promise<ReturnType<typeof createOpenAI>> {
@@ -68,127 +62,122 @@ export function createOpenAiLlmHandler(): HandlerFactory {
       return client;
     }
 
-    async function warmStart(): Promise<void> {
-      try {
-        await ensureClient();
-      } catch (error) {
-        logger?.error?.('providers.openai.warmStart.error', {
-          provider: descriptor.provider,
-          model: descriptor.model,
-          error: error instanceof Error ? error.message : String(error),
-        });
-        throw error;
-      }
-    }
+    const factory = createProducerHandlerFactory({
+      domain: 'prompt',
+      configValidator: parseOpenAiConfig,
+      warmStart: async () => {
+        try {
+          await ensureClient();
+        } catch (error) {
+          logger?.error?.('providers.openai.warmStart.error', {
+            provider: descriptor.provider,
+            model: descriptor.model,
+            error: error instanceof Error ? error.message : String(error),
+          });
+          throw error;
+        }
+      },
+      invoke: async (args: ProducerInvokeArgs) => {
+        const openai = await ensureClient();
+        const { request, runtime } = args;
+        const config = runtime.config.parse<OpenAiLlmConfig>(parseOpenAiConfig);
+        const prompts = renderPrompts(config, runtime.inputs.all());
+        const prompt = buildPrompt(prompts) || ' ';
 
-    async function invoke(request: ProviderJobContext): Promise<ProviderResult> {
-      const openai = await ensureClient();
-      const config = parseOpenAiConfig(request.context.providerConfig);
-      const resolvedInputs = extractResolvedInputs(request.context.extras);
+        const callSettings: CallSettings = {
+          temperature: config.temperature,
+          maxOutputTokens: config.maxOutputTokens,
+          presencePenalty: config.presencePenalty,
+          frequencyPenalty: config.frequencyPenalty,
+        };
 
-      const prompts = renderPrompts(config, resolvedInputs);
-      const prompt = buildPrompt(prompts) || ' ';
+        const openAiOptions: Record<string, JSONValue> = {};
+        if (config.responseFormat.type === 'json_schema') {
+          openAiOptions.strictJsonSchema = true;
+        }
+        if (config.reasoning) {
+          openAiOptions.reasoningEffort = config.reasoning;
+        }
+        const providerOptions =
+          Object.keys(openAiOptions).length > 0 ? { openai: openAiOptions } : undefined;
 
-      const callSettings: CallSettings = {
-        temperature: config.temperature,
-        maxOutputTokens: config.maxOutputTokens,
-        presencePenalty: config.presencePenalty,
-        frequencyPenalty: config.frequencyPenalty,
-      };
+        const openAiModel = openai.responses(request.model);
+        const baseCallOptions = {
+          ...callSettings,
+          ...(providerOptions ? { providerOptions } : {}),
+        } as CallSettings & { providerOptions?: Record<string, Record<string, JSONValue>> };
 
-      const openAiOptions: Record<string, JSONValue> = {};
-      if (config.responseFormat.type === 'json_schema') {
-        openAiOptions.strictJsonSchema = true;
-      }
-      if (config.reasoning) {
-        openAiOptions.reasoningEffort = config.reasoning;
-      }
-      const providerOptions =
-        Object.keys(openAiOptions).length > 0 ? { openai: openAiOptions } : undefined;
+        let baseText: string;
+        let parsedPayload: JsonObject | undefined;
+        let responseMeta: Record<string, unknown> | undefined;
+        let usageMeta: Record<string, unknown> | undefined;
+        let warningsMeta: unknown[] | undefined;
 
-      const openAiModel = openai.responses(request.model);
-      const baseCallOptions = {
-        ...callSettings,
-        ...(providerOptions ? { providerOptions } : {}),
-      } as CallSettings & { providerOptions?: Record<string, Record<string, JSONValue>> };
+        if (config.responseFormat.type === 'json_schema') {
+          const normalizedSchema = normalizeJsonSchema(config.responseFormat.schema as JSONSchema7, {
+            title: config.responseFormat.name,
+            description: config.responseFormat.description,
+          });
+          const schema = jsonSchema(normalizedSchema);
+          const generation = await generateObject({
+            ...baseCallOptions,
+            model: openAiModel,
+            prompt,
+            system: prompts.system,
+            schema,
+            schemaName: config.responseFormat.name,
+            schemaDescription: config.responseFormat.description,
+            mode: 'json',
+          });
+          baseText = JSON.stringify(generation.object, null, 2);
+          parsedPayload = generation.object as JsonObject;
+          responseMeta = generation.response as Record<string, unknown> | undefined;
+          usageMeta = generation.usage as Record<string, unknown> | undefined;
+          warningsMeta = generation.warnings;
+        } else {
+          const generation = await generateText({
+            ...baseCallOptions,
+            model: openAiModel,
+            prompt,
+            system: prompts.system,
+          });
+          baseText = generation.text;
+          responseMeta = generation.response as Record<string, unknown> | undefined;
+          usageMeta = generation.usage as Record<string, unknown> | undefined;
+          warningsMeta = generation.warnings;
+        }
 
-      let baseText: string;
-      let parsedPayload: JsonObject | undefined;
-      let responseMeta: Record<string, unknown> | undefined;
-      let usageMeta: Record<string, unknown> | undefined;
-      let warningsMeta: unknown[] | undefined;
+        const artefacts = config.artefactMapping.map((mapping) =>
+          buildArtefact({
+            mapping,
+            parsedPayload,
+            baseText,
+            config,
+          }),
+        );
 
-      if (config.responseFormat.type === 'json_schema') {
-        const normalizedSchema = normalizeJsonSchema(config.responseFormat.schema as JSONSchema7, {
-          title: config.responseFormat.name,
-          description: config.responseFormat.description,
-        });
-        const schema = jsonSchema(normalizedSchema);
-        const generation = await generateObject({
-          ...baseCallOptions,
-          model: openAiModel,
-          prompt,
-          system: prompts.system,
-          schema,
-          schemaName: config.responseFormat.name,
-          schemaDescription: config.responseFormat.description,
-          mode: 'json',
-        });
-        baseText = JSON.stringify(generation.object, null, 2);
-        parsedPayload = generation.object as JsonObject;
-        responseMeta = generation.response as Record<string, unknown> | undefined;
-        usageMeta = generation.usage as Record<string, unknown> | undefined;
-        warningsMeta = generation.warnings;
-      } else {
-        const generation = await generateText({
-          ...baseCallOptions,
-          model: openAiModel,
-          prompt,
-          system: prompts.system,
-        });
-        baseText = generation.text;
-        responseMeta = generation.response as Record<string, unknown> | undefined;
-        usageMeta = generation.usage as Record<string, unknown> | undefined;
-        warningsMeta = generation.warnings;
-      }
+        const status: ArtefactEventStatus = artefacts.some((artefact) => artefact.status === 'failed')
+          ? 'failed'
+          : 'succeeded';
 
-      const artefacts = config.artefactMapping.map((mapping) =>
-        buildArtefact({
-          mapping,
-          parsedPayload,
-          baseText,
-          config,
-        }),
-      );
+        const enrichedDiagnostics = {
+          provider: 'openai',
+          model: request.model,
+          response: sanitizeResponseMetadata(responseMeta),
+          usage: usageMeta,
+          warnings: warningsMeta,
+          textLength: baseText.length,
+        } satisfies Record<string, unknown>;
 
-      const status: ArtefactEventStatus = artefacts.some((artefact) => artefact.status === 'failed')
-        ? 'failed'
-        : 'succeeded';
+        return {
+          status,
+          artefacts,
+          diagnostics: enrichedDiagnostics,
+        };
+      },
+    });
 
-      const enrichedDiagnostics = {
-        provider: 'openai',
-        model: request.model,
-        response: sanitizeResponseMetadata(responseMeta),
-        usage: usageMeta,
-        warnings: warningsMeta,
-        textLength: baseText.length,
-      } satisfies Record<string, unknown>;
-
-      return {
-        status,
-        artefacts,
-        diagnostics: enrichedDiagnostics,
-      };
-    }
-
-    return {
-      provider: descriptor.provider,
-      model: descriptor.model,
-      environment: descriptor.environment,
-      mode,
-      warmStart,
-      invoke,
-    };
+    return factory(init);
   };
 }
 
@@ -269,29 +258,17 @@ function parseArtefactMapping(raw: unknown): OpenAiArtefactMapping[] {
   });
 }
 
-function extractResolvedInputs(extras: Record<string, unknown> | undefined): ResolvedInputs {
-  const resolved = extras && typeof extras === 'object' ? (extras as Record<string, unknown>).resolvedInputs : undefined;
-  if (!resolved || typeof resolved !== 'object') {
-    return {};
-  }
-  return resolved as ResolvedInputs;
-}
-
 function renderTemplate(
   template: string,
   variables: Record<string, string> | undefined,
-  inputs: ResolvedInputs,
+  inputs: Record<string, unknown>,
 ): string {
-  if (!variables) {
-    return template;
-  }
+  if (!variables) return template;
   return template.replace(/{{\s*([^}]+)\s*}}/g, (_, key: string) => {
     const inputKey = variables[key.trim()];
-    if (!inputKey) {
-      return '';
-    }
+    if (!inputKey) return '';
     const value = inputs[inputKey];
-    return value === undefined || value === null ? '' : String(value);
+    return value == null ? '' : String(value);
   });
 }
 
@@ -379,35 +356,37 @@ function materializeValue(value: unknown): {
   buffer?: Uint8Array | string;
   error?: string;
 } {
-  if (value === null || value === undefined) {
+  if (value == null) {
     return { success: false, error: 'Value is undefined or null.' };
   }
+
+  // String value
   if (typeof value === 'string') {
-    return {
-      success: true,
-      text: value,
-      buffer: value,
-    };
+    return { success: true, text: value, buffer: value };
   }
+
+  // Array - join items with newlines
   if (Array.isArray(value)) {
-    const joined = value.map((item) => (item === null || item === undefined ? '' : String(item))).join('\n');
-    return { success: true, text: joined, buffer: joined };
+    const text = value.map((item) => (item == null ? '' : String(item))).join('\n');
+    return { success: true, text, buffer: text };
   }
+
+  // Binary data
   if (value instanceof Uint8Array) {
     return { success: true, text: Buffer.from(value).toString('utf8'), buffer: value };
   }
+
+  // Object or other - serialize to JSON
   try {
-    const serialized = JSON.stringify(value, null, 2);
-    return { success: true, text: serialized, buffer: serialized };
+    const text = JSON.stringify(value, null, 2);
+    return { success: true, text, buffer: text };
   } catch {
     return { success: false, error: 'Unable to serialize value to JSON.' };
   }
 }
 
 function sanitizeResponseMetadata(metadata: unknown): Record<string, unknown> | undefined {
-  if (!metadata || typeof metadata !== 'object') {
-    return undefined;
-  }
+  if (!metadata || typeof metadata !== 'object') return undefined;
   const response = metadata as Record<string, unknown>;
   return {
     id: response.id,
@@ -418,23 +397,16 @@ function sanitizeResponseMetadata(metadata: unknown): Record<string, unknown> | 
 
 function renderPrompts(
   config: OpenAiLlmConfig,
-  inputs: ResolvedInputs,
+  inputs: Record<string, unknown>,
 ): { system?: string; user?: string } {
-  const system = renderTemplate(config.systemPrompt, config.variables, inputs);
-  const user = config.userPrompt
-    ? renderTemplate(config.userPrompt, config.variables, inputs)
-    : undefined;
-  return { system, user };
+  return {
+    system: renderTemplate(config.systemPrompt, config.variables, inputs),
+    user: config.userPrompt ? renderTemplate(config.userPrompt, config.variables, inputs) : undefined,
+  };
 }
 
 function buildPrompt(rendered: { system?: string; user?: string }): string {
-  if (rendered.user && rendered.user.trim()) {
-    return rendered.user.trim();
-  }
-  if (rendered.system && rendered.system.trim()) {
-    return rendered.system.trim();
-  }
-  return '';
+  return rendered.user?.trim() || rendered.system?.trim() || '';
 }
 
 function readString(value: unknown, field: string): string {
@@ -445,38 +417,31 @@ function readString(value: unknown, field: string): string {
 }
 
 function readOptionalString(value: unknown): string | undefined {
-  if (value === undefined || value === null) {
-    return undefined;
-  }
-  return String(value);
+  return value == null ? undefined : String(value);
 }
 
 function readOptionalNumber(value: unknown): number | undefined {
-  if (value === undefined || value === null) {
-    return undefined;
-  }
-  const numberValue = Number(value);
-  if (Number.isNaN(numberValue)) {
+  if (value == null) return undefined;
+  const num = Number(value);
+  if (Number.isNaN(num)) {
     throw new Error(`Expected numeric value, received ${value}`);
   }
-  return numberValue;
+  return num;
 }
 
 function readOptionalRecord(value: unknown): Record<string, string> | undefined {
-  if (!value || typeof value !== 'object') {
-    return undefined;
-  }
-  const entries = Object.entries(value as Record<string, unknown>).map(([key, val]) => [key, String(val)]);
-  return Object.fromEntries(entries);
+  if (!value || typeof value !== 'object') return undefined;
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>).map(([k, v]) => [k, String(v)])
+  );
 }
 
 function readOptionalReasoning(value: unknown): OpenAiLlmConfig['reasoning'] {
-  if (value === undefined || value === null) {
-    return undefined;
-  }
+  if (value == null) return undefined;
   const reasoning = String(value);
-  if (reasoning === 'minimal' || reasoning === 'low' || reasoning === 'medium' || reasoning === 'high') {
-    return reasoning;
+  const valid = ['minimal', 'low', 'medium', 'high'] as const;
+  if (valid.includes(reasoning as typeof valid[number])) {
+    return reasoning as OpenAiLlmConfig['reasoning'];
   }
   throw new Error(`Unsupported reasoning level "${reasoning}".`);
 }
