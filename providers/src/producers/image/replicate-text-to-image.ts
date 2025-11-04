@@ -1,9 +1,14 @@
-import { Buffer } from 'node:buffer';
-import Replicate from 'replicate';
 import { createProducerHandlerFactory } from '../../sdk/handler-factory.js';
 import type { HandlerFactory, ProviderJobContext } from '../../types.js';
-import type { ProducedArtefact } from 'tutopanda-core';
 import { createProviderError } from '../../sdk/errors.js';
+import {
+  createReplicateClientManager,
+  normalizeReplicateOutput,
+  buildArtefactsFromUrls,
+  extractPlannerContext,
+  isRecord,
+  type PlannerContext,
+} from '../../sdk/replicate/index.js';
 
 interface ReplicateImageConfig {
   defaults: Record<string, unknown>;
@@ -16,39 +21,17 @@ interface ReplicateImageConfig {
   extrasMapping: Record<string, string>;
 }
 
-interface PlannerContext {
-  index?: {
-    segment?: number;
-    image?: number;
-  };
-  [key: string]: unknown;
-}
-
-type JsonRecord = Record<string, unknown>;
-
 export function createReplicateTextToImageHandler(): HandlerFactory {
   return (init) => {
     const { descriptor, secretResolver, logger } = init;
-    let client: Replicate | null = null;
-
-    async function ensureClient(): Promise<Replicate> {
-      if (client) {
-        return client;
-      }
-      const token = await secretResolver.getSecret('REPLICATE_API_TOKEN');
-      if (!token) {
-        throw new Error('REPLICATE_API_TOKEN is required to use the Replicate provider.');
-      }
-      client = new Replicate({ auth: token });
-      return client;
-    }
+    const clientManager = createReplicateClientManager(secretResolver, logger);
 
     const factory = createProducerHandlerFactory({
       domain: 'media',
       configValidator: parseReplicateImageConfig,
       warmStart: async () => {
         try {
-          await ensureClient();
+          await clientManager.ensure();
         } catch (error) {
           logger?.error?.('providers.replicate.warmStart.error', {
             provider: descriptor.provider,
@@ -59,7 +42,7 @@ export function createReplicateTextToImageHandler(): HandlerFactory {
         }
       },
       invoke: async ({ request, runtime }) => {
-        const replicate = await ensureClient();
+        const replicate = await clientManager.ensure();
         const config = runtime.config.parse<ReplicateImageConfig>(parseReplicateImageConfig);
         const resolvedInputs = runtime.inputs.all();
         const plannerContext = extractPlannerContext(request);
@@ -95,7 +78,7 @@ export function createReplicateTextToImageHandler(): HandlerFactory {
         }
 
         const outputUrls = normalizeReplicateOutput(predictionOutput);
-        const artefacts = await buildArtefactsFromOutputs({
+        const artefacts = await buildArtefactsFromUrls({
           produces: request.produces,
           urls: outputUrls,
           mimeType: config.outputMimeType,
@@ -161,11 +144,6 @@ function parseReplicateImageConfig(raw: unknown): ReplicateImageConfig {
   };
 }
 
-function extractPlannerContext(request: ProviderJobContext): PlannerContext {
-  const extras = request.context.extras;
-  const planner = extras && typeof extras === 'object' ? (extras as Record<string, unknown>).plannerContext : null;
-  return planner && typeof planner === 'object' ? (planner as PlannerContext) : {};
-}
 
 function resolvePrompt(resolvedInputs: Record<string, unknown>, planner: PlannerContext): string | undefined {
   const promptInput = resolvedInputs['SegmentImagePromptInput'];
@@ -257,127 +235,3 @@ function buildReplicateInput(args: {
   return input;
 }
 
-function normalizeReplicateOutput(output: unknown): string[] {
-  if (!output) {
-    return [];
-  }
-
-  // Array of URLs or file objects
-  if (Array.isArray(output)) {
-    const urls: string[] = [];
-    for (const item of output) {
-      // Plain string URL
-      if (typeof item === 'string' && item.length > 0) {
-        urls.push(item);
-      }
-      // File object with url() method - Replicate SDK returns file objects with url() that returns URL objects
-      else if (item && typeof item === 'object' && 'url' in item) {
-        const obj = item as Record<string, unknown>;
-        const urlProp = obj.url;
-        const urlResult = typeof urlProp === 'function' ? (urlProp as () => unknown)() : urlProp;
-
-        // Handle string URLs or URL objects (which have an href property)
-        let urlString: string | undefined;
-        if (typeof urlResult === 'string') {
-          urlString = urlResult;
-        } else if (urlResult && typeof urlResult === 'object' && 'href' in urlResult) {
-          const href = (urlResult as Record<string, unknown>).href;
-          urlString = typeof href === 'string' ? href : undefined;
-        }
-
-        if (urlString && urlString.length > 0) {
-          urls.push(urlString);
-        }
-      }
-    }
-    return urls;
-  }
-
-  // Single string URL
-  if (typeof output === 'string' && output.length > 0) {
-    return [output];
-  }
-
-  // Single file object with url() method
-  if (output && typeof output === 'object' && 'url' in output) {
-    const obj = output as Record<string, unknown>;
-    const urlProp = obj.url;
-    const urlResult = typeof urlProp === 'function' ? (urlProp as () => unknown)() : urlProp;
-
-    let urlString: string | undefined;
-    if (typeof urlResult === 'string') {
-      urlString = urlResult;
-    } else if (urlResult && typeof urlResult === 'object' && 'href' in urlResult) {
-      const href = (urlResult as Record<string, unknown>).href;
-      urlString = typeof href === 'string' ? href : undefined;
-    }
-
-    if (urlString && urlString.length > 0) {
-      return [urlString];
-    }
-  }
-
-  return [];
-}
-
-async function buildArtefactsFromOutputs(args: {
-  produces: string[];
-  urls: string[];
-  mimeType: string;
-}): Promise<ProducedArtefact[]> {
-  const artefacts: ProducedArtefact[] = [];
-  for (let index = 0; index < args.produces.length; index += 1) {
-    const artefactId = args.produces[index] ?? `Artifact:SegmentImage#${index}`;
-    const url = args.urls[index];
-    if (!url) {
-      artefacts.push({
-        artefactId,
-        status: 'failed' as const,
-        diagnostics: {
-          reason: 'missing_output',
-          index,
-        },
-      });
-      continue;
-    }
-
-    try {
-      const buffer = await downloadBinary(url);
-      artefacts.push({
-        artefactId,
-        status: 'succeeded' as const,
-        blob: {
-          data: buffer,
-          mimeType: args.mimeType,
-        },
-        diagnostics: {
-          sourceUrl: url,
-        },
-      });
-    } catch (error) {
-      artefacts.push({
-        artefactId,
-        status: 'failed' as const,
-        diagnostics: {
-          reason: 'download_failed',
-          url,
-          error: error instanceof Error ? error.message : String(error),
-        },
-      });
-    }
-  }
-  return artefacts;
-}
-
-async function downloadBinary(url: string): Promise<Buffer> {
-  const response = await fetch(url);
-  if (!response.ok) {
-    throw new Error(`Failed to download ${url} (${response.status})`);
-  }
-  const arrayBuffer = await response.arrayBuffer();
-  return Buffer.from(arrayBuffer);
-}
-
-function isRecord(value: unknown): value is JsonRecord {
-  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
-}

@@ -1,0 +1,149 @@
+import { createProducerHandlerFactory } from '../../sdk/handler-factory.js';
+import type { HandlerFactory, ProviderJobContext } from '../../types.js';
+import { createProviderError } from '../../sdk/errors.js';
+import {
+  createReplicateClientManager,
+  normalizeReplicateOutput,
+  buildArtefactsFromUrls,
+  extractPlannerContext,
+  mergeInputs,
+  isRecord,
+  type PlannerContext,
+} from '../../sdk/replicate/index.js';
+
+interface ReplicateAudioConfig {
+  textKey: string;
+  defaults?: Record<string, unknown>;
+  outputMimeType: string;
+}
+
+export function createReplicateAudioHandler(): HandlerFactory {
+  return (init) => {
+    const { descriptor, secretResolver, logger } = init;
+    const clientManager = createReplicateClientManager(secretResolver, logger);
+
+    const factory = createProducerHandlerFactory({
+      domain: 'media',
+      configValidator: parseReplicateAudioConfig,
+      warmStart: async () => {
+        try {
+          await clientManager.ensure();
+        } catch (error) {
+          logger?.error?.('providers.replicate.audio.warmStart.error', {
+            provider: descriptor.provider,
+            model: descriptor.model,
+            error: error instanceof Error ? error.message : String(error),
+          });
+          throw error;
+        }
+      },
+      invoke: async ({ request, runtime }) => {
+        const replicate = await clientManager.ensure();
+        const config = runtime.config.parse<ReplicateAudioConfig>(parseReplicateAudioConfig);
+        const resolvedInputs = runtime.inputs.all();
+        const plannerContext = extractPlannerContext(request);
+        const text = resolveText(resolvedInputs, plannerContext);
+
+        if (!text) {
+          throw createProviderError('No text available for audio generation.', {
+            code: 'missing_text',
+            kind: 'user_input',
+            causedByUser: true,
+          });
+        }
+
+        // Build input by merging defaults with customAttributes
+        const customAttributes = isRecord(request.context.providerConfig)
+          ? (request.context.providerConfig as Record<string, unknown>).customAttributes
+          : undefined;
+
+        const input = mergeInputs(config.defaults ?? {}, customAttributes as Record<string, unknown> | undefined);
+        input[config.textKey] = text;
+
+        let predictionOutput: unknown;
+        const modelIdentifier = request.model as `${string}/${string}` | `${string}/${string}:${string}`;
+
+        try {
+          predictionOutput = await replicate.run(modelIdentifier, { input });
+        } catch (error) {
+          throw createProviderError('Replicate prediction failed.', {
+            code: 'replicate_prediction_failed',
+            kind: 'transient',
+            retryable: true,
+            raw: error,
+          });
+        }
+
+        const outputUrls = normalizeReplicateOutput(predictionOutput);
+        const artefacts = await buildArtefactsFromUrls({
+          produces: request.produces,
+          urls: outputUrls,
+          mimeType: config.outputMimeType,
+        });
+
+        const status = artefacts.some((artefact) => artefact.status === 'failed') ? 'failed' : 'succeeded';
+
+        const diagnostics: Record<string, unknown> = {
+          provider: 'replicate',
+          model: request.model,
+          input,
+          outputUrls,
+          plannerContext,
+        };
+        if (outputUrls.length === 0) {
+          diagnostics.rawOutput = predictionOutput;
+        }
+
+        return {
+          status,
+          artefacts,
+          diagnostics,
+        };
+      },
+    });
+
+    return factory(init);
+  };
+}
+
+function parseReplicateAudioConfig(raw: unknown): ReplicateAudioConfig {
+  const source = isRecord(raw) ? raw : {};
+
+  // Merge defaults
+  const defaults: Record<string, unknown> = {
+    ...(isRecord(source.defaults) ? source.defaults : {}),
+    ...(isRecord(source.inputs) ? source.inputs : {}),
+  };
+
+  // Determine textKey based on model (minimax uses 'text', elevenlabs uses 'prompt')
+  const textKey = typeof source.textKey === 'string' && source.textKey ? source.textKey : 'text';
+
+  // Fixed output mime type for audio
+  const outputMimeType = 'audio/mpeg';
+
+  return {
+    textKey,
+    defaults,
+    outputMimeType,
+  };
+}
+
+function resolveText(resolvedInputs: Record<string, unknown>, planner: PlannerContext): string | undefined {
+  const narrationInput = resolvedInputs['SegmentNarration'];
+  const segmentIndex = planner.index?.segment ?? 0;
+
+  // Handle array of narration texts
+  if (Array.isArray(narrationInput) && narrationInput.length > 0) {
+    const text = narrationInput[segmentIndex] ?? narrationInput[0];
+    if (typeof text === 'string' && text.trim()) {
+      return text;
+    }
+  }
+
+  // Handle single string narration
+  if (typeof narrationInput === 'string' && narrationInput.trim()) {
+    return narrationInput;
+  }
+
+  return undefined;
+}

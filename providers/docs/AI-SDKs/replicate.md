@@ -709,7 +709,6 @@ for (const [index, item] of Object.entries(output)) {
 }
 ```
 
-
 ## Video Models
 
 ### bytedance/seedance-1-lite

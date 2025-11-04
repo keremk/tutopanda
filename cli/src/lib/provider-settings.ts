@@ -404,7 +404,22 @@ const DEFAULT_PRODUCERS: RawProducerSetting[] = [
         priority: 'main',
         provider: 'replicate',
         model: 'stability-ai/stable-audio-2.5',
+        customAttributes: {
+          duration: 180, // Duration should match the movie duration as long as it is less than max allowed (190s)
+          steps: 8,
+          cfg_scale: 1,
+        },
       },
+      {
+        priority: 'fallback',
+        provider: 'replicate',
+        model: 'elevenlabs/music',
+        customAttributes: {
+          music_length_ms: 30000, // Duration should match the movie duration as long as it is less than max allowed (300000ms)
+          force_instrumental: false,
+          output_format: 'mp3_standard',
+        },
+      }
     ],
   },
   {
@@ -460,25 +475,40 @@ const DEFAULT_PRODUCERS: RawProducerSetting[] = [
         priority: 'main',
         provider: 'replicate',
         model: 'bytedance/seedream-4',
-        configFile: 'text-to-image-producer.toml',
-      },
-      {
-        priority: 'fallback',
-        provider: 'replicate',
-        model: 'google/imagen-4',
-        configFile: 'text-to-image-producer.toml',
+        customAttributes: {
+          size: '1K', // Size is not custom so width & height is not specified
+          aspect_ratio: '16:9',
+          sequential_image_generation: 'disabled',
+          max_images: 1,
+          enhance_prompt: true,
+        },
+        
       },
       {
         priority: 'fallback',
         provider: 'replicate',
         model: 'google/nano-banana',
-        configFile: 'text-to-image-producer.toml',
+        customAttributes: {
+          aspect_ratio: '16:9',
+          output_format: 'png',
+        },
       },
       {
         priority: 'fallback',
         provider: 'replicate',
-        model: 'tencent/hunyuan-image-3',
-        configFile: 'text-to-image-producer.toml',
+        model: 'qwen/qwen-image',
+        customAttributes: {
+          aspect_ratio: '16:9',
+          output_format: 'png',
+          image_size: 'optimize_for_quality',
+          go_fast: true,
+          guidance: 4,
+          strength: 0.9,
+          enhance_prompt: true,
+          output_quality: 80,
+          num_inference_steps: 50,
+          disable_safety_checker: false,
+        },
       },
     ],
   },
@@ -500,11 +530,25 @@ const DEFAULT_PRODUCERS: RawProducerSetting[] = [
         priority: 'main',
         provider: 'replicate',
         model: 'bytedance/seedance-1-pro-fast',
+        customAttributes: {
+          duration: 10,
+          resolution: '480p',
+          aspect_ratio: '16:9',
+          fps: 24,
+          camera_fixed: false,
+        },
       },
       {
         priority: 'fallback',
         provider: 'replicate',
         model: 'bytedance/seedance-1-lite',
+        customAttributes: {
+          duration: 10,
+          resolution: '480p',
+          aspect_ratio: '16:9',
+          fps: 24,
+          camera_fixed: false,
+        },
       },
     ],
   },
@@ -526,6 +570,13 @@ const DEFAULT_PRODUCERS: RawProducerSetting[] = [
         priority: 'main',
         provider: 'replicate',
         model: 'bytedance/seedream-4',
+        customAttributes: {
+          size: '1K', // Size is not custom so width & height is not specified
+          aspect_ratio: '16:9',
+          sequential_image_generation: 'disabled',
+          max_images: 1,
+          enhance_prompt: true,
+        },
       },
     ],
   },
@@ -536,6 +587,13 @@ const DEFAULT_PRODUCERS: RawProducerSetting[] = [
         priority: 'main',
         provider: 'replicate',
         model: 'bytedance/seedance-1-pro-fast',
+        customAttributes: {
+          duration: 10,
+          resolution: '480p',
+          aspect_ratio: '16:9',
+          fps: 24,
+          camera_fixed: false,
+        },
       },
     ],
   },
