@@ -1,0 +1,110 @@
+import type { EventLog } from './event-log.js';
+import type { StorageContext } from './storage.js';
+import type { BlobRef, ArtefactEvent } from './types.js';
+
+/**
+ * Resolves artifact IDs to their actual data by streaming the event log
+ * and reading blobs from storage.
+ *
+ * This is used during execution to provide artifacts from previous steps
+ * as inputs to subsequent steps.
+ *
+ * @param args Configuration with artifact IDs to resolve, event log, storage, and movie ID
+ * @returns Map of artifact kinds to their resolved data (Uint8Array for blobs, string for inline)
+ *
+ * @example
+ * const resolved = await resolveArtifactsFromEventLog({
+ *   artifactIds: ['Artifact:SegmentImage[segment=0]', 'Input:Topic'],
+ *   eventLog,
+ *   storage,
+ *   movieId: 'movie-123',
+ * });
+ * // Returns: { SegmentImage: Uint8Array(...), Topic: 'marine life' }
+ */
+export async function resolveArtifactsFromEventLog(args: {
+  artifactIds: string[];
+  eventLog: EventLog;
+  storage: StorageContext;
+  movieId: string;
+}): Promise<Record<string, unknown>> {
+  if (args.artifactIds.length === 0) {
+    return {};
+  }
+
+  // Map to store latest event for each artifact ID
+  // We keep the latest in case there are multiple events for the same artifact
+  const latestEvents = new Map<string, ArtefactEvent>();
+
+  // Stream events and collect latest succeeded events for requested artifacts
+  for await (const event of args.eventLog.streamArtefacts(args.movieId)) {
+    if (event.status === 'succeeded' && args.artifactIds.includes(event.artefactId)) {
+      latestEvents.set(event.artefactId, event);
+    }
+  }
+
+  // Build resolved map with artifact kind as key
+  const resolved: Record<string, unknown> = {};
+
+  for (const [artifactId, event] of latestEvents) {
+    const kind = extractArtifactKind(artifactId);
+
+    if (event.output.blob) {
+      // Read blob from storage
+      const blobData = await readBlob(args.storage, args.movieId, event.output.blob);
+      resolved[kind] = blobData;
+    } else if (event.output.inline !== undefined) {
+      // Use inline string directly
+      resolved[kind] = event.output.inline;
+    }
+  }
+
+  return resolved;
+}
+
+/**
+ * Extracts the artifact kind from a full artifact ID.
+ *
+ * Removes the prefix (Artifact: or Input:) and any dimensional indices.
+ *
+ * @param artifactId Full artifact identifier
+ * @returns The artifact kind without prefix or dimensions
+ *
+ * @example
+ * extractArtifactKind('Artifact:SegmentImage[segment=0][image=0]') // 'SegmentImage'
+ * extractArtifactKind('Artifact:NarrationScript') // 'NarrationScript'
+ * extractArtifactKind('Input:Topic') // 'Topic'
+ */
+export function extractArtifactKind(artifactId: string): string {
+  // Remove prefix (Artifact: or Input:)
+  const withoutPrefix = artifactId.replace(/^(Artifact|Input):/, '');
+
+  // Remove dimensions like [segment=0][image=0]
+  const kind = withoutPrefix.replace(/\[.*?\]/g, '');
+
+  return kind;
+}
+
+/**
+ * Reads a blob from FlyStorage using its hash reference.
+ *
+ * Blobs are stored at: blobs/{prefix}/{hash}
+ * where prefix is the first 2 characters of the hash.
+ *
+ * @param storage Storage context with FlyStorage instance
+ * @param movieId Movie identifier for path resolution
+ * @param blobRef Blob reference with hash, size, and mimeType
+ * @returns The blob data as Uint8Array
+ */
+async function readBlob(
+  storage: StorageContext,
+  movieId: string,
+  blobRef: BlobRef,
+): Promise<Uint8Array> {
+  const prefix = blobRef.hash.slice(0, 2);
+  const blobPath = storage.resolve(movieId, 'blobs', prefix, blobRef.hash);
+
+  // Use FlyStorage's readToUint8Array method
+  const data = await storage.storage.readToUint8Array(blobPath);
+
+  return data;
+}

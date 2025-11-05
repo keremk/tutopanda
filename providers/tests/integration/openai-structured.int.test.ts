@@ -1,11 +1,35 @@
+/**
+ * OpenAI Integration Tests (Structured Output)
+ *
+ * These tests call real OpenAI APIs and incur costs.
+ * By default, all tests are SKIPPED even if OPENAI_API_KEY is available.
+ *
+ * Enable specific test types via environment variables:
+ * - RUN_OPENAI_STRUCTURED=1    (structured output test)
+ * - RUN_ALL_OPENAI_TESTS=1     (runs all OpenAI tests)
+ *
+ * Examples:
+ *
+ * # Run structured output test
+ * RUN_OPENAI_STRUCTURED=1 pnpm test:integration
+ *
+ * # Run all OpenAI tests
+ * RUN_ALL_OPENAI_TESTS=1 pnpm test:integration
+ */
+
 import { describe, expect, it } from 'vitest';
 import { createOpenAiLlmHandler } from '../../src/producers/llm/openai.js';
 import type { ProviderJobContext } from '../../src/types.js';
 
 const describeIfHasKey = process.env.OPENAI_API_KEY ? describe : describe.skip;
+const describeIfStructured =
+  process.env.RUN_OPENAI_STRUCTURED || process.env.RUN_ALL_OPENAI_TESTS
+    ? describe
+    : describe.skip;
 
 describeIfHasKey('OpenAI structured integration', () => {
-  it('returns artefacts for structured JSON schema outputs', async () => {
+  describeIfStructured('structured output', () => {
+    it('returns artefacts for structured JSON schema outputs', async () => {
     const handler = createOpenAiLlmHandler()({
       descriptor: {
         provider: 'openai',
@@ -92,5 +116,6 @@ describeIfHasKey('OpenAI structured integration', () => {
     );
     expect(summary?.inline && summary.inline.length).toBeTruthy();
     expect(title?.inline && title.inline.length).toBeTruthy();
+    });
   });
 });

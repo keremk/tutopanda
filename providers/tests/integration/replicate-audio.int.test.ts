@@ -1,3 +1,26 @@
+/**
+ * Audio Integration Tests
+ *
+ * These tests call real Replicate APIs and are expensive/slow.
+ * By default, all tests are SKIPPED even if REPLICATE_API_TOKEN is available.
+ *
+ * Enable specific models via environment variables:
+ * - RUN_AUDIO_MINIMAX=1        (minimax/speech-02-hd)
+ * - RUN_AUDIO_ELEVENLABS=1     (elevenlabs/v3)
+ * - RUN_ALL_AUDIO_TESTS=1      (runs all audio tests)
+ *
+ * Examples:
+ *
+ * # Spot check minimax model
+ * RUN_AUDIO_MINIMAX=1 pnpm test:integration
+ *
+ * # Run only elevenlabs test
+ * RUN_AUDIO_ELEVENLABS=1 pnpm test:integration
+ *
+ * # Run all audio integration tests
+ * RUN_ALL_AUDIO_TESTS=1 pnpm test:integration
+ */
+
 import { describe, expect, it } from 'vitest';
 import { createReplicateAudioHandler } from '../../src/producers/audio/replicate-audio.js';
 import type { ProviderJobContext } from '../../src/types.js';
@@ -5,9 +28,14 @@ import { writeFileSync } from 'fs';
 import { join } from 'path';
 
 const describeIfToken = process.env.REPLICATE_API_TOKEN ? describe : describe.skip;
+const describeIfMinimax =
+  process.env.RUN_AUDIO_MINIMAX || process.env.RUN_ALL_AUDIO_TESTS ? describe : describe.skip;
+const describeIfElevenlabs =
+  process.env.RUN_AUDIO_ELEVENLABS || process.env.RUN_ALL_AUDIO_TESTS ? describe : describe.skip;
 
 describeIfToken('Replicate audio integration', () => {
-  it('generates an audio artefact via Replicate (minimax)', async () => {
+  describeIfMinimax('minimax/speech-02-hd', () => {
+    it('generates an audio artefact via Replicate (minimax)', async () => {
     const handler = createReplicateAudioHandler()({
       descriptor: {
         provider: 'replicate',
@@ -87,9 +115,11 @@ describeIfToken('Replicate audio integration', () => {
     if (artefact?.blob?.data) {
       writeFileSync(join(__dirname, 'test-audio-output.mp3'), artefact.blob.data);
     }
+    });
   });
 
-  it('generates an audio artefact via Replicate (elevenlabs)', async () => {
+  describeIfElevenlabs('elevenlabs/v3', () => {
+    it('generates an audio artefact via Replicate (elevenlabs)', async () => {
     const handler = createReplicateAudioHandler()({
       descriptor: {
         provider: 'replicate',
@@ -166,5 +196,6 @@ describeIfToken('Replicate audio integration', () => {
     if (artefact?.blob?.data) {
       writeFileSync(join(__dirname, 'test-audio-output-elevenlabs.mp3'), artefact.blob.data);
     }
+    });
   });
 });

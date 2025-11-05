@@ -1,11 +1,33 @@
+/**
+ * OpenAI Integration Tests (Text Response)
+ *
+ * These tests call real OpenAI APIs and incur costs.
+ * By default, all tests are SKIPPED even if OPENAI_API_KEY is available.
+ *
+ * Enable specific test types via environment variables:
+ * - RUN_OPENAI_TEXT=1          (text response test)
+ * - RUN_ALL_OPENAI_TESTS=1     (runs all OpenAI tests)
+ *
+ * Examples:
+ *
+ * # Run text response test
+ * RUN_OPENAI_TEXT=1 pnpm test:integration
+ *
+ * # Run all OpenAI tests
+ * RUN_ALL_OPENAI_TESTS=1 pnpm test:integration
+ */
+
 import { describe, expect, it } from 'vitest';
 import { createOpenAiLlmHandler } from '../../src/producers/llm/openai.js';
 import type { ProviderJobContext } from '../../src/types.js';
 
 const describeIfKey = process.env.OPENAI_API_KEY ? describe : describe.skip;
+const describeIfText =
+  process.env.RUN_OPENAI_TEXT || process.env.RUN_ALL_OPENAI_TESTS ? describe : describe.skip;
 
 describeIfKey('OpenAI integration', () => {
-  it('executes live Responses API and returns artefacts', async () => {
+  describeIfText('text response', () => {
+    it('executes live Responses API and returns artefacts', async () => {
     const handler = createOpenAiLlmHandler()({
       descriptor: {
         provider: 'openai',
@@ -64,5 +86,6 @@ describeIfKey('OpenAI integration', () => {
     const artefact = result.artefacts[0];
     expect(artefact).toBeDefined();
     expect(artefact?.inline).toContain('Northern');
+    });
   });
 });

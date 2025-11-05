@@ -2,6 +2,7 @@ import { createMockProducerHandler } from './mock-producers.js';
 import { createOpenAiLlmHandler } from './producers/llm/openai.js';
 import { createReplicateTextToImageHandler } from './producers/image/replicate-text-to-image.js';
 import { createReplicateAudioHandler } from './producers/audio/replicate-audio.js';
+import { createReplicateVideoHandler } from './producers/video/replicate-video.js';
 import type { ProviderImplementationRegistry } from './types.js';
 
 const wildcard = '*' as const;
@@ -89,5 +90,33 @@ export const providerImplementations: ProviderImplementationRegistry = [
     },
     mode: 'live',
     factory: createReplicateAudioHandler(),
+  },
+  // Replicate Video Models
+  {
+    match: {
+      provider: 'replicate',
+      model: 'bytedance/seedance-1-pro-fast',
+      environment: wildcard,
+    },
+    mode: 'live',
+    factory: createReplicateVideoHandler(),
+  },
+  {
+    match: {
+      provider: 'replicate',
+      model: 'bytedance/seedance-1-lite',
+      environment: wildcard,
+    },
+    mode: 'live',
+    factory: createReplicateVideoHandler(),
+  },
+  {
+    match: {
+      provider: 'replicate',
+      model: 'google/veo-3.1-fast',
+      environment: wildcard,
+    },
+    mode: 'live',
+    factory: createReplicateVideoHandler(),
   },
 ];

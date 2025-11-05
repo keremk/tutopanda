@@ -595,6 +595,17 @@ const DEFAULT_PRODUCERS: RawProducerSetting[] = [
           camera_fixed: false,
         },
       },
+      {
+        priority: 'fallback',
+        provider: 'replicate',
+        model: 'google/veo-3.1-fast',
+        customAttributes: {
+          aspect_ratio: '16:9',
+          duration: 8,
+          resolution: '720p',
+          generate_audio: false,
+        },
+      },
     ],
   },
   {

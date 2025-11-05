@@ -1,5 +1,6 @@
 import { Buffer } from 'node:buffer';
 import { createHash } from 'node:crypto';
+import { resolveArtifactsFromEventLog } from './artifact-resolver.js';
 import type { EventLog } from './event-log.js';
 import { hashInputs } from './event-log.js';
 import { createManifestService, type ManifestService } from './manifest.js';
@@ -187,9 +188,20 @@ async function executeJob(
   const inputsHash = hashInputs(job.inputs);
 
   try {
+    // Resolve artifacts from event log
+    const resolvedArtifacts = await resolveArtifactsFromEventLog({
+      artifactIds: job.inputs,
+      eventLog,
+      storage,
+      movieId,
+    });
+
+    // Merge resolved artifacts into job context
+    const enrichedJob = mergeResolvedArtifacts(job, resolvedArtifacts);
+
     const result = await produce({
       movieId,
-      job,
+      job: enrichedJob,
       layerIndex,
       attempt,
       revision,
@@ -391,4 +403,48 @@ function serializeError(error: unknown): SerializedError {
     name: 'Error',
     message: typeof error === 'string' ? error : JSON.stringify(error),
   };
+}
+
+/**
+ * Merges resolved artifact data into the job context.
+ * Preserves existing resolvedInputs and adds newly resolved artifacts.
+ */
+function mergeResolvedArtifacts(
+  job: JobDescriptor,
+  resolvedArtifacts: Record<string, unknown>,
+): JobDescriptor {
+  // If no artifacts were resolved, return job as-is
+  if (Object.keys(resolvedArtifacts).length === 0) {
+    return job;
+  }
+
+  const jobContext = job.context ?? {};
+
+  // Extract existing extras and resolvedInputs
+  const extras = isRecord(jobContext) && isRecord(jobContext.extras)
+    ? jobContext.extras
+    : {};
+
+  const existingResolvedInputs = isRecord(extras) && isRecord(extras.resolvedInputs)
+    ? extras.resolvedInputs
+    : {};
+
+  // Merge resolved artifacts with existing resolvedInputs
+  return {
+    ...job,
+    context: {
+      ...jobContext,
+      extras: {
+        ...extras,
+        resolvedInputs: {
+          ...existingResolvedInputs,
+          ...resolvedArtifacts,
+        },
+      },
+    },
+  };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
