@@ -1,0 +1,235 @@
+import type { HandlerFactory } from '../../types.js';
+import { createProducerHandlerFactory } from '../../sdk/handler-factory.js';
+import { createProviderError } from '../../sdk/errors.js';
+import {
+  createReplicateClientManager,
+  normalizeReplicateOutput,
+  buildArtefactsFromUrls,
+  mergeInputs,
+  isRecord,
+} from '../../sdk/replicate/index.js';
+
+interface ReplicateMusicConfig {
+  promptKey: string;
+  durationKey?: string;
+  durationMultiplier?: number;
+  maxDuration?: number;
+  defaults?: Record<string, unknown>;
+  outputMimeType: string;
+}
+
+export function createReplicateMusicHandler(): HandlerFactory {
+  return (init) => {
+    const { descriptor, secretResolver, logger } = init;
+    const clientManager = createReplicateClientManager(secretResolver, logger);
+
+    return createProducerHandlerFactory({
+      domain: 'media',
+      configValidator: parseReplicateMusicConfig,
+      warmStart: async () => {
+        try {
+          await clientManager.ensure();
+        } catch (error) {
+          logger?.error?.('providers.replicate.music.warmStart.error', {
+            provider: descriptor.provider,
+            model: descriptor.model,
+            error: error instanceof Error ? error.message : String(error),
+          });
+          throw error;
+        }
+      },
+      invoke: async ({ request, runtime }) => {
+        const replicate = await clientManager.ensure();
+        const config = runtime.config.parse<ReplicateMusicConfig>(parseReplicateMusicConfig);
+
+        const resolvedInputs = runtime.inputs.all();
+
+        // Resolve required MusicPrompt
+        const prompt = resolveMusicPrompt(resolvedInputs);
+        if (!prompt) {
+          throw createProviderError('No music prompt available for music generation.', {
+            code: 'missing_music_prompt',
+            kind: 'user_input',
+            causedByUser: true,
+          });
+        }
+
+        // Resolve required Duration
+        const duration = resolveDuration(resolvedInputs);
+        if (duration === undefined) {
+          throw createProviderError('No duration available for music generation.', {
+            code: 'missing_duration',
+            kind: 'user_input',
+            causedByUser: true,
+          });
+        }
+
+        // Build input by merging defaults with customAttributes
+        const providerConfig = request.context.providerConfig;
+        const customAttributes =
+          isRecord(providerConfig) && isRecord(providerConfig.customAttributes)
+            ? (providerConfig.customAttributes as Record<string, unknown>)
+            : undefined;
+        const input = mergeInputs(config.defaults ?? {}, customAttributes);
+
+        // Set required prompt
+        input[config.promptKey] = prompt;
+
+        // Map duration to model-specific field with capping
+        if (config.durationKey) {
+          const mappedDuration = capDuration(
+            duration,
+            config.durationMultiplier ?? 1,
+            config.maxDuration,
+          );
+          input[config.durationKey] = mappedDuration;
+        }
+
+        // Run Replicate prediction
+        let predictionOutput: unknown;
+        const modelIdentifier = request.model as
+          | `${string}/${string}`
+          | `${string}/${string}:${string}`;
+
+        logger?.info?.('providers.replicate.music.invoke.start', {
+          provider: descriptor.provider,
+          model: request.model,
+          jobId: request.jobId,
+          duration,
+          mappedDuration: input[config.durationKey ?? 'duration'],
+        });
+
+        try {
+          predictionOutput = await replicate.run(modelIdentifier, { input });
+        } catch (error) {
+          logger?.error?.('providers.replicate.music.invoke.error', {
+            provider: descriptor.provider,
+            model: request.model,
+            jobId: request.jobId,
+            error: error instanceof Error ? error.message : String(error),
+          });
+          throw createProviderError('Replicate music prediction failed.', {
+            code: 'replicate_prediction_failed',
+            kind: 'transient',
+            retryable: true,
+            raw: error,
+          });
+        }
+
+        // Normalize output and build artefacts
+        const outputUrls = normalizeReplicateOutput(predictionOutput);
+        const artefacts = await buildArtefactsFromUrls({
+          produces: request.produces,
+          urls: outputUrls,
+          mimeType: config.outputMimeType,
+        });
+
+        const status = artefacts.some((a) => a.status === 'failed') ? 'failed' : 'succeeded';
+
+        logger?.info?.('providers.replicate.music.invoke.end', {
+          provider: descriptor.provider,
+          model: request.model,
+          jobId: request.jobId,
+          status,
+          artefactCount: artefacts.length,
+        });
+
+        return {
+          status,
+          artefacts,
+          diagnostics: {
+            provider: 'replicate',
+            model: request.model,
+            input,
+            outputUrls,
+            duration,
+            mappedDuration: input[config.durationKey ?? 'duration'],
+            ...(outputUrls.length === 0 && { rawOutput: predictionOutput }),
+          },
+        };
+      },
+    })(init);
+  };
+}
+
+function parseReplicateMusicConfig(raw: unknown): ReplicateMusicConfig {
+  const source = isRecord(raw) ? raw : {};
+
+  // Merge defaults from multiple sources
+  const defaults: Record<string, unknown> = {
+    ...(isRecord(source.defaults) ? source.defaults : {}),
+    ...(isRecord(source.inputs) ? source.inputs : {}),
+  };
+
+  // Model-specific key with sensible default
+  const promptKey =
+    typeof source.promptKey === 'string' && source.promptKey ? source.promptKey : 'prompt';
+
+  // Model-specific duration configuration
+  // stability-ai/stable-audio-2.5 uses 'duration' in seconds (max 190)
+  // elevenlabs/music uses 'music_length_ms' in milliseconds (max 300000)
+  const durationKey =
+    typeof source.durationKey === 'string' && source.durationKey
+      ? source.durationKey
+      : 'duration';
+
+  const durationMultiplier =
+    typeof source.durationMultiplier === 'number' ? source.durationMultiplier : 1;
+
+  const maxDuration =
+    typeof source.maxDuration === 'number' ? source.maxDuration : undefined;
+
+  // Fixed output type for music
+  const outputMimeType = 'audio/mpeg';
+
+  return {
+    promptKey,
+    durationKey,
+    durationMultiplier,
+    maxDuration,
+    defaults,
+    outputMimeType,
+  };
+}
+
+function resolveMusicPrompt(resolvedInputs: Record<string, unknown>): string | undefined {
+  const promptInput = resolvedInputs['MusicPrompt'];
+
+  // Handle single string prompt (music is per-movie, not per-segment)
+  if (typeof promptInput === 'string' && promptInput.trim()) {
+    return promptInput;
+  }
+
+  return undefined;
+}
+
+function resolveDuration(resolvedInputs: Record<string, unknown>): number | undefined {
+  const durationInput = resolvedInputs['Duration'];
+
+  // Handle single number value (music is per-movie, not per-segment)
+  if (typeof durationInput === 'number' && durationInput > 0) {
+    return durationInput;
+  }
+
+  return undefined;
+}
+
+/**
+ * Apply duration multiplier and cap to model-specific maximum.
+ *
+ * @param duration Original duration from projectConfig (in seconds)
+ * @param multiplier Conversion factor (1 for seconds, 1000 for milliseconds)
+ * @param max Optional maximum duration in target units
+ * @returns Duration in target units, capped if max is specified
+ */
+function capDuration(
+  duration: number,
+  multiplier: number,
+  max: number | undefined,
+): number {
+  const converted = duration * multiplier;
+  if (max !== undefined) {
+    return Math.min(converted, max);
+  }
+  return converted;
+}

@@ -3,6 +3,7 @@ import { createOpenAiLlmHandler } from './producers/llm/openai.js';
 import { createReplicateTextToImageHandler } from './producers/image/replicate-text-to-image.js';
 import { createReplicateAudioHandler } from './producers/audio/replicate-audio.js';
 import { createReplicateVideoHandler } from './producers/video/replicate-video.js';
+import { createReplicateMusicHandler } from './producers/music/replicate-music.js';
 import type { ProviderImplementationRegistry } from './types.js';
 
 const wildcard = '*' as const;
@@ -118,5 +119,24 @@ export const providerImplementations: ProviderImplementationRegistry = [
     },
     mode: 'live',
     factory: createReplicateVideoHandler(),
+  },
+  // Replicate Music Models
+  {
+    match: {
+      provider: 'replicate',
+      model: 'stability-ai/stable-audio-2.5',
+      environment: wildcard,
+    },
+    mode: 'live',
+    factory: createReplicateMusicHandler(),
+  },
+  {
+    match: {
+      provider: 'replicate',
+      model: 'elevenlabs/music',
+      environment: wildcard,
+    },
+    mode: 'live',
+    factory: createReplicateMusicHandler(),
   },
 ];

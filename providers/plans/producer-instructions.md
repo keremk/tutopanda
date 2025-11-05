@@ -1,4 +1,4 @@
-Now we need to add the video producers. The models we are using are documented in @providers/docs/AI-SDKs/replicate.md document
+Now we need to add the music producers. The models we are using are documented in @providers/docs/AI-SDKs/replicate.md document
   along with the Replicate SDK and how to use the client. The custom_attributes that will be provided by default from the CLI to the
   provider API can be seen here: @cli/src/lib/provider-settings.ts. The provider documentations are
   @providers/docs/extensibility.md @providers/docs/provider-api.md and @providers/docs/provider-architecture.md. You should also

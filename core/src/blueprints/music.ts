@@ -1,11 +1,5 @@
 import type { BlueprintSection } from '../types.js';
-import {
-  artifactRef,
-  edge,
-  inputRef,
-  node,
-  producerRef,
-} from './helpers.js';
+import { artifactRef, edge, inputRef, node, producerRef } from './helpers.js';
 
 export const musicSection: BlueprintSection = {
   id: 'music',
@@ -18,6 +12,7 @@ export const musicSection: BlueprintSection = {
     node(artifactRef('MusicTrack'), 'single'),
   ],
   edges: [
+    edge(inputRef('Duration'), producerRef('TextToMusicProducer')),
     edge(producerRef('TextToMusicPromptProducer'), artifactRef('MusicPrompt')),
     edge(artifactRef('MusicPrompt'), producerRef('TextToMusicProducer')),
     edge(inputRef('MusicPromptInput'), producerRef('TextToMusicProducer')),
