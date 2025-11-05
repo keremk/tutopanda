@@ -43,6 +43,7 @@ export function createReplicateAudioHandler(): HandlerFactory {
         const resolvedInputs = runtime.inputs.all();
         const plannerContext = extractPlannerContext(request);
         const text = resolveText(resolvedInputs, plannerContext);
+        const voice = resolveVoice(resolvedInputs);
 
         if (!text) {
           throw createProviderError('No text available for audio generation.', {
@@ -59,6 +60,12 @@ export function createReplicateAudioHandler(): HandlerFactory {
 
         const input = mergeInputs(config.defaults ?? {}, customAttributes as Record<string, unknown> | undefined);
         input[config.textKey] = text;
+
+        // Map voice from input if provided (takes precedence over customAttributes)
+        if (voice) {
+          const voiceFieldName = getVoiceFieldName(request.model);
+          input[voiceFieldName] = voice;
+        }
 
         let predictionOutput: unknown;
         const modelIdentifier = request.model as `${string}/${string}` | `${string}/${string}:${string}`;
@@ -146,4 +153,29 @@ function resolveText(resolvedInputs: Record<string, unknown>, planner: PlannerCo
   }
 
   return undefined;
+}
+
+function resolveVoice(resolvedInputs: Record<string, unknown>): string | undefined {
+  const voiceInput = resolvedInputs['VoiceId'];
+
+  // Handle single string value (voice is uniform across segments)
+  if (typeof voiceInput === 'string' && voiceInput.trim()) {
+    return voiceInput;
+  }
+
+  return undefined;
+}
+
+/**
+ * Determine the voice parameter name based on the model.
+ * Different models use different parameter names:
+ * - minimax models: 'voice_id'
+ * - elevenlabs models: 'voice'
+ */
+function getVoiceFieldName(model: string): string {
+  if (model.includes('elevenlabs')) {
+    return 'voice';
+  }
+  // Default to minimax format
+  return 'voice_id';
 }

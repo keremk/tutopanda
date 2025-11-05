@@ -550,6 +550,262 @@ describe('createReplicateAudioHandler', () => {
     });
   });
 
+  describe('resolveVoice', () => {
+    it('maps VoiceId from resolvedInputs to voice_id for minimax models', async () => {
+      const handler = createReplicateAudioHandler()({
+        descriptor: {
+          provider: 'replicate',
+          model: 'minimax/speech-02-hd',
+          environment: 'local',
+        },
+        mode: 'live',
+        secretResolver,
+        logger: undefined,
+      });
+
+      const request: ProviderJobContext = {
+        jobId: 'test-job',
+        provider: 'replicate',
+        model: 'minimax/speech-02-hd',
+        revision: 'test-rev',
+        layerIndex: 0,
+        attempt: 1,
+        inputs: ['Input:SegmentNarration[segment=0]', 'Input:VoiceId'],
+        produces: ['Artifact:SegmentAudio[segment=0]'],
+        context: {
+          providerConfig: {},
+          rawAttachments: [],
+          environment: 'local',
+          observability: undefined,
+          extras: {
+            plannerContext: {
+              index: { segment: 0 },
+            },
+            resolvedInputs: {
+              SegmentNarration: ['Test narration'],
+              VoiceId: 'English_CaptivatingStoryteller',
+            },
+          },
+        },
+      };
+
+      const testData = new Uint8Array([1, 2, 3]);
+      (global.fetch as any).mockResolvedValue({
+        ok: true,
+        status: 200,
+        arrayBuffer: async () => testData.buffer,
+      });
+
+      const Replicate = (await import('replicate')).default;
+      const mockRun = vi.fn().mockResolvedValue('https://example.com/audio.mp3');
+      (Replicate as any).mockImplementation(() => ({
+        run: mockRun,
+      }));
+
+      await handler.warmStart?.({ logger: undefined });
+      const result = await handler.invoke(request);
+
+      expect(result.status).toBe('succeeded');
+      expect(mockRun).toHaveBeenCalledWith('minimax/speech-02-hd', {
+        input: expect.objectContaining({
+          text: 'Test narration',
+          voice_id: 'English_CaptivatingStoryteller',
+        }),
+      });
+    });
+
+    it('maps VoiceId from resolvedInputs to voice for elevenlabs models', async () => {
+      const handler = createReplicateAudioHandler()({
+        descriptor: {
+          provider: 'replicate',
+          model: 'elevenlabs/v3',
+          environment: 'local',
+        },
+        mode: 'live',
+        secretResolver,
+        logger: undefined,
+      });
+
+      const request: ProviderJobContext = {
+        jobId: 'test-job',
+        provider: 'replicate',
+        model: 'elevenlabs/v3',
+        revision: 'test-rev',
+        layerIndex: 0,
+        attempt: 1,
+        inputs: ['Input:SegmentNarration[segment=0]', 'Input:VoiceId'],
+        produces: ['Artifact:SegmentAudio[segment=0]'],
+        context: {
+          providerConfig: {
+            textKey: 'prompt',
+          },
+          rawAttachments: [],
+          environment: 'local',
+          observability: undefined,
+          extras: {
+            plannerContext: {
+              index: { segment: 0 },
+            },
+            resolvedInputs: {
+              SegmentNarration: ['Test narration'],
+              VoiceId: 'Grimblewood',
+            },
+          },
+        },
+      };
+
+      const testData = new Uint8Array([1, 2, 3]);
+      (global.fetch as any).mockResolvedValue({
+        ok: true,
+        status: 200,
+        arrayBuffer: async () => testData.buffer,
+      });
+
+      const Replicate = (await import('replicate')).default;
+      const mockRun = vi.fn().mockResolvedValue('https://example.com/audio.mp3');
+      (Replicate as any).mockImplementation(() => ({
+        run: mockRun,
+      }));
+
+      await handler.warmStart?.({ logger: undefined });
+      const result = await handler.invoke(request);
+
+      expect(result.status).toBe('succeeded');
+      expect(mockRun).toHaveBeenCalledWith('elevenlabs/v3', {
+        input: expect.objectContaining({
+          prompt: 'Test narration',
+          voice: 'Grimblewood',
+        }),
+      });
+    });
+
+    it('VoiceId from resolvedInputs takes precedence over customAttributes', async () => {
+      const handler = createReplicateAudioHandler()({
+        descriptor: {
+          provider: 'replicate',
+          model: 'minimax/speech-02-hd',
+          environment: 'local',
+        },
+        mode: 'live',
+        secretResolver,
+        logger: undefined,
+      });
+
+      const request: ProviderJobContext = {
+        jobId: 'test-job',
+        provider: 'replicate',
+        model: 'minimax/speech-02-hd',
+        revision: 'test-rev',
+        layerIndex: 0,
+        attempt: 1,
+        inputs: ['Input:SegmentNarration[segment=0]', 'Input:VoiceId'],
+        produces: ['Artifact:SegmentAudio[segment=0]'],
+        context: {
+          providerConfig: {
+            customAttributes: {
+              voice_id: 'OldVoice',
+            },
+          },
+          rawAttachments: [],
+          environment: 'local',
+          observability: undefined,
+          extras: {
+            plannerContext: {
+              index: { segment: 0 },
+            },
+            resolvedInputs: {
+              SegmentNarration: ['Test narration'],
+              VoiceId: 'NewVoice',
+            },
+          },
+        },
+      };
+
+      const testData = new Uint8Array([1, 2, 3]);
+      (global.fetch as any).mockResolvedValue({
+        ok: true,
+        status: 200,
+        arrayBuffer: async () => testData.buffer,
+      });
+
+      const Replicate = (await import('replicate')).default;
+      const mockRun = vi.fn().mockResolvedValue('https://example.com/audio.mp3');
+      (Replicate as any).mockImplementation(() => ({
+        run: mockRun,
+      }));
+
+      await handler.warmStart?.({ logger: undefined });
+      const result = await handler.invoke(request);
+
+      expect(result.status).toBe('succeeded');
+      expect(mockRun).toHaveBeenCalledWith('minimax/speech-02-hd', {
+        input: expect.objectContaining({
+          text: 'Test narration',
+          voice_id: 'NewVoice',
+        }),
+      });
+    });
+
+    it('does not add voice field when VoiceId is not provided', async () => {
+      const handler = createReplicateAudioHandler()({
+        descriptor: {
+          provider: 'replicate',
+          model: 'minimax/speech-02-hd',
+          environment: 'local',
+        },
+        mode: 'live',
+        secretResolver,
+        logger: undefined,
+      });
+
+      const request: ProviderJobContext = {
+        jobId: 'test-job',
+        provider: 'replicate',
+        model: 'minimax/speech-02-hd',
+        revision: 'test-rev',
+        layerIndex: 0,
+        attempt: 1,
+        inputs: ['Input:SegmentNarration[segment=0]'],
+        produces: ['Artifact:SegmentAudio[segment=0]'],
+        context: {
+          providerConfig: {},
+          rawAttachments: [],
+          environment: 'local',
+          observability: undefined,
+          extras: {
+            plannerContext: {
+              index: { segment: 0 },
+            },
+            resolvedInputs: {
+              SegmentNarration: ['Test narration'],
+            },
+          },
+        },
+      };
+
+      const testData = new Uint8Array([1, 2, 3]);
+      (global.fetch as any).mockResolvedValue({
+        ok: true,
+        status: 200,
+        arrayBuffer: async () => testData.buffer,
+      });
+
+      const Replicate = (await import('replicate')).default;
+      const mockRun = vi.fn().mockResolvedValue('https://example.com/audio.mp3');
+      (Replicate as any).mockImplementation(() => ({
+        run: mockRun,
+      }));
+
+      await handler.warmStart?.({ logger: undefined });
+      const result = await handler.invoke(request);
+
+      expect(result.status).toBe('succeeded');
+      const callArgs = mockRun.mock.calls[0]?.[1] as { input: Record<string, unknown> };
+      expect(callArgs.input).not.toHaveProperty('voice');
+      expect(callArgs.input).not.toHaveProperty('voice_id');
+    });
+  });
+
   describe('error handling', () => {
     it('throws error when Replicate prediction fails', async () => {
       const handler = createReplicateAudioHandler()({

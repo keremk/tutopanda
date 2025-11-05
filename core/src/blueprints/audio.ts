@@ -14,7 +14,6 @@ export const audioSection: BlueprintSection = {
   nodes: [
     node(inputRef('SegmentNarrationInput'), 'perSegment'),
     node(inputRef('VoiceId'), 'perSegment'),
-    node(inputRef('Emotion'), 'perSegment'),
     node(producerRef('AudioProducer'), 'perSegment'),
     node(artifactRef('SegmentAudio'), 'perSegment'),
   ],
@@ -23,9 +22,6 @@ export const audioSection: BlueprintSection = {
       dimensions: segmentDim,
     }),
     edge(inputRef('VoiceId'), producerRef('AudioProducer'), {
-      dimensions: segmentDim,
-    }),
-    edge(inputRef('Emotion'), producerRef('AudioProducer'), {
       dimensions: segmentDim,
     }),
     edge(producerRef('AudioProducer'), artifactRef('SegmentAudio'), {

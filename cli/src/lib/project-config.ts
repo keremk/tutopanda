@@ -86,6 +86,7 @@ export function deriveBlueprintAndInputs(
     ImageStyle: config.style === 'Custom' ? config.customStyle || config.style : config.style,
     ImagesPerSegment: 2,
     IsImageToVideo: config.isImageToVideo,
+    VoiceId: config.voice,
   };
 
   return { blueprint, inputValues: inputs, segmentCount };

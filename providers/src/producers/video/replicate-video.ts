@@ -89,6 +89,20 @@ export function createReplicateVideoHandler(): HandlerFactory {
           input[config.lastFrameKey] = toBufferIfNeeded(lastFrame);
         }
 
+        // Map size from input if provided (takes precedence over customAttributes)
+        const size = resolveSize(resolvedInputs);
+        if (size) {
+          const sizeFieldName = getSizeFieldName(request.model);
+          input[sizeFieldName] = size;
+        }
+
+        // Map aspect ratio from input if provided (takes precedence over customAttributes)
+        const aspectRatio = resolveAspectRatio(resolvedInputs);
+        if (aspectRatio) {
+          const aspectRatioFieldName = getAspectRatioFieldName(request.model);
+          input[aspectRatioFieldName] = aspectRatio;
+        }
+
         // Run Replicate prediction
         let predictionOutput: unknown;
         const modelIdentifier = request.model as
@@ -333,4 +347,44 @@ function toBufferIfNeeded(data: string | Uint8Array): string | Buffer {
   }
   // Convert Uint8Array to Buffer for Replicate SDK compatibility
   return Buffer.from(data);
+}
+
+function resolveSize(resolvedInputs: Record<string, unknown>): string | undefined {
+  const sizeInput = resolvedInputs['Size'];
+
+  // Handle single string value (size is uniform across segments)
+  if (typeof sizeInput === 'string' && sizeInput.trim()) {
+    return sizeInput;
+  }
+
+  return undefined;
+}
+
+function resolveAspectRatio(resolvedInputs: Record<string, unknown>): string | undefined {
+  const aspectRatioInput = resolvedInputs['AspectRatio'];
+
+  // Handle single string value (aspect ratio is uniform across segments)
+  if (typeof aspectRatioInput === 'string' && aspectRatioInput.trim()) {
+    return aspectRatioInput;
+  }
+
+  return undefined;
+}
+
+/**
+ * Determine the size parameter name based on the model.
+ * Currently all video models use 'resolution' for size.
+ */
+function getSizeFieldName(model: string): string {
+  // All current video models use 'resolution'
+  return 'resolution';
+}
+
+/**
+ * Determine the aspect ratio parameter name based on the model.
+ * Currently all video models use 'aspect_ratio'.
+ */
+function getAspectRatioFieldName(model: string): string {
+  // All current video models use 'aspect_ratio'
+  return 'aspect_ratio';
 }

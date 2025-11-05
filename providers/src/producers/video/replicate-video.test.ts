@@ -845,6 +845,291 @@ describe('replicate-video', () => {
     });
   });
 
+  describe('Size and AspectRatio resolution', () => {
+    it('maps Size from resolvedInputs to resolution field', async () => {
+      const handler = createReplicateVideoHandler()({
+        descriptor: {
+          provider: 'replicate',
+          model: 'bytedance/seedance-1-pro-fast',
+          environment: 'local',
+        },
+        mode: 'live',
+        secretResolver,
+        logger: undefined,
+      });
+
+      const request: ProviderJobContext = {
+        jobId: 'test-job-size',
+        provider: 'replicate',
+        model: 'bytedance/seedance-1-pro-fast',
+        revision: 'rev-test',
+        layerIndex: 0,
+        attempt: 1,
+        inputs: ['TextToVideoPrompt', 'Input:Size', 'Input:AspectRatio'],
+        produces: ['Artifact:SegmentVideo[0]'],
+        context: {
+          providerConfig: {},
+          extras: {
+            resolvedInputs: {
+              TextToVideoPrompt: 'Test video',
+              Size: '720p',
+              AspectRatio: '9:16',
+            },
+            plannerContext: { index: { segment: 0 } },
+          },
+        },
+      };
+
+      const Replicate = (await import('replicate')).default;
+      const mockRun = vi.fn().mockResolvedValue('https://example.com/video.mp4');
+      (Replicate as any).mockImplementation(() => ({ run: mockRun }));
+
+      (global.fetch as any).mockResolvedValue({
+        ok: true,
+        arrayBuffer: async () => new ArrayBuffer(1024),
+      });
+
+      await handler.warmStart?.({ logger: undefined });
+      const result = await handler.invoke(request);
+
+      expect(result.status).toBe('succeeded');
+      expect(mockRun).toHaveBeenCalledWith('bytedance/seedance-1-pro-fast', {
+        input: expect.objectContaining({
+          prompt: 'Test video',
+          resolution: '720p',
+          aspect_ratio: '9:16',
+        }),
+      });
+    });
+
+    it('Size and AspectRatio from resolvedInputs take precedence over customAttributes', async () => {
+      const handler = createReplicateVideoHandler()({
+        descriptor: {
+          provider: 'replicate',
+          model: 'google/veo-3.1-fast',
+          environment: 'local',
+        },
+        mode: 'live',
+        secretResolver,
+        logger: undefined,
+      });
+
+      const request: ProviderJobContext = {
+        jobId: 'test-job-precedence',
+        provider: 'replicate',
+        model: 'google/veo-3.1-fast',
+        revision: 'rev-test',
+        layerIndex: 0,
+        attempt: 1,
+        inputs: ['TextToVideoPrompt', 'Input:Size', 'Input:AspectRatio'],
+        produces: ['Artifact:SegmentVideo[0]'],
+        context: {
+          providerConfig: {
+            customAttributes: {
+              resolution: '480p',
+              aspect_ratio: '16:9',
+              duration: 8,
+            },
+          },
+          extras: {
+            resolvedInputs: {
+              TextToVideoPrompt: 'Test video',
+              Size: '1080p',
+              AspectRatio: '1:1',
+            },
+            plannerContext: { index: { segment: 0 } },
+          },
+        },
+      };
+
+      const Replicate = (await import('replicate')).default;
+      const mockRun = vi.fn().mockResolvedValue('https://example.com/video.mp4');
+      (Replicate as any).mockImplementation(() => ({ run: mockRun }));
+
+      (global.fetch as any).mockResolvedValue({
+        ok: true,
+        arrayBuffer: async () => new ArrayBuffer(1024),
+      });
+
+      await handler.warmStart?.({ logger: undefined });
+      const result = await handler.invoke(request);
+
+      expect(result.status).toBe('succeeded');
+      expect(mockRun).toHaveBeenCalledWith('google/veo-3.1-fast', {
+        input: expect.objectContaining({
+          prompt: 'Test video',
+          resolution: '1080p', // from resolvedInputs, overrides customAttributes
+          aspect_ratio: '1:1', // from resolvedInputs, overrides customAttributes
+          duration: 8, // from customAttributes (not overridden)
+        }),
+      });
+    });
+
+    it('does not add resolution/aspect_ratio fields when Size/AspectRatio are not provided', async () => {
+      const handler = createReplicateVideoHandler()({
+        descriptor: {
+          provider: 'replicate',
+          model: 'bytedance/seedance-1-pro-fast',
+          environment: 'local',
+        },
+        mode: 'live',
+        secretResolver,
+        logger: undefined,
+      });
+
+      const request: ProviderJobContext = {
+        jobId: 'test-job-no-size',
+        provider: 'replicate',
+        model: 'bytedance/seedance-1-pro-fast',
+        revision: 'rev-test',
+        layerIndex: 0,
+        attempt: 1,
+        inputs: ['TextToVideoPrompt'],
+        produces: ['Artifact:SegmentVideo[0]'],
+        context: {
+          providerConfig: {},
+          extras: {
+            resolvedInputs: {
+              TextToVideoPrompt: 'Test video',
+            },
+            plannerContext: { index: { segment: 0 } },
+          },
+        },
+      };
+
+      const Replicate = (await import('replicate')).default;
+      const mockRun = vi.fn().mockResolvedValue('https://example.com/video.mp4');
+      (Replicate as any).mockImplementation(() => ({ run: mockRun }));
+
+      (global.fetch as any).mockResolvedValue({
+        ok: true,
+        arrayBuffer: async () => new ArrayBuffer(1024),
+      });
+
+      await handler.warmStart?.({ logger: undefined });
+      const result = await handler.invoke(request);
+
+      expect(result.status).toBe('succeeded');
+      const callArgs = mockRun.mock.calls[0]?.[1] as { input: Record<string, unknown> };
+      // Should only have prompt, not resolution or aspect_ratio
+      expect(callArgs.input).toHaveProperty('prompt');
+      expect(callArgs.input).not.toHaveProperty('resolution');
+      expect(callArgs.input).not.toHaveProperty('aspect_ratio');
+    });
+
+    it('works with only Size provided (no AspectRatio)', async () => {
+      const handler = createReplicateVideoHandler()({
+        descriptor: {
+          provider: 'replicate',
+          model: 'bytedance/seedance-1-lite',
+          environment: 'local',
+        },
+        mode: 'live',
+        secretResolver,
+        logger: undefined,
+      });
+
+      const request: ProviderJobContext = {
+        jobId: 'test-job-size-only',
+        provider: 'replicate',
+        model: 'bytedance/seedance-1-lite',
+        revision: 'rev-test',
+        layerIndex: 0,
+        attempt: 1,
+        inputs: ['TextToVideoPrompt', 'Input:Size'],
+        produces: ['Artifact:SegmentVideo[0]'],
+        context: {
+          providerConfig: {},
+          extras: {
+            resolvedInputs: {
+              TextToVideoPrompt: 'Test video',
+              Size: '480p',
+            },
+            plannerContext: { index: { segment: 0 } },
+          },
+        },
+      };
+
+      const Replicate = (await import('replicate')).default;
+      const mockRun = vi.fn().mockResolvedValue('https://example.com/video.mp4');
+      (Replicate as any).mockImplementation(() => ({ run: mockRun }));
+
+      (global.fetch as any).mockResolvedValue({
+        ok: true,
+        arrayBuffer: async () => new ArrayBuffer(1024),
+      });
+
+      await handler.warmStart?.({ logger: undefined });
+      const result = await handler.invoke(request);
+
+      expect(result.status).toBe('succeeded');
+      expect(mockRun).toHaveBeenCalledWith('bytedance/seedance-1-lite', {
+        input: expect.objectContaining({
+          prompt: 'Test video',
+          resolution: '480p',
+        }),
+      });
+      const callArgs = mockRun.mock.calls[0]?.[1] as { input: Record<string, unknown> };
+      expect(callArgs.input).not.toHaveProperty('aspect_ratio');
+    });
+
+    it('works with only AspectRatio provided (no Size)', async () => {
+      const handler = createReplicateVideoHandler()({
+        descriptor: {
+          provider: 'replicate',
+          model: 'google/veo-3.1-fast',
+          environment: 'local',
+        },
+        mode: 'live',
+        secretResolver,
+        logger: undefined,
+      });
+
+      const request: ProviderJobContext = {
+        jobId: 'test-job-aspect-only',
+        provider: 'replicate',
+        model: 'google/veo-3.1-fast',
+        revision: 'rev-test',
+        layerIndex: 0,
+        attempt: 1,
+        inputs: ['TextToVideoPrompt', 'Input:AspectRatio'],
+        produces: ['Artifact:SegmentVideo[0]'],
+        context: {
+          providerConfig: {},
+          extras: {
+            resolvedInputs: {
+              TextToVideoPrompt: 'Test video',
+              AspectRatio: '21:9',
+            },
+            plannerContext: { index: { segment: 0 } },
+          },
+        },
+      };
+
+      const Replicate = (await import('replicate')).default;
+      const mockRun = vi.fn().mockResolvedValue('https://example.com/video.mp4');
+      (Replicate as any).mockImplementation(() => ({ run: mockRun }));
+
+      (global.fetch as any).mockResolvedValue({
+        ok: true,
+        arrayBuffer: async () => new ArrayBuffer(1024),
+      });
+
+      await handler.warmStart?.({ logger: undefined });
+      const result = await handler.invoke(request);
+
+      expect(result.status).toBe('succeeded');
+      expect(mockRun).toHaveBeenCalledWith('google/veo-3.1-fast', {
+        input: expect.objectContaining({
+          prompt: 'Test video',
+          aspect_ratio: '21:9',
+        }),
+      });
+      const callArgs = mockRun.mock.calls[0]?.[1] as { input: Record<string, unknown> };
+      expect(callArgs.input).not.toHaveProperty('resolution');
+    });
+  });
+
   describe('error handling', () => {
     it('throws error when Replicate API fails', async () => {
       const handler = createReplicateVideoHandler()({
