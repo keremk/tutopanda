@@ -25,8 +25,7 @@
 import { describe, expect, it } from 'vitest';
 import { createReplicateTextToImageHandler } from '../../src/producers/image/replicate-text-to-image.js';
 import type { ProviderJobContext } from '../../src/types.js';
-import { writeFileSync } from 'fs';
-import { join } from 'path';
+import { saveTestArtifact } from './test-utils.js';
 
 const describeIfToken = process.env.REPLICATE_API_TOKEN ? describe : describe.skip;
 const describeIfSeedream =
@@ -120,7 +119,7 @@ describeIfToken('Replicate text-to-image integration', () => {
     
     // Temporary: write artifact to disk for inspection
     if (artefact?.blob?.data) {
-      writeFileSync(join(__dirname, 'test-output-seedream.png'), artefact.blob.data);
+      saveTestArtifact('test-output-seedream.png', artefact.blob.data);
     }
     });
   });
@@ -206,7 +205,7 @@ describeIfToken('Replicate text-to-image integration', () => {
 
       // Temporary: write artifact to disk for inspection
       if (artefact?.blob?.data) {
-        writeFileSync(join(__dirname, 'test-output-nano-banana.png'), artefact.blob.data);
+        saveTestArtifact('test-output-nano-banana.png', artefact.blob.data);
       }
     }, 60000); // 1 minute timeout
   });
@@ -300,7 +299,7 @@ describeIfToken('Replicate text-to-image integration', () => {
 
       // Temporary: write artifact to disk for inspection
       if (artefact?.blob?.data) {
-        writeFileSync(join(__dirname, 'test-output-qwen.png'), artefact.blob.data);
+        saveTestArtifact('test-output-qwen.png', artefact.blob.data);
       }
     }, 60000); // 1 minute timeout
   });

@@ -24,8 +24,7 @@
 import { describe, expect, it } from 'vitest';
 import { createReplicateMusicHandler } from '../../src/producers/music/replicate-music.js';
 import type { ProviderJobContext } from '../../src/types.js';
-import { writeFileSync } from 'fs';
-import { join } from 'path';
+import { saveTestArtifact } from './test-utils.js';
 
 const describeIfToken = process.env.REPLICATE_API_TOKEN ? describe : describe.skip;
 const describeIfStableAudio =
@@ -117,10 +116,8 @@ describeIfToken('Replicate music integration', () => {
       });
 
       // Optional: Write to disk for manual verification
-      if (artefact?.blob?.data && process.env.WRITE_TEST_OUTPUTS) {
-        const outputPath = join(__dirname, 'test-stable-audio-output.mp3');
-        writeFileSync(outputPath, artefact.blob.data);
-        console.log(`Music written to ${outputPath}`);
+      if (artefact?.blob?.data) {
+        saveTestArtifact('test-stable-audio-output.mp3', artefact.blob.data);
       }
     }, 120000); // 2 minute timeout for music generation
   });
@@ -203,10 +200,8 @@ describeIfToken('Replicate music integration', () => {
       });
 
       // Optional: Write to disk for manual verification
-      if (artefact?.blob?.data && process.env.WRITE_TEST_OUTPUTS) {
-        const outputPath = join(__dirname, 'test-elevenlabs-music-output.mp3');
-        writeFileSync(outputPath, artefact.blob.data);
-        console.log(`Music written to ${outputPath}`);
+      if (artefact?.blob?.data) {
+        saveTestArtifact('test-elevenlabs-music-output.mp3', artefact.blob.data);
       }
     }, 120000); // 2 minute timeout for music generation
   });

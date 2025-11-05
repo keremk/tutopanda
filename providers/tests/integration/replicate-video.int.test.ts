@@ -26,10 +26,9 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { writeFileSync } from 'node:fs';
-import { join } from 'node:path';
 import type { ProviderJobContext } from '../../src/types.js';
 import { createReplicateVideoHandler } from '../../src/producers/video/replicate-video.js';
+import { saveTestArtifact } from './test-utils.js';
 
 /**
  * Helper to fetch an image URL and return it as Uint8Array.
@@ -128,9 +127,7 @@ describeIfToken('Replicate video integration', () => {
 
       // Optional: write to disk for manual inspection
       if (result.artefacts[0]?.blob?.data) {
-        const outputPath = join(__dirname, 'test-video-seedance-pro-fast-text.mp4');
-        writeFileSync(outputPath, result.artefacts[0].blob.data);
-        console.log(`Video written to: ${outputPath}`);
+        saveTestArtifact('test-video-seedance-pro-fast-text.mp4', result.artefacts[0].blob.data);
       }
     }, 300000); // 5 minute timeout for video generation
 
@@ -209,9 +206,7 @@ describeIfToken('Replicate video integration', () => {
 
       // Optional: write to disk for manual inspection
       if (result.artefacts[0]?.blob?.data) {
-        const outputPath = join(__dirname, 'test-video-seedance-pro-fast-image.mp4');
-        writeFileSync(outputPath, result.artefacts[0].blob.data);
-        console.log(`Video written to: ${outputPath}`);
+        saveTestArtifact('test-video-seedance-pro-fast-image.mp4', result.artefacts[0].blob.data);
       }
     }, 300000); // 5 minute timeout
   });
@@ -287,9 +282,7 @@ describeIfToken('Replicate video integration', () => {
 
       // Optional: write to disk for manual inspection
       if (result.artefacts[0]?.blob?.data) {
-        const outputPath = join(__dirname, 'test-video-seedance-lite.mp4');
-        writeFileSync(outputPath, result.artefacts[0].blob.data);
-        console.log(`Video written to: ${outputPath}`);
+        saveTestArtifact('test-video-seedance-lite.mp4', result.artefacts[0].blob.data);
       }
     }, 300000); // 5 minute timeout
   });
@@ -365,9 +358,7 @@ describeIfToken('Replicate video integration', () => {
 
       // Optional: write to disk for manual inspection
       if (result.artefacts[0]?.blob?.data) {
-        const outputPath = join(__dirname, 'test-video-veo-fast-text.mp4');
-        writeFileSync(outputPath, result.artefacts[0].blob.data);
-        console.log(`Video written to: ${outputPath}`);
+        saveTestArtifact('test-video-veo-fast-text.mp4', result.artefacts[0].blob.data);
       }
     }, 300000); // 5 minute timeout
 
@@ -439,9 +430,7 @@ describeIfToken('Replicate video integration', () => {
 
       // Optional: write to disk for manual inspection
       if (result.artefacts[0]?.blob?.data) {
-        const outputPath = join(__dirname, 'test-video-veo-fast-negative.mp4');
-        writeFileSync(outputPath, result.artefacts[0].blob.data);
-        console.log(`Video written to: ${outputPath}`);
+        saveTestArtifact('test-video-veo-fast-negative.mp4', result.artefacts[0].blob.data);
       }
     }, 300000); // 5 minute timeout
 
@@ -523,9 +512,7 @@ describeIfToken('Replicate video integration', () => {
 
       // Optional: write to disk for manual inspection
       if (result.artefacts[0]?.blob?.data) {
-        const outputPath = join(__dirname, 'test-video-veo-fast-interpolation.mp4');
-        writeFileSync(outputPath, result.artefacts[0].blob.data);
-        console.log(`Video written to: ${outputPath}`);
+        saveTestArtifact('test-video-veo-fast-interpolation.mp4', result.artefacts[0].blob.data);
       }
     }, 300000); // 5 minute timeout
   });

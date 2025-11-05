@@ -56,3 +56,6 @@ next-env.d.ts
 local-storage/
 
 **/test-output/
+
+# Integration test temporary files
+providers/tmp/

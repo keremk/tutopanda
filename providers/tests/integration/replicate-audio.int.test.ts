@@ -24,8 +24,7 @@
 import { describe, expect, it } from 'vitest';
 import { createReplicateAudioHandler } from '../../src/producers/audio/replicate-audio.js';
 import type { ProviderJobContext } from '../../src/types.js';
-import { writeFileSync } from 'fs';
-import { join } from 'path';
+import { saveTestArtifact } from './test-utils.js';
 
 const describeIfToken = process.env.REPLICATE_API_TOKEN ? describe : describe.skip;
 const describeIfMinimax =
@@ -113,7 +112,7 @@ describeIfToken('Replicate audio integration', () => {
 
     // Temporary: write artifact to disk for inspection
     if (artefact?.blob?.data) {
-      writeFileSync(join(__dirname, 'test-audio-output.mp3'), artefact.blob.data);
+      saveTestArtifact('test-audio-output.mp3', artefact.blob.data);
     }
     });
   });
@@ -194,7 +193,7 @@ describeIfToken('Replicate audio integration', () => {
 
     // Temporary: write artifact to disk for inspection
     if (artefact?.blob?.data) {
-      writeFileSync(join(__dirname, 'test-audio-output-elevenlabs.mp3'), artefact.blob.data);
+      saveTestArtifact('test-audio-output-elevenlabs.mp3', artefact.blob.data);
     }
     });
   });

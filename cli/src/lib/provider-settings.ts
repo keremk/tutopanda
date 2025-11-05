@@ -405,7 +405,7 @@ const DEFAULT_PRODUCERS: RawProducerSetting[] = [
         provider: 'replicate',
         model: 'stability-ai/stable-audio-2.5',
         customAttributes: {
-          duration: 180, // Duration should match the movie duration as long as it is less than max allowed (190s)
+          // duration: 180, // Duration should match the movie duration as long as it is less than max allowed (190s)
           steps: 8,
           cfg_scale: 1,
         },
@@ -415,7 +415,7 @@ const DEFAULT_PRODUCERS: RawProducerSetting[] = [
         provider: 'replicate',
         model: 'elevenlabs/music',
         customAttributes: {
-          music_length_ms: 30000, // Duration should match the movie duration as long as it is less than max allowed (300000ms)
+          // music_length_ms: 30000, Duration should match the movie duration as long as it is less than max allowed (300000ms)
           force_instrumental: false,
           output_format: 'mp3_standard',
         },
@@ -430,7 +430,7 @@ const DEFAULT_PRODUCERS: RawProducerSetting[] = [
         provider: 'replicate',
         model: 'minimax/speech-02-hd',
         customAttributes: {
-          voice_id: 'English_CaptivatingStoryteller',
+          // voice_id: 'English_CaptivatingStoryteller',
           speed: 1.0,
           pitch: 0,
           volume: 1,
@@ -447,7 +447,7 @@ const DEFAULT_PRODUCERS: RawProducerSetting[] = [
         provider: 'replicate',
         model: 'elevenlabs/v3',
         customAttributes: {
-          voice: 'Grimblewood',
+          // voice: 'Grimblewood',
           stability: 0.5,
           similarity_boost: 0.75,
           style: 0.0,
@@ -476,8 +476,8 @@ const DEFAULT_PRODUCERS: RawProducerSetting[] = [
         provider: 'replicate',
         model: 'bytedance/seedream-4',
         customAttributes: {
-          size: '1K', // Size is not custom so width & height is not specified
-          aspect_ratio: '16:9',
+          // size: '1K', // Size is not custom so width & height is not specified
+          // aspect_ratio: '16:9',
           sequential_image_generation: 'disabled',
           max_images: 1,
           enhance_prompt: true,
@@ -489,7 +489,7 @@ const DEFAULT_PRODUCERS: RawProducerSetting[] = [
         provider: 'replicate',
         model: 'google/nano-banana',
         customAttributes: {
-          aspect_ratio: '16:9',
+          // aspect_ratio: '16:9',
           output_format: 'png',
         },
       },
@@ -498,7 +498,7 @@ const DEFAULT_PRODUCERS: RawProducerSetting[] = [
         provider: 'replicate',
         model: 'qwen/qwen-image',
         customAttributes: {
-          aspect_ratio: '16:9',
+          // aspect_ratio: '16:9',
           output_format: 'png',
           image_size: 'optimize_for_quality',
           go_fast: true,
@@ -532,8 +532,8 @@ const DEFAULT_PRODUCERS: RawProducerSetting[] = [
         model: 'bytedance/seedance-1-pro-fast',
         customAttributes: {
           duration: 10,
-          resolution: '480p',
-          aspect_ratio: '16:9',
+          // resolution: '480p',
+          // aspect_ratio: '16:9',
           fps: 24,
           camera_fixed: false,
         },
@@ -544,8 +544,8 @@ const DEFAULT_PRODUCERS: RawProducerSetting[] = [
         model: 'bytedance/seedance-1-lite',
         customAttributes: {
           duration: 10,
-          resolution: '480p',
-          aspect_ratio: '16:9',
+          // resolution: '480p',
+          // aspect_ratio: '16:9',
           fps: 24,
           camera_fixed: false,
         },
@@ -571,8 +571,8 @@ const DEFAULT_PRODUCERS: RawProducerSetting[] = [
         provider: 'replicate',
         model: 'bytedance/seedream-4',
         customAttributes: {
-          size: '1K', // Size is not custom so width & height is not specified
-          aspect_ratio: '16:9',
+          // size: '1K', // Size is not custom so width & height is not specified
+          // aspect_ratio: '16:9',
           sequential_image_generation: 'disabled',
           max_images: 1,
           enhance_prompt: true,
@@ -589,8 +589,8 @@ const DEFAULT_PRODUCERS: RawProducerSetting[] = [
         model: 'bytedance/seedance-1-pro-fast',
         customAttributes: {
           duration: 10,
-          resolution: '480p',
-          aspect_ratio: '16:9',
+          // resolution: '480p',
+          // aspect_ratio: '16:9',
           fps: 24,
           camera_fixed: false,
         },
@@ -600,7 +600,7 @@ const DEFAULT_PRODUCERS: RawProducerSetting[] = [
         provider: 'replicate',
         model: 'google/veo-3.1-fast',
         customAttributes: {
-          aspect_ratio: '16:9',
+          // aspect_ratio: '16:9',
           duration: 8,
           resolution: '720p',
           generate_audio: false,
