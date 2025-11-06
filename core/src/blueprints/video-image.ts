@@ -12,6 +12,72 @@ import {
 export const videoFromImageSection: BlueprintSection = {
   id: 'video-image',
   label: 'Video From Image',
+
+  inputs: [
+    {
+      name: 'imageStyle',
+      ref: inputRef('ImageStyle'),
+      cardinality: 'single',
+      required: false,
+      description: 'Style for video generation',
+    },
+    {
+      name: 'startingImagePromptInput',
+      ref: inputRef('StartingImagePromptInput'),
+      cardinality: 'perSegment',
+      required: false,
+      description: 'Starting image prompts',
+    },
+    {
+      name: 'movieDirectionPromptInput',
+      ref: inputRef('MovieDirectionPromptInput'),
+      cardinality: 'perSegment',
+      required: false,
+      description: 'Movie direction prompts',
+    },
+    {
+      name: 'size',
+      ref: inputRef('Size'),
+      cardinality: 'single',
+      required: false,
+      description: 'Video size',
+    },
+    {
+      name: 'aspectRatio',
+      ref: inputRef('AspectRatio'),
+      cardinality: 'single',
+      required: false,
+      description: 'Video aspect ratio',
+    },
+  ],
+
+  outputs: [
+    {
+      name: 'segmentVideo',
+      ref: artifactRef('SegmentVideo'),
+      cardinality: 'perSegment',
+      required: true,
+      description: 'Generated video for each segment',
+      when: [imageVideoOnly],
+    },
+    {
+      name: 'imageToVideoPrompt',
+      ref: artifactRef('ImageToVideoPrompt'),
+      cardinality: 'perSegment',
+      required: false,
+      description: 'Generated image-to-video prompts',
+      when: [imageVideoOnly],
+    },
+    {
+      name: 'startImage',
+      ref: artifactRef('StartImage'),
+      cardinality: 'perSegment',
+      required: false,
+      description: 'Generated starting images',
+      when: [imageVideoOnly],
+    },
+  ],
+
   nodes: [
     node(inputRef('ImageStyle'), 'single'),
     node(inputRef('StartingImagePromptInput'), 'perSegment'),

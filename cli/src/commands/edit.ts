@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 import { readFile } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
 import { parseProjectConfig, type ProjectConfig } from 'tutopanda-core';
@@ -25,6 +26,10 @@ import {
   applyProviderShortcutOverrides,
 } from '../lib/provider-settings.js';
 import { expandPath } from '../lib/path.js';
+import { confirmPlanExecution } from '../lib/interactive-confirm.js';
+import { cleanupPlanFiles } from '../lib/plan-cleanup.js';
+
+const console = globalThis.console;
 
 export interface EditOptions {
   movieId: string;
@@ -39,6 +44,7 @@ export interface EditOptions {
   aspectRatio?: string;
   size?: string;
   dryRun?: boolean;
+  nonInteractive?: boolean;
 }
 
 export interface EditResult {
@@ -113,6 +119,25 @@ export async function runEdit(options: EditOptions): Promise<EditResult> {
     movieId: storageMovieId,
     isNew: false,
   });
+
+  // Interactive confirmation (skip if dry-run or non-interactive)
+  if (!options.dryRun && !options.nonInteractive) {
+    const confirmed = await confirmPlanExecution(planResult.plan);
+    if (!confirmed) {
+      await cleanupPlanFiles(movieDir);
+      console.log('\nExecution cancelled.');
+      console.log('Tip: Run with --dryrun to see what would happen without executing.');
+      return {
+        storageMovieId,
+        planPath: planResult.planPath,
+        targetRevision: planResult.targetRevision,
+        dryRun: undefined,
+        build: undefined,
+        manifestPath: undefined,
+        storagePath: movieDir,
+      };
+    }
+  }
 
   const dryRun = options.dryRun
     ? await executeDryRun({

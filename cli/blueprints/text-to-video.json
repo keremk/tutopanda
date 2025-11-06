@@ -1,0 +1,35 @@
+{
+  "name": "text-to-video",
+  "description": "Generate video directly from text prompts",
+  "version": "1.0",
+  "sections": [
+    "script",
+    "music",
+    "audio",
+    "videoFromText",
+    "assembly"
+  ],
+  "connections": [
+    {
+      "from": { "section": "script", "port": "narrationScript" },
+      "to": { "section": "audio", "port": "narrationScript" }
+    },
+    {
+      "from": { "section": "audio", "port": "segmentAudio" },
+      "to": { "section": "assembly", "port": "segmentAudio" }
+    },
+    {
+      "from": { "section": "videoFromText", "port": "segmentVideo" },
+      "to": { "section": "assembly", "port": "segmentVideo" }
+    },
+    {
+      "from": { "section": "music", "port": "musicTrack" },
+      "to": { "section": "assembly", "port": "musicTrack" }
+    }
+  ],
+  "autoConnect": false,
+  "blueprintConfig": {
+    "useVideo": true,
+    "isImageToVideo": false
+  }
+}

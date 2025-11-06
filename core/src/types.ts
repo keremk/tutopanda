@@ -124,11 +124,126 @@ export interface BlueprintEdge {
   note?: string;
 }
 
+/**
+ * Port declaration for a blueprint section.
+ * Represents a public input or output interface point.
+ */
+export interface SectionPort {
+  /** Human-readable port name (e.g., "segmentAudio") */
+  name: string;
+
+  /** The actual node ref this port represents */
+  ref: BlueprintNodeRef;
+
+  /** Cardinality of this port */
+  cardinality: CardinalityTag;
+
+  /** Is this port required to be connected? */
+  required: boolean;
+
+  /** Description of what this port represents */
+  description?: string;
+
+  /** Conditions under which this port is active */
+  when?: Condition[][];
+}
+
+/**
+ * Extended blueprint section with port-based interface.
+ * Backward compatible - ports are optional.
+ */
 export interface BlueprintSection {
   id: string;
   label: string;
   nodes: BlueprintNode[];
   edges: BlueprintEdge[];
+
+  /** Input ports (optional) */
+  inputs?: SectionPort[];
+
+  /** Output ports (optional) */
+  outputs?: SectionPort[];
+}
+
+/**
+ * Connection between two section ports.
+ */
+export interface SectionConnection {
+  from: {
+    section: string;  // Section ID
+    port: string;     // Output port name
+  };
+  to: {
+    section: string;  // Section ID
+    port: string;     // Input port name
+  };
+}
+
+export type ConditionalValue = boolean | boolean[];
+
+/**
+ * Configuration for blueprint expansion.
+ */
+export interface BlueprintExpansionConfig {
+  segmentCount: number;
+  imagesPerSegment: number;
+  useVideo: ConditionalValue;
+  isImageToVideo: ConditionalValue;
+}
+
+/**
+ * Custom blueprint configuration (user-facing).
+ */
+export interface CustomBlueprintConfig {
+  /** Blueprint name */
+  name: string;
+
+  /** Description of this blueprint */
+  description?: string;
+
+  /** Schema version for future compatibility */
+  version: string;
+
+  /** List of section IDs to include */
+  sections: string[];
+
+  /** Explicit port connections */
+  connections: SectionConnection[];
+
+  /** Blueprint expansion config (optional overrides) */
+  blueprintConfig?: Partial<BlueprintExpansionConfig>;
+
+  /** Whether to auto-connect compatible ports */
+  autoConnect?: boolean;
+}
+
+/**
+ * Result of composing a custom blueprint.
+ */
+export interface ComposedBlueprint {
+  blueprint: GraphBlueprint;
+  warnings: ValidationWarning[];
+}
+
+/**
+ * Validation warning (non-fatal).
+ */
+export interface ValidationWarning {
+  type: 'unused_output' | 'optional_input_missing' | 'auto_connected';
+  message: string;
+  section?: string;
+  port?: string;
+}
+
+/**
+ * Validation error (fatal).
+ */
+export interface ValidationError extends Error {
+  type: 'missing_section' | 'missing_port' | 'incompatible_cardinality' |
+        'incompatible_kind' | 'required_input_missing' | 'circular_dependency';
+  section?: string;
+  port?: string;
+  details?: Record<string, unknown>;
 }
 
 export interface GraphBlueprint {

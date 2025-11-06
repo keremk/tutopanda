@@ -2,22 +2,18 @@ import type {
   BlueprintEdge,
   BlueprintNode,
   BlueprintNodeRef,
+  BlueprintExpansionConfig,
   CardinalityDimension,
   CardinalityTag,
   Condition,
   ConditionKey,
+  ConditionalValue,
   GraphBlueprint,
 } from './types.js';
 import { generationBlueprint } from './blueprints/index.js';
 
-type ConditionalValue = boolean | boolean[];
-
-export interface BlueprintExpansionConfig {
-  segmentCount: number;
-  imagesPerSegment: number;
-  useVideo: ConditionalValue;
-  isImageToVideo: ConditionalValue;
-}
+// Re-export for backward compatibility
+export type { BlueprintExpansionConfig };
 
 export type NodeInstanceIndex = Partial<Record<CardinalityDimension, number>>;
 

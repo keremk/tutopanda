@@ -33,6 +33,9 @@ importers:
 
   cli:
     dependencies:
+      dotenv:
+        specifier: ^17.2.3
+        version: 17.2.3
       ink:
         specifier: ^4.1.0
         version: 4.4.1(@types/react@18.3.24)(bufferutil@4.0.9)(react@18.3.1)

@@ -1,0 +1,19 @@
+{
+  "name": "audio-only",
+  "description": "Generate audio narration without video",
+  "version": "1.0",
+  "sections": [
+    "script",
+    "audio"
+  ],
+  "connections": [
+    {
+      "from": { "section": "script", "port": "narrationScript" },
+      "to": { "section": "audio", "port": "narrationScript" }
+    }
+  ],
+  "autoConnect": false,
+  "blueprintConfig": {
+    "useVideo": false
+  }
+}

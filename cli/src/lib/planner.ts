@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 import { mkdir, writeFile } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
 import {
@@ -7,6 +8,8 @@ import {
   ManifestNotFoundError,
   createEventLog,
   createProducerGraphFromConfig,
+  createProducerGraph,
+  expandBlueprint,
   createPlanner,
   planStore,
   hashPayload,
@@ -27,6 +30,9 @@ import {
   type ProviderOptionsMap,
 } from './provider-settings.js';
 import { writePromptFile } from './prompts.js';
+import { loadCustomBlueprint } from './custom-blueprint.js';
+
+const console = globalThis.console;
 
 export interface GeneratePlanOptions {
   cliConfig: CliConfig;
@@ -35,6 +41,7 @@ export interface GeneratePlanOptions {
   prompt: string;
   movieId: string; // storage movie id (e.g., movie-q123)
   isNew: boolean;
+  usingBlueprint?: string; // Path to custom blueprint JSON file
 }
 
 export interface GeneratePlanResult {
@@ -89,11 +96,22 @@ export async function generatePlan(options: GeneratePlanOptions): Promise<Genera
 
   const catalog = buildProducerCatalog(providerOptions);
 
+  // Use custom blueprint if provided, otherwise use default
+  let producerGraph;
+  if (options.usingBlueprint) {
+    const customBlueprint = await loadCustomBlueprint(options.usingBlueprint);
+    const expanded = expandBlueprint(blueprint, customBlueprint);
+    producerGraph = createProducerGraph(expanded, catalog);
+    console.log(`Using custom blueprint from: ${options.usingBlueprint}`);
+  } else {
+    producerGraph = createProducerGraphFromConfig(blueprint, catalog);
+  }
+
   const plan = await planner.computePlan({
     movieId,
     manifest,
     eventLog,
-    blueprint: createProducerGraphFromConfig(blueprint, catalog),
+    blueprint: producerGraph,
     targetRevision,
     pendingEdits: pendingEvents,
   });

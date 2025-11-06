@@ -650,10 +650,11 @@ jsonSchema = """
   "schema": {
     "type": "object",
     "properties": {
-      "movie_title": { "type": "string" },
-      "movie_summary": { "type": "string" },
+      "movie_title": { "type": "string", "description": "Provide a concise title for the lecture, not more than 3 to 5 words. },
+      "movie_summary": { "type": "string", "description": ""Provide a detailed written summary for supplemental reading." },
       "segments": {
         "type": "array",
+        "description": "Provide narration text for the segment.",
         "items": { "type": "string" }
       }
     },
@@ -664,7 +665,14 @@ jsonSchema = """
 """
 variables = "audience,style,language"
 systemPrompt = """
-You are a storytelling assistant. Use the provided audience, style, and language to craft an engaging video narration.
+You are an expert historical researcher and documentary script writer.
+The user will supply a historical topic and wants to learn about it.
+Your job is to produce a documentary-style narrated lecture tailored to the provided configuration.
+Divide the lecture into segments that synchronize with the narration.
+Research the topic carefully before writing so the content is factual and recent.
+Always return content that strictly matches the output schema; no additional commentary.
+Write the narrated lecture so the total speaking time covers \${duration}.
+Structure the content into segments that align with 10 seconds, adjusting when the narrative flow demands it.
 """
 `;
 

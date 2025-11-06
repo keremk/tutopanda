@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 import { resolve as resolvePath } from 'node:path';
 import {
   createEventLog,
@@ -23,6 +24,8 @@ import {
 import type { CliConfig } from './cli-config.js';
 import type { ProviderOptionsMap, LoadedProviderOption } from './provider-settings.js';
 
+const console = globalThis.console;
+
 export interface ExecuteBuildOptions {
   cliConfig: CliConfig;
   movieId: string;
@@ -32,7 +35,7 @@ export interface ExecuteBuildOptions {
   providerOptions: ProviderOptionsMap;
   resolvedInputs: Record<string, unknown>;
   logger?: {
-    info?(message: string): void;
+    info?(message?: string): void;
   };
 }
 
@@ -67,7 +70,7 @@ export async function executeBuild(options: ExecuteBuildOptions): Promise<Execut
 
   const eventLog = createEventLog(storage);
   const manifestService = createManifestService(storage);
-  const registry = createProviderRegistry({ mode: 'mock' });
+  const registry = createProviderRegistry({ mode: 'live' });
   const preResolved = prepareProviderHandlers(registry, options.plan, options.providerOptions);
   await registry.warmStart?.(preResolved);
   const produce = createProviderProduce(
@@ -142,7 +145,7 @@ export function createProviderProduce(
   providerOptions: ProviderOptionsMap,
   resolvedInputs: Record<string, unknown>,
   preResolved: ResolvedProviderHandler[] = [],
-  logger: { info?(message: string): void } = {},
+  logger: { info?(message?: string): void } = {},
 ): ProduceFn {
   const handlerCache = new Map<string, ProducerHandler>();
 
@@ -191,17 +194,26 @@ export function createProviderProduce(
       `provider.invoke.start ${providerOption.provider}/${providerOption.model} [${providerOption.environment}] -> ${request.job.produces.join(', ')}`,
     );
 
-    const response = await handler.invoke({
-      jobId: request.job.jobId,
-      provider: providerOption.provider,
-      model: providerOption.model,
-      revision: request.revision,
-      layerIndex: request.layerIndex,
-      attempt: request.attempt,
-      inputs: request.job.inputs,
-      produces: request.job.produces,
-      context,
-    });
+    let response;
+    try {
+      response = await handler.invoke({
+        jobId: request.job.jobId,
+        provider: providerOption.provider,
+        model: providerOption.model,
+        revision: request.revision,
+        layerIndex: request.layerIndex,
+        attempt: request.attempt,
+        inputs: request.job.inputs,
+        produces: request.job.produces,
+        context,
+      });
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error(
+        `ERROR: provider.invoke.failed ${providerOption.provider}/${providerOption.model} [${providerOption.environment}]: ${errorMessage}`,
+      );
+      throw error;
+    }
 
     logger.info?.(
       `provider.invoke.end ${providerOption.provider}/${providerOption.model} [${providerOption.environment}]`,

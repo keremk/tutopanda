@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 import {
   createEventLog,
   createManifestService,
@@ -12,6 +13,8 @@ import {
 import { createProviderRegistry } from 'tutopanda-providers';
 import { createProviderProduce, prepareProviderHandlers } from './build.js';
 import type { ProviderOptionsMap } from './provider-settings.js';
+
+const console = globalThis.console;
 
 export interface DryRunStatusCounts {
   succeeded: number;

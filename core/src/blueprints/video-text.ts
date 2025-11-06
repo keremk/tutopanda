@@ -12,6 +12,57 @@ import {
 export const videoFromTextSection: BlueprintSection = {
   id: 'video-text',
   label: 'Video From Text',
+
+  inputs: [
+    {
+      name: 'imageStyle',
+      ref: inputRef('ImageStyle'),
+      cardinality: 'single',
+      required: false,
+      description: 'Style for video generation',
+    },
+    {
+      name: 'movieDirectionPromptInput',
+      ref: inputRef('MovieDirectionPromptInput'),
+      cardinality: 'perSegment',
+      required: false,
+      description: 'Movie direction prompts',
+    },
+    {
+      name: 'size',
+      ref: inputRef('Size'),
+      cardinality: 'single',
+      required: false,
+      description: 'Video size',
+    },
+    {
+      name: 'aspectRatio',
+      ref: inputRef('AspectRatio'),
+      cardinality: 'single',
+      required: false,
+      description: 'Video aspect ratio',
+    },
+  ],
+
+  outputs: [
+    {
+      name: 'segmentVideo',
+      ref: artifactRef('SegmentVideo'),
+      cardinality: 'perSegment',
+      required: true,
+      description: 'Generated video for each segment',
+      when: [textVideoOnly],
+    },
+    {
+      name: 'textToVideoPrompt',
+      ref: artifactRef('TextToVideoPrompt'),
+      cardinality: 'perSegment',
+      required: false,
+      description: 'Generated text-to-video prompts',
+      when: [textVideoOnly],
+    },
+  ],
+
   nodes: [
     node(inputRef('ImageStyle'), 'single'),
     node(inputRef('MovieDirectionPromptInput'), 'perSegment'),
