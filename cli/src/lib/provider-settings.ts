@@ -640,30 +640,27 @@ async function writeDefaultConfigFiles(settingsDir: string): Promise<void> {
 }
 
 const DEFAULT_SCRIPT_PROMPT = `# Script Producer Configuration
-[system_prompt]
+[prompt_settings]
 textFormat = "json_schema"
 jsonSchema = """
 {
-  "name": "script_generation",
-  "strict": true,
-  "reasoning": "low",
   "schema": {
     "type": "object",
     "properties": {
-      "movie_title": { "type": "string", "description": "Provide a concise title for the lecture, not more than 3 to 5 words. },
-      "movie_summary": { "type": "string", "description": ""Provide a detailed written summary for supplemental reading." },
-      "segments": {
+      "movieTitle": { "type": "string", "description": "Provide a concise title for the lecture, not more than 3 to 5 words. },
+      "movieSummary": { "type": "string", "description": ""Provide a detailed written summary for supplemental reading." },
+      "narrationScript": {
         "type": "array",
         "description": "Provide narration text for the segment.",
         "items": { "type": "string" }
       }
     },
-    "required": ["movie_title", "movie_summary", "segments"],
+    "required": ["movieTitle", "movieSummary", "narrationScript"],
     "additionalProperties": false
   }
 }
 """
-variables = "audience,style,language"
+variables = ["Audience","Duration","Language","InquiryPrompt"]
 systemPrompt = """
 You are an expert historical researcher and documentary script writer.
 The user will supply a historical topic and wants to learn about it.
@@ -671,8 +668,13 @@ Your job is to produce a documentary-style narrated lecture tailored to the prov
 Divide the lecture into segments that synchronize with the narration.
 Research the topic carefully before writing so the content is factual and recent.
 Always return content that strictly matches the output schema; no additional commentary.
-Write the narrated lecture so the total speaking time covers \${duration}.
+"""
+userPrompt = """
+Write the narrated lecture so the total speaking time covers {{Duration}}.
 Structure the content into segments that align with 10 seconds, adjusting when the narrative flow demands it.
+Deliver the narration in {{Language}}, keeping terminology accurate for that language and avoiding stage directions.
+Topic:
+{{InquiryPrompt}}
 """
 `;
 
@@ -705,23 +707,35 @@ const DEFAULT_IMAGE_TO_VIDEO_PROMPT = `# Image to Video Prompt Configuration
 textFormat = "json_schema"
 jsonSchema = """
 {
-  "name": "segment_image_movie_description",
-  "strict": true,
-  "reasoning": "low",
   "schema": {
     "type": "object",
     "properties": {
-      "segment_start_image": { "type": "string" },
-      "movie_directions": { "type": "string" }
+      "startImagePrompt": { "type": "string", "description": "Prompt describing the starting image for the video segment as determined from the narrative." },
+      "movieDirections": { "type": "string", "description": "Prompt describing the movie generator's directions, including camera moves, style, and cut-scene descriptions." }
     },
-    "required": ["segment_start_image", "movie_directions"],
+    "required": ["startImagePrompt", "movieDirections"],
     "additionalProperties": false
   }
 }
 """
-variables = "foo,bar"
-tools = "WebSearch"
+variables = []
 systemPrompt = """
-You are an expert in {foo}. You should generate {bar}.
+You are a well-renowned documentary filmmaker. You will be given a narrative for a short 10 second segment in the documentary, as well as the summary of the overall documentary. Your task is to generate:
+- An image prompt for the first scene of 10s segment. This image prompts will be used to generate those images and then the image will be fed into a movie generator to generate a movie clip that starts with that image.
+- A prompt for the movie generator to help set the mood, camera movements and the cut scenes for the overall 10 second movie. Make sure the cut scenes are separated with [cut] markers. (See example)
+
+# Important Instructions:
+- Do not include music or SFX instructions, just video
+- Do not include any text generation instructions. No text allowed in the image or movie.
+- Ensure that instructions are appropriate for the time period. Example: "city skyline" is not appropriate instruction for 18th century Paris.
+
+# Movie prompt example:
+Mood: Energetic, inspiring, and kid-friendly—symbolic action without violence. Colorful, pastel, hand-painted anime look with soft outlines and lively fabric/flag motion.
+[cut] Slow dolly-in from a mid shot to a low-angle view of the Bastille. Flags and ribbons flutter in the breeze; sunbeams and dust motes drift. Subtle drumroll builds.
+[cut] Quick close-ups—hands passing a rope; a glinting key; a wooden latch clicking; a barrel labeled "Poudre" (gunpowder) in a safe, symbolic way. Rhythm matches snare taps.
+[cut] Return to the crowd: they surge forward with hopeful cheers. Doves take off past camera. A parchment ribbon appears briefly with hand-lettered "Change is coming!" as the drumroll resolves into bright strings.
+"""
+userPrompt = """
+
 """
 `;

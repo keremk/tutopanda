@@ -1,0 +1,159 @@
+import {
+  generateObject,
+  generateText,
+  jsonSchema,
+  type CallSettings,
+  type JSONSchema7,
+  type JSONValue,
+} from 'ai';
+import type { OpenAiResponseFormat, OpenAiLlmConfig } from './config.js';
+import { normalizeJsonSchema } from './config.js';
+import type { RenderedPrompts } from './prompts.js';
+
+type JsonObject = Record<string, unknown>;
+
+export interface GenerationOptions {
+  model: ReturnType<ReturnType<typeof import('@ai-sdk/openai').createOpenAI>>;
+  prompts: RenderedPrompts;
+  responseFormat: OpenAiResponseFormat;
+  config: OpenAiLlmConfig;
+}
+
+export interface GenerationResult {
+  data: JsonObject | string;
+  usage?: Record<string, unknown>;
+  warnings?: unknown[];
+  response?: Record<string, unknown>;
+}
+
+/**
+ * Calls OpenAI via AI SDK with either structured (JSON) or text output.
+ */
+export async function callOpenAi(options: GenerationOptions): Promise<GenerationResult> {
+  const { model, prompts, responseFormat, config } = options;
+
+  // Build prompt string (required by AI SDK)
+  const prompt = prompts.user?.trim() || prompts.system?.trim() || ' ';
+
+  // Build call settings
+  const callSettings: CallSettings = {
+    temperature: config.temperature,
+    maxOutputTokens: config.maxOutputTokens,
+    presencePenalty: config.presencePenalty,
+    frequencyPenalty: config.frequencyPenalty,
+  };
+
+  // Build provider-specific options
+  const openAiOptions: Record<string, JSONValue> = {};
+  if (responseFormat.type === 'json_schema') {
+    openAiOptions.strictJsonSchema = true;
+  }
+  if (config.reasoning) {
+    openAiOptions.reasoningEffort = config.reasoning;
+  }
+
+  const providerOptions =
+    Object.keys(openAiOptions).length > 0 ? { openai: openAiOptions } : undefined;
+
+  const baseCallOptions = {
+    ...callSettings,
+    ...(providerOptions ? { providerOptions } : {}),
+  } as CallSettings & { providerOptions?: Record<string, Record<string, JSONValue>> };
+
+  // Call OpenAI based on response format
+  if (responseFormat.type === 'json_schema') {
+    return await generateStructuredOutput({
+      model,
+      prompt,
+      system: prompts.system,
+      responseFormat,
+      baseCallOptions,
+    });
+  } else {
+    return await generatePlainText({
+      model,
+      prompt,
+      system: prompts.system,
+      baseCallOptions,
+    });
+  }
+}
+
+interface StructuredOutputOptions {
+  model: ReturnType<ReturnType<typeof import('@ai-sdk/openai').createOpenAI>>;
+  prompt: string;
+  system?: string;
+  responseFormat: OpenAiResponseFormat;
+  baseCallOptions: CallSettings & { providerOptions?: Record<string, Record<string, JSONValue>> };
+}
+
+async function generateStructuredOutput(options: StructuredOutputOptions): Promise<GenerationResult> {
+  const { model, prompt, system, responseFormat, baseCallOptions } = options;
+
+  if (!responseFormat.schema) {
+    throw new Error('Schema is required for json_schema response format.');
+  }
+
+  const normalizedSchema = normalizeJsonSchema(responseFormat.schema as JSONSchema7, {
+    title: responseFormat.name,
+    description: responseFormat.description,
+  });
+
+  const schema = jsonSchema(normalizedSchema);
+
+  const generation = await generateObject({
+    ...baseCallOptions,
+    model,
+    prompt,
+    system,
+    schema,
+    schemaName: responseFormat.name,
+    schemaDescription: responseFormat.description,
+    mode: 'json',
+  });
+
+  return {
+    data: generation.object as JsonObject,
+    usage: generation.usage as Record<string, unknown> | undefined,
+    warnings: generation.warnings,
+    response: generation.response as Record<string, unknown> | undefined,
+  };
+}
+
+interface PlainTextOptions {
+  model: ReturnType<ReturnType<typeof import('@ai-sdk/openai').createOpenAI>>;
+  prompt: string;
+  system?: string;
+  baseCallOptions: CallSettings & { providerOptions?: Record<string, Record<string, JSONValue>> };
+}
+
+async function generatePlainText(options: PlainTextOptions): Promise<GenerationResult> {
+  const { model, prompt, system, baseCallOptions } = options;
+
+  const generation = await generateText({
+    ...baseCallOptions,
+    model,
+    prompt,
+    system,
+  });
+
+  return {
+    data: generation.text,
+    usage: generation.usage as Record<string, unknown> | undefined,
+    warnings: generation.warnings,
+    response: generation.response as Record<string, unknown> | undefined,
+  };
+}
+
+/**
+ * Sanitizes response metadata for diagnostics.
+ */
+export function sanitizeResponseMetadata(metadata: unknown): Record<string, unknown> | undefined {
+  if (!metadata || typeof metadata !== 'object') return undefined;
+  const response = metadata as Record<string, unknown>;
+  return {
+    id: response.id,
+    model: response.model,
+    createdAt: response.createdAt ?? response.created_at,
+  };
+}
