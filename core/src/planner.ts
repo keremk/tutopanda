@@ -4,12 +4,13 @@ import type {
   PlannedNodeInstance,
 } from './blueprints.js';
 import type { EventLog } from './event-log.js';
-import { hashPayload } from './hashing.js';
+import { hashArtefactOutput, hashPayload } from './hashing.js';
 import {
   type Clock,
   type ExecutionPlan,
   type InputEvent,
   type Manifest,
+  type ArtefactEvent,
   type ProducerCatalog,
   type ProducerGraph,
   type ProducerGraphEdge,
@@ -43,9 +44,11 @@ interface ComputePlanArgs {
 interface GraphMetadata {
   node: ProducerGraphNode;
   inputBases: Set<string>;
+  artefactInputs: Set<string>;
 }
 
 type InputsMap = Map<string, InputEvent>;
+type ArtefactMap = Map<string, ArtefactEvent>;
 
 export function createPlanner(options: PlannerOptions = {}) {
   const logger = options.logger ?? {};
@@ -61,9 +64,16 @@ export function createPlanner(options: PlannerOptions = {}) {
       const latestInputs = await readLatestInputs(eventLog, args.movieId);
       const combinedInputs = mergeInputs(latestInputs, pendingEdits);
       const dirtyInputs = determineDirtyInputs(manifest, combinedInputs);
+      const latestArtefacts = await readLatestArtefacts(eventLog, args.movieId);
+      const dirtyArtefacts = determineDirtyArtefacts(manifest, latestArtefacts);
 
       const metadata = buildGraphMetadata(blueprint);
-      const initialDirty = determineInitialDirtyJobs(manifest, metadata, dirtyInputs);
+      const initialDirty = determineInitialDirtyJobs(
+        manifest,
+        metadata,
+        dirtyInputs,
+        dirtyArtefacts,
+      );
       const dirtyJobs = propagateDirtyJobs(initialDirty, blueprint);
       const layers = buildExecutionLayers(dirtyJobs, metadata, blueprint);
 
@@ -145,6 +155,7 @@ export function createProducerGraph(
 function buildGraphMetadata(blueprint: ProducerGraph): Map<string, GraphMetadata> {
   const metadata = new Map<string, GraphMetadata>();
   for (const node of blueprint.nodes) {
+    const artefactInputs = node.inputs.filter((input) => input.startsWith('Artifact:'));
     metadata.set(node.jobId, {
       node,
       inputBases: new Set(
@@ -152,6 +163,7 @@ function buildGraphMetadata(blueprint: ProducerGraph): Map<string, GraphMetadata
           .map(extractInputBaseId)
           .filter((value): value is string => value !== null),
       ),
+      artefactInputs: new Set(artefactInputs),
     });
   }
   return metadata;
@@ -169,6 +181,7 @@ function determineInitialDirtyJobs(
   manifest: Manifest,
   metadata: Map<string, GraphMetadata>,
   dirtyInputs: Set<string>,
+  dirtyArtefacts: Set<string>,
 ): Set<string> {
   const dirtyJobs = new Set<string>();
   const isInitial = Object.keys(manifest.inputs).length === 0;
@@ -181,7 +194,10 @@ function determineInitialDirtyJobs(
     const touchesDirtyInput = Array.from(info.inputBases).some((id) =>
       dirtyInputs.has(id),
     );
-    if (touchesDirtyInput) {
+    const touchesDirtyArtefact = Array.from(info.artefactInputs).some((artefactId) =>
+      dirtyArtefacts.has(artefactId),
+    );
+    if (touchesDirtyInput || touchesDirtyArtefact) {
       dirtyJobs.add(jobId);
     }
   }
@@ -330,6 +346,42 @@ function determineDirtyInputs(manifest: Manifest, inputs: InputsMap): Set<string
     }
   }
   return dirty;
+}
+
+async function readLatestArtefacts(eventLog: EventLog, movieId: string): Promise<ArtefactMap> {
+  const artefacts = new Map<string, ArtefactEvent>();
+  for await (const event of eventLog.streamArtefacts(movieId)) {
+    if (event.status !== 'succeeded') {
+      continue;
+    }
+    artefacts.set(event.artefactId, event);
+  }
+  return artefacts;
+}
+
+function determineDirtyArtefacts(manifest: Manifest, artefacts: ArtefactMap): Set<string> {
+  const dirty = new Set<string>();
+  for (const [id, event] of artefacts) {
+    const manifestEntry = manifest.artefacts[id];
+    const eventHash = deriveArtefactHash(event);
+    if (!manifestEntry || manifestEntry.hash !== eventHash) {
+      dirty.add(id);
+    }
+  }
+  return dirty;
+}
+
+function deriveArtefactHash(event: ArtefactEvent): string {
+  if (event.output.blob?.hash) {
+    return event.output.blob.hash;
+  }
+  if (event.output.inline !== undefined) {
+    return hashArtefactOutput({ inline: event.output.inline });
+  }
+  return hashPayload({
+    artefactId: event.artefactId,
+    revision: event.revision,
+  }).hash;
 }
 
 function manifestBaseHash(manifest: Manifest): string {

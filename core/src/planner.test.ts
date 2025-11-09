@@ -3,7 +3,7 @@ import { createPlanner, createProducerGraph } from './planner.js';
 import { createEventLog } from './event-log.js';
 import { createStorageContext, initializeMovieStorage } from './storage.js';
 import { createManifestService, ManifestNotFoundError } from './manifest.js';
-import { hashPayload } from './hashing.js';
+import { hashArtefactOutput, hashPayload } from './hashing.js';
 import { nextRevisionId } from './revisions.js';
 import type {
   InputEvent,
@@ -323,6 +323,74 @@ describe('planner', () => {
     const jobs = plan.layers.flat();
     expect(jobs.some((job) => job.jobId.includes('Producer:ScriptProducer'))).toBe(true);
     expect(jobs.some((job) => job.jobId.includes('Producer:TimelineAssembler'))).toBe(true);
+  });
+
+  it('marks artefact consumers dirty when artefact output changes without input edits', async () => {
+    const ctx = memoryContext();
+    await initializeMovieStorage(ctx, 'demo');
+    const eventLog = createEventLog(ctx);
+    const graph = buildProducerGraph();
+    const planner = createPlanner();
+
+    const baseRevision = 'rev-0001';
+    const baseline = createInputEvents({ InquiryPrompt: 'Tell me a story' }, baseRevision);
+    for (const event of baseline) {
+      await eventLog.appendInput('demo', event);
+    }
+
+    const scriptArtefactId = 'Artifact:NarrationScript[segment=0]';
+    const originalScript = 'Segment 0: original narration';
+    const originalHash = hashArtefactOutput({ inline: originalScript });
+
+    const manifest: Manifest = {
+      revision: baseRevision,
+      baseRevision: null,
+      createdAt: new Date().toISOString(),
+      inputs: Object.fromEntries(
+        baseline.map((event) => [
+          event.id,
+          {
+            hash: event.hash,
+            payloadDigest: hashPayload(event.payload).canonical,
+            createdAt: event.createdAt,
+          },
+        ]),
+      ),
+      artefacts: {
+        [scriptArtefactId]: {
+          hash: originalHash,
+          inline: originalScript,
+          producedBy: 'Producer:ScriptProducer[segment=0]',
+          status: 'succeeded',
+          createdAt: new Date().toISOString(),
+        },
+      },
+      timeline: {},
+    };
+
+    await eventLog.appendArtefact('demo', {
+      artefactId: scriptArtefactId,
+      revision: 'rev-manual',
+      inputsHash: 'manual',
+      output: { inline: 'Segment 0: edited narration' },
+      status: 'succeeded',
+      producedBy: 'manual-edit',
+      createdAt: new Date().toISOString(),
+    });
+
+    const plan = await planner.computePlan({
+      movieId: 'demo',
+      manifest,
+      eventLog,
+      blueprint: graph,
+      targetRevision: nextRevisionId(baseRevision),
+      pendingEdits: [],
+    });
+
+    const jobs = plan.layers.flat();
+    expect(jobs.some((job) => job.producer === 'AudioProducer')).toBe(true);
+    expect(jobs.some((job) => job.producer === 'TimelineAssembler')).toBe(true);
+    expect(jobs.some((job) => job.producer === 'ScriptProducer')).toBe(false);
   });
 
   it('throws when the graph contains a cycle', async () => {

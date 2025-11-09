@@ -14,7 +14,7 @@ dotenvConfig({ path: resolve(process.cwd(), '.env'), override: false }); // Curr
 import { runInit } from './commands/init.js';
 import { runQuery } from './commands/query.js';
 import { runInspect } from './commands/inspect.js';
-import { runEdit } from './commands/edit.js';
+import { runEdit, runInteractiveEditSetup, runWorkspaceSubmit } from './commands/edit.js';
 import { runProvidersList } from './commands/providers-list.js';
 import { runBlueprintsList } from './commands/blueprints-list.js';
 import { runBlueprintsDescribe } from './commands/blueprints-describe.js';
@@ -38,6 +38,8 @@ const cli = meow(
       dryrun: { type: 'boolean' },
       nonInteractive: { type: 'boolean' },
       usingBlueprint: { type: 'string' },
+      interactiveEdit: { type: 'boolean' },
+      submitEdits: { type: 'boolean' },
     },
   },
 );
@@ -53,6 +55,8 @@ async function main(): Promise<void> {
     dryrun?: boolean;
     nonInteractive?: boolean;
     usingBlueprint?: string;
+    interactiveEdit?: boolean;
+    submitEdits?: boolean;
   };
 
   switch (command) {
@@ -243,9 +247,48 @@ async function main(): Promise<void> {
       return;
     }
     case 'edit': {
+      const interactiveEdit = Boolean(flags.interactiveEdit);
+      const submitEdits = Boolean(flags.submitEdits);
       if (!flags.movieId) {
         console.error('Error: --movieId is required for edit.');
         process.exitCode = 1;
+        return;
+      }
+      if (interactiveEdit && submitEdits) {
+        console.error('Error: --interactive-edit and --submitEdits cannot be combined.');
+        process.exitCode = 1;
+        return;
+      }
+      if (interactiveEdit) {
+        const setup = await runInteractiveEditSetup({
+          movieId: flags.movieId,
+          usingBlueprint: flags.usingBlueprint,
+        });
+        console.log(`Workspace ready at: ${setup.workspaceDir}`);
+        console.log('Edit inputs/ or artefacts/ then run:');
+        console.log(`  tutopanda edit --movieId ${flags.movieId} --submitEdits`);
+        return;
+      }
+      if (submitEdits) {
+        const result = await runWorkspaceSubmit({
+          movieId: flags.movieId,
+          dryRun: Boolean(flags.dryrun),
+          nonInteractive: Boolean(flags.nonInteractive),
+          usingBlueprint: flags.usingBlueprint,
+        });
+        if (!result.changesApplied) {
+          return;
+        }
+        if (result.edit) {
+          console.log(`Updated movie ${flags.movieId}. New revision: ${result.edit.targetRevision}`);
+          console.log(`Plan saved to ${result.edit.planPath}`);
+        }
+        if (result.edit?.dryRun) {
+          printDryRunSummary(result.edit.dryRun, result.edit.storagePath);
+        } else if (result.edit?.build) {
+          printBuildSummary(result.edit.build, result.edit.manifestPath);
+          console.log(`Manifests and artefacts stored under: ${result.edit.storagePath}`);
+        }
         return;
       }
       if (!flags.inputs) {

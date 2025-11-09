@@ -20,6 +20,8 @@ import {
   type RevisionId,
   type ExecutionPlan,
   type StorageContext,
+  type ArtefactEvent,
+  type ArtefactEventOutput,
 } from 'tutopanda-core';
 import type { CliConfig } from './cli-config.js';
 import { writePromptFile } from './prompts.js';
@@ -32,6 +34,7 @@ import {
 } from './producer-options.js';
 import type { BlueprintGraphData } from 'tutopanda-core';
 import { expandPath } from './path.js';
+import { mergeMovieMetadata } from './movie-metadata.js';
 
 const console = globalThis.console;
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -43,6 +46,7 @@ export interface GeneratePlanOptions {
   isNew: boolean;
   inputsPath: string;
   usingBlueprint?: string; // Path to blueprint TOML file
+  pendingArtefacts?: PendingArtefactDraft[];
 }
 
 export interface GeneratePlanResult {
@@ -54,6 +58,16 @@ export interface GeneratePlanResult {
   manifestHash: string | null;
   resolvedInputs: Record<string, unknown>;
   providerOptions: ProducerOptionsMap;
+  blueprintPath: string;
+}
+
+export interface PendingArtefactDraft {
+  artefactId: string;
+  output: ArtefactEventOutput;
+  producedBy: string;
+  inputsHash?: string;
+  status?: ArtefactEvent['status'];
+  diagnostics?: Record<string, unknown>;
 }
 
 export async function generatePlan(options: GeneratePlanOptions): Promise<GeneratePlanResult> {
@@ -84,6 +98,7 @@ export async function generatePlan(options: GeneratePlanOptions): Promise<Genera
     ? expandPath(options.usingBlueprint)
     : DEFAULT_BLUEPRINT_PATH;
   const { blueprint: resolvedBlueprint } = await loadBlueprintFromToml(blueprintPath);
+  await mergeMovieMetadata(movieDir, { blueprintPath });
 
   const inputValues = await loadInputsFromToml(options.inputsPath, resolvedBlueprint);
   if (typeof inputValues.InquiryPrompt !== 'string' || inputValues.InquiryPrompt.trim().length === 0) {
@@ -97,6 +112,13 @@ export async function generatePlan(options: GeneratePlanOptions): Promise<Genera
 
   for (const event of pendingEvents) {
     await eventLog.appendInput(movieId, event);
+  }
+
+  const artefactEvents = (options.pendingArtefacts ?? []).map((draft) =>
+    makeArtefactEvent(draft, targetRevision),
+  );
+  for (const artefactEvent of artefactEvents) {
+    await eventLog.appendArtefact(movieId, artefactEvent);
   }
 
   const providerOptions = buildProducerOptionsFromBlueprint(resolvedBlueprint);
@@ -130,6 +152,7 @@ export async function generatePlan(options: GeneratePlanOptions): Promise<Genera
     manifestHash,
     resolvedInputs,
     providerOptions,
+    blueprintPath,
   };
 }
 
@@ -221,4 +244,17 @@ async function persistInputs(movieDir: string, inputsPath: string, values: Input
   if (typeof promptValue === 'string' && promptValue.trim().length > 0) {
     await writePromptFile(movieDir, join('prompts', 'inquiry.txt'), promptValue);
   }
+}
+
+function makeArtefactEvent(draft: PendingArtefactDraft, revision: RevisionId): ArtefactEvent {
+  return {
+    artefactId: draft.artefactId,
+    revision,
+    inputsHash: draft.inputsHash ?? 'manual-edit',
+    output: draft.output,
+    status: draft.status ?? 'succeeded',
+    producedBy: draft.producedBy,
+    diagnostics: draft.diagnostics,
+    createdAt: new Date().toISOString(),
+  };
 }
