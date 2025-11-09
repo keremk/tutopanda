@@ -12,6 +12,8 @@ Consult `design_guidelines.md` before adjusting visuals in the client, and keep 
 ## Build, Test, and Development Commands
 Run `pnpm install` once to hydrate the workspaces. Use `pnpm dev` for the combined web client and API loop, or `pnpm dev:client` / `pnpm dev:server` for focused development (CLI and core expose `pnpm --filter tutopanda-<pkg> dev` watchers when needed). Build artifacts either via `pnpm build` or per-package scripts such as `pnpm --filter tutopanda-core build`. Linting and type checks run through the package names: e.g. `pnpm --filter tutopanda-client lint`, `pnpm --filter tutopanda-core type-check`, `pnpm --filter tutopanda-cli lint`. Vitest is wired the same way (`pnpm --filter tutopanda-server test`, etc.). Use the actual package names with `--filter` when invoking commands from the repo root.
 
+> **Important**: Do not write overly defensive code. Do production quality checking but do not write it in an overly defensive way. Clear and readable code is the key. Don’t add speculative guards, elaborate null checks, or fallback branches that handle scenarios we don’t actually expect today. Stick to the known contract, keep control flow straightforward, and only handle concrete failure modes we already understand (e.g., validation errors that truly happen).
+
 > **Important**: Do **not** run `pnpm install` as a build step or during routine development tasks—only run it when specifically instructed to hydrate dependencies.
 
 > **Agent Rule**: Never run package-management commands (`pnpm add`, `pnpm install`, etc.) without explicit user approval. Always surface the dependency request to the user instead.
@@ -37,6 +39,7 @@ cd cli && pnpm vitest run --pool=threads --poolOptions.threads.singleThread
 Write strict TypeScript and prefer functional React components with kebab-case filenames. Route segment folders in `src/app` should follow Next.js rules (`(group)`, `[param]`, etc.). Use Tailwind utilities and the design tokens defined in `tailwind.config.ts` instead of ad-hoc CSS. Internal imports should use the configured aliases such as `@/components/*` and `@/lib/*`. Reuse helpers from `src/lib` before adding new utilities, and keep new files two-space indented to match the existing style.
 
 - Optimise for clarity first: avoid adding defensive guards or nested ternaries that obscure intent unless there is a concrete bug being handled. Prefer small helper functions or straightforward control flow.
+- Avoid overly defensive TypeScript patterns (e.g., repeatedly checking `foo && typeof foo === 'object' && !Array.isArray(foo)`). Trust the known contract and let bad inputs surface as real errors instead of speculative guards.
 
 ## Testing Guidelines
 The repo still relies on linting and type checks as the baseline gate, but all packages are wired for Vitest. Add tests for new behaviour (`.test.ts`/`.test.tsx` next to the code) across client, server, core, and CLI. Ensure each package exposes the relevant `test` scripts and use `pnpm --filter <package> test` from the root. Document any fixture data inside its package and keep runs deterministic.

@@ -9,12 +9,9 @@ export interface CliConfig {
     root: string;
     basePath: string;
   };
-  defaultSettingsPath: string;
 }
 
 const DEFAULT_ROOT = resolve(os.homedir(), '.tutopanda');
-const DEFAULT_SETTINGS_RELATIVE = 'default-settings.json';
-
 export function getDefaultCliConfigPath(): string {
   const envPath = process.env.TUTOPANDA_CLI_CONFIG;
   if (envPath) {
@@ -27,7 +24,13 @@ export async function readCliConfig(configPath?: string): Promise<CliConfig | nu
   const targetPath = resolve(configPath ?? getDefaultCliConfigPath());
   try {
     const contents = await readFile(targetPath, 'utf8');
-    return JSON.parse(contents) as CliConfig;
+    const parsed = JSON.parse(contents) as Partial<CliConfig>;
+    if (!parsed.storage) {
+      return null;
+    }
+    return {
+      storage: parsed.storage,
+    };
   } catch {
     return null;
   }
@@ -42,8 +45,4 @@ export async function writeCliConfig(config: CliConfig, configPath?: string): Pr
 
 export function getDefaultRoot(): string {
   return DEFAULT_ROOT;
-}
-
-export function getDefaultSettingsPath(rootFolder?: string): string {
-  return resolve(rootFolder ?? DEFAULT_ROOT, DEFAULT_SETTINGS_RELATIVE);
 }

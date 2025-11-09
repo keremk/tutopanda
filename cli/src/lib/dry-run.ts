@@ -12,7 +12,7 @@ import {
 } from 'tutopanda-core';
 import { createProviderRegistry } from 'tutopanda-providers';
 import { createProviderProduce, prepareProviderHandlers } from './build.js';
-import type { ProviderOptionsMap } from './provider-settings.js';
+import type { ProducerOptionsMap } from './producer-options.js';
 
 const console = globalThis.console;
 
@@ -41,7 +41,7 @@ interface ExecuteDryRunArgs {
   movieId: string;
   plan: ExecutionPlan;
   manifest: Manifest;
-  providerOptions: ProviderOptionsMap;
+  providerOptions: ProducerOptionsMap;
   resolvedInputs: Record<string, unknown>;
   storage?: {
     rootDir: string;

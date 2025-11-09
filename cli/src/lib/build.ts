@@ -10,7 +10,6 @@ import {
   type Manifest,
   type ProduceFn,
   type ProduceResult,
-  type ProducerKind,
   type RunResult,
 } from 'tutopanda-core';
 import {
@@ -22,7 +21,7 @@ import {
   type ProviderDescriptor,
 } from 'tutopanda-providers';
 import type { CliConfig } from './cli-config.js';
-import type { ProviderOptionsMap, LoadedProviderOption } from './provider-settings.js';
+import type { ProducerOptionsMap, LoadedProducerOption } from './producer-options.js';
 
 const console = globalThis.console;
 
@@ -32,7 +31,7 @@ export interface ExecuteBuildOptions {
   plan: ExecutionPlan;
   manifest: Manifest;
   manifestHash: string | null;
-  providerOptions: ProviderOptionsMap;
+  providerOptions: ProducerOptionsMap;
   resolvedInputs: Record<string, unknown>;
   logger?: {
     info?(message?: string): void;
@@ -89,6 +88,7 @@ export async function executeBuild(options: ExecuteBuildOptions): Promise<Execut
     eventLog,
     manifestService,
     produce,
+    logger: options.logger ?? console,
   });
 
   const manifest = await run.buildManifest();
@@ -142,7 +142,7 @@ function summarizeRun(run: RunResult, manifestPath: string): BuildSummary {
 
 export function createProviderProduce(
   registry: ReturnType<typeof createProviderRegistry>,
-  providerOptions: ProviderOptionsMap,
+  providerOptions: ProducerOptionsMap,
   resolvedInputs: Record<string, unknown>,
   preResolved: ResolvedProviderHandler[] = [],
   logger: { info?(message?: string): void } = {},
@@ -171,25 +171,25 @@ export function createProviderProduce(
       request.job.providerModel,
     );
 
+    const descriptor = toDescriptor(providerOption);
     const descriptorKey = makeDescriptorKey(
       registry.mode,
-      providerOption.provider,
-      providerOption.model,
-      providerOption.environment,
+      descriptor.provider,
+      descriptor.model,
+      descriptor.environment,
     );
 
     let handler = handlerCache.get(descriptorKey);
     if (!handler) {
-      handler = registry.resolve({
-        provider: providerOption.provider,
-        model: providerOption.model,
-        environment: providerOption.environment,
-      });
+      handler = registry.resolve(descriptor);
       handlerCache.set(descriptorKey, handler);
     }
 
-    const context = buildProviderContext(providerOption, request.job.context, resolvedInputs);
-
+    const mergedResolvedInputs = mergeResolvedInputs(request.job.context, resolvedInputs);
+    const context = buildProviderContext(providerOption, request.job.context, mergedResolvedInputs);
+    const log = formatResolvedInputs(mergedResolvedInputs);
+    console.debug('[provider.invoke.inputs]', producerName, log);
+    validateResolvedInputs(producerName, providerOption, mergedResolvedInputs);
     logger.info?.(
       `provider.invoke.start ${providerOption.provider}/${providerOption.model} [${providerOption.environment}] -> ${request.job.produces.join(', ')}`,
     );
@@ -198,8 +198,8 @@ export function createProviderProduce(
     try {
       response = await handler.invoke({
         jobId: request.job.jobId,
-        provider: providerOption.provider,
-        model: providerOption.model,
+        provider: descriptor.provider,
+        model: descriptor.model,
         revision: request.revision,
         layerIndex: request.layerIndex,
         attempt: request.attempt,
@@ -243,7 +243,7 @@ export function createProviderProduce(
 export function prepareProviderHandlers(
   registry: ReturnType<typeof createProviderRegistry>,
   plan: ExecutionPlan,
-  providerOptions: ProviderOptionsMap,
+  providerOptions: ProducerOptionsMap,
 ): ResolvedProviderHandler[] {
   const descriptorMap = new Map<string, ProviderDescriptor>();
   for (const layer of plan.layers) {
@@ -252,13 +252,10 @@ export function prepareProviderHandlers(
         continue;
       }
       const option = resolveProviderOption(providerOptions, job.producer, job.provider, job.providerModel);
-      const key = makeDescriptorKey(registry.mode, option.provider, option.model, option.environment);
+      const descriptor = toDescriptor(option);
+      const key = makeDescriptorKey(registry.mode, descriptor.provider, descriptor.model, descriptor.environment);
       if (!descriptorMap.has(key)) {
-        descriptorMap.set(key, {
-          provider: option.provider,
-          model: option.model,
-          environment: option.environment,
-        });
+        descriptorMap.set(key, descriptor);
       }
     }
   }
@@ -266,12 +263,12 @@ export function prepareProviderHandlers(
 }
 
 function resolveProviderOption(
-  providerOptions: ProviderOptionsMap,
+  providerOptions: ProducerOptionsMap,
   producer: string,
   provider: string,
   model: string,
-): LoadedProviderOption {
-  const options = providerOptions.get(producer as ProducerKind);
+): LoadedProducerOption {
+  const options = providerOptions.get(producer);
   if (!options || options.length === 0) {
     throw new Error(`No provider configuration defined for producer "${producer}".`);
   }
@@ -283,7 +280,7 @@ function resolveProviderOption(
 }
 
 function buildProviderContext(
-  option: LoadedProviderOption,
+  option: LoadedProducerOption,
   jobContext: unknown,
   resolvedInputs: Record<string, unknown>,
 ): ProviderContextPayload {
@@ -307,17 +304,19 @@ function buildProviderContext(
   } satisfies ProviderContextPayload;
 }
 
-function normalizeProviderConfig(option: LoadedProviderOption): unknown {
-  const { config, customAttributes } = option;
-  if (config && typeof config === 'object' && !Array.isArray(config)) {
-    return customAttributes
-      ? { ...config, customAttributes }
-      : config;
-  }
-  if (customAttributes) {
-    return { customAttributes, value: config };
-  }
-  return config;
+function normalizeProviderConfig(option: LoadedProducerOption): unknown {
+  const config = option.config ? { ...(option.config as Record<string, unknown>) } : undefined;
+  return option.customAttributes
+    ? { customAttributes: option.customAttributes, config }
+    : config;
+}
+
+function toDescriptor(option: LoadedProducerOption): ProviderDescriptor {
+  return {
+    provider: option.provider as ProviderDescriptor['provider'],
+    model: option.model,
+    environment: option.environment,
+  };
 }
 
 function makeDescriptorKey(
@@ -329,6 +328,67 @@ function makeDescriptorKey(
   return [mode, provider, model, environment].join('|');
 }
 
+function mergeResolvedInputs(
+  jobContext: unknown,
+  baseInputs: Record<string, unknown>,
+): Record<string, unknown> {
+  const merged: Record<string, unknown> = {};
+  if (Object.keys(baseInputs).length > 0) {
+    Object.assign(merged, baseInputs);
+  }
+  if (isRecord(jobContext) && isRecord(jobContext.extras) && isRecord(jobContext.extras.resolvedInputs)) {
+    Object.assign(merged, jobContext.extras.resolvedInputs as Record<string, unknown>);
+  }
+  return merged;
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function formatResolvedInputs(inputs: Record<string, unknown>): string {
+  return Object.entries(inputs)
+    .map(([key, value]) => `${key}=${summarizeValue(value)}`)
+    .join(', ');
+}
+
+function summarizeValue(value: unknown): string {
+  if (typeof value === 'string') {
+    return value.length > 80 ? `${value.slice(0, 77)}… (${value.length} chars)` : value;
+  }
+  if (typeof value === 'number' || typeof value === 'boolean' || value === null || value === undefined) {
+    return JSON.stringify(value);
+  }
+  if (Array.isArray(value)) {
+    return `[array(${value.length})]`;
+  }
+  if (value instanceof Uint8Array) {
+    return `[uint8(${value.byteLength})]`;
+  }
+  if (isRecord(value)) {
+    const keys = Object.keys(value);
+    const preview = keys.slice(0, 5).join(',');
+    const suffix = keys.length > 5 ? `,+${keys.length - 5}` : '';
+    return `[object keys=${preview}${suffix ? suffix : ''}]`;
+  }
+  return String(value);
+}
+
+function validateResolvedInputs(
+  producerName: string,
+  option: LoadedProducerOption,
+  inputs: Record<string, unknown>,
+): void {
+  const keys = Object.keys(inputs);
+  if (keys.length === 0) {
+    throw new Error(`Aborting ${producerName}: resolved inputs map is empty.`);
+  }
+  const config = option.config as Record<string, unknown> | undefined;
+  const required = Array.isArray(config?.variables) ? (config?.variables as string[]) : [];
+  const missing = required.filter((key) => inputs[key] === undefined);
+  if (missing.length > 0) {
+    console.warn(
+      `[provider.invoke.inputs] ${producerName} missing resolved input(s): ${missing.join(', ')}.`,
+    );
+  }
 }

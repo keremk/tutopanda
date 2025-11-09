@@ -6,7 +6,6 @@ const SizeEnum = z.enum(['480p', '720p', '1080p']);
 const StyleEnum = z.enum(['Ghibli', 'Pixar', 'Anime', 'Watercolor', 'Cartoon', 'PhotoRealistic', 'Custom']);
 
 const GENERAL_DEFAULTS = {
-  useVideo: false,
   audience: 'general',
   audiencePrompt: '',
   language: 'en',
@@ -16,12 +15,9 @@ const GENERAL_DEFAULTS = {
   style: 'Ghibli',
   customStyle: '',
   voice: 'Atlas',
-  isImageToVideo: false,
-  imageToVideo: {} as Record<string, boolean>,
 } as const;
 
 const ProjectConfigOverrideSchema = z.object({
-  useVideo: z.boolean().optional(),
   audience: z.string().optional(),
   audiencePrompt: z.string().optional(),
   language: LanguageEnum.optional(),
@@ -31,8 +27,6 @@ const ProjectConfigOverrideSchema = z.object({
   style: StyleEnum.optional(),
   customStyle: z.string().optional(),
   voice: z.string().optional(),
-  isImageToVideo: z.boolean().optional(),
-  imageToVideo: z.record(z.string(), z.boolean()).optional(),
 });
 
 export const ProjectConfigSchema = ProjectConfigOverrideSchema.transform((value) => ({

@@ -1,20 +1,19 @@
-import { createProviderRegistry } from 'tutopanda-providers';
-import { readCliConfig } from '../lib/cli-config.js';
-import {
-  loadSettings,
-  loadSettingsOverrides,
-  mergeProviderOptions,
-  type ProviderOptionsMap,
-} from '../lib/provider-settings.js';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { createProviderRegistry, type ProviderDescriptor } from 'tutopanda-providers';
+import { loadBlueprintFromToml } from '../lib/blueprint-loader/index.js';
+import { buildProducerOptionsFromBlueprint } from '../lib/producer-options.js';
 import { expandPath } from '../lib/path.js';
 
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const DEFAULT_BLUEPRINT_PATH = resolve(__dirname, '../../blueprints/audio-only.toml');
+
 export interface ProvidersListOptions {
-  settingsPath?: string;
+  blueprintPath?: string;
 }
 
 export interface ProviderListEntry {
   producer: string;
-  priority: 'main' | 'fallback';
   provider: string;
   model: string;
   environment: string;
@@ -27,29 +26,22 @@ export interface ProvidersListResult {
 }
 
 export async function runProvidersList(options: ProvidersListOptions = {}): Promise<ProvidersListResult> {
-  const cliConfig = await readCliConfig();
-  if (!cliConfig) {
-    throw new Error('Tutopanda CLI is not initialized. Run "tutopanda init" first.');
-  }
-
-  const defaultSettings = await loadSettings(cliConfig.defaultSettingsPath);
-  let providerOptions: ProviderOptionsMap = defaultSettings.providerOptions;
-
-  if (options.settingsPath) {
-    const overrides = await loadSettingsOverrides(expandPath(options.settingsPath));
-    providerOptions = mergeProviderOptions(providerOptions, overrides.providerOptions);
-  }
+  const blueprintPath = options.blueprintPath
+    ? expandPath(options.blueprintPath)
+    : DEFAULT_BLUEPRINT_PATH;
+  const { blueprint } = await loadBlueprintFromToml(blueprintPath);
+  const providerOptions = buildProducerOptionsFromBlueprint(blueprint);
 
   const registry = createProviderRegistry({ mode: 'live' });
   const entries: ProviderListEntry[] = [];
 
   for (const [producer, variants] of providerOptions) {
     for (const variant of variants) {
-      const descriptor = {
-        provider: variant.provider,
+      const descriptor: ProviderDescriptor = {
+        provider: variant.provider as ProviderDescriptor['provider'],
         model: variant.model,
         environment: variant.environment,
-      } as const;
+      };
 
       let status: ProviderListEntry['status'] = 'ready';
       let message: string | undefined;
@@ -64,7 +56,6 @@ export async function runProvidersList(options: ProvidersListOptions = {}): Prom
 
       entries.push({
         producer,
-        priority: variant.priority,
         provider: variant.provider,
         model: variant.model,
         environment: variant.environment,

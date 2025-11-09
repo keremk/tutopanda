@@ -26,7 +26,7 @@ The system follows a three-layer architecture:
 │                        CLI Package                           │
 │  - User Commands                                            │
 │  - Project Configuration (projectConfig)                    │
-│  - Provider Settings (provider-settings.ts)                 │
+│  - Provider Settings (producer-options.ts)                 │
 │  - Producer Catalog Building                                │
 └─────────────────────┬───────────────────────────────────────┘
                       │
@@ -95,7 +95,7 @@ const size = resolveSize(resolvedInputs);   // '720p'
 
 ```typescript
 // CLI: Provider settings define models and their configurations
-// (cli/src/lib/provider-settings.ts)
+// (cli/src/lib/producer-options.ts)
 {
   producer: 'AudioProducer',
   providers: [
@@ -655,7 +655,7 @@ function getVoiceFieldName(model: string): string {
 },
 ```
 
-4. **Add to provider-settings.ts**:
+4. **Add to producer-options.ts**:
 
 ```typescript
 {
@@ -689,7 +689,7 @@ If the new model needs different configuration parameters:
 1. **Check if using config file** (for LLM producers only):
 
 ```typescript
-// In provider-settings.ts
+// In producer-options.ts
 {
   producer: 'ScriptProducer',
   providers: [
@@ -756,7 +756,7 @@ interface ReplicateMusicConfig {
   outputMimeType: string;
 }
 
-// In provider-settings.ts
+// In producer-options.ts
 {
   producer: 'TextToMusicProducer',
   providers: [
@@ -917,7 +917,7 @@ if (yourSetting) {
 If this setting was previously in customAttributes, comment it out:
 
 ```typescript
-// cli/src/lib/provider-settings.ts
+// cli/src/lib/producer-options.ts
 {
   producer: 'YourProducer',
   providers: [
@@ -1791,7 +1791,7 @@ When creating a new producer or adding model support, use this checklist:
 - [ ] Handle errors with typed errors
 - [ ] Build artefacts with complete diagnostics
 - [ ] Register in mappings.ts
-- [ ] Add to provider-settings.ts
+- [ ] Add to producer-options.ts
 - [ ] Create unit tests (15+ tests recommended)
 - [ ] Create integration tests (optional)
 - [ ] Update projectConfig if needed
@@ -1804,7 +1804,7 @@ When creating a new producer or adding model support, use this checklist:
 - [ ] Identify parameter name differences
 - [ ] Update field mapping functions if needed
 - [ ] Register in mappings.ts
-- [ ] Add to provider-settings.ts with customAttributes
+- [ ] Add to producer-options.ts with customAttributes
 - [ ] Add unit tests for new model
 - [ ] Add integration test (optional)
 - [ ] Document new model in provider-architecture.md
@@ -1817,7 +1817,7 @@ Key files to reference when working with producers:
 
 ### CLI Package
 - `cli/src/lib/project-config.ts` - projectConfig → inputValues mapping
-- `cli/src/lib/provider-settings.ts` - Producer catalog and customAttributes
+- `cli/src/lib/producer-options.ts` - Producer catalog and customAttributes
 
 ### Core Package
 - `core/src/types.ts` - ProjectConfig type definition

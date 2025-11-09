@@ -7,7 +7,6 @@ describe('InputValuesSchema', () => {
       InquiryPrompt: 'Hello world',
       Duration: 45,
       SegmentNarrationInput: ['Line 1', 'Line 2'],
-      UseVideo: false,
       ImagesPerSegment: 2,
     });
     expect(result.Duration).toBe(45);

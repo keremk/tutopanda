@@ -37,7 +37,11 @@ export function renderPrompts(
 function substituteVariables(template: string, inputs: Record<string, unknown>): string {
   return template.replace(/\{\{(\w+)\}\}/g, (_, varName: string) => {
     const value = inputs[varName];
-    return value == null ? '' : String(value);
+    if (value == null) {
+      console.warn('[openai] Missing input for prompt variable', varName);
+      return '';
+    }
+    return String(value);
   });
 }
 

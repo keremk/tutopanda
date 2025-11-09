@@ -9,6 +9,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./blueprint-loader": {
+      "types": "./dist/blueprint-loader/index.d.ts",
+      "import": "./dist/blueprint-loader/index.js"
     }
   },
   "license": "MIT",

@@ -1,6 +1,5 @@
 {
   "General": {
-    "UseVideo": false,
     "Audience": "general",
     "AudiencePrompt": "",
     "Language": "en",
@@ -37,8 +36,6 @@
     "Provider": "",
     "ImageModel": "",
     "ImageProvider": "",
-    "IsImageToVideo": false,
-    "ImageToVideo": {},
     "AssemblyStrategy": "speed-adjustment",
     "SegmentAnimations": {}
   }

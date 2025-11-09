@@ -62,7 +62,10 @@ function buildSingleArtefact(
   }
 
   // Convert PascalCase to camelCase: MovieTitle → movieTitle, NarrationScript → narrationScript
-  const fieldName = toCamelCase(parsed.kind);
+  const kindBase = parsed.kind.includes('.')
+    ? parsed.kind.slice(parsed.kind.lastIndexOf('.') + 1)
+    : parsed.kind;
+  const fieldName = toCamelCase(kindBase);
   diagnostics.field = fieldName;
   diagnostics.kind = parsed.kind;
 

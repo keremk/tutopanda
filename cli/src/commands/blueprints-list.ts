@@ -1,23 +1,44 @@
-import { listSections } from 'tutopanda-core';
+import { readdir, readFile } from 'node:fs/promises';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { parseBlueprintToml } from '../lib/blueprint-loader/index.js';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const DEFAULT_BLUEPRINT_DIR = resolve(__dirname, '../../blueprints');
 
 export interface BlueprintsListResult {
-  sections: Array<{
-    id: string;
-    label: string;
+  blueprints: Array<{
+    path: string;
+    name: string;
+    description?: string;
+    version?: string;
     inputCount: number;
     outputCount: number;
   }>;
 }
 
-export async function runBlueprintsList(): Promise<BlueprintsListResult> {
-  const sections = listSections();
+export async function runBlueprintsList(
+  directory: string = DEFAULT_BLUEPRINT_DIR,
+): Promise<BlueprintsListResult> {
+  const entries = await readdir(directory, { withFileTypes: true });
+  const blueprints: BlueprintsListResult['blueprints'] = [];
 
-  return {
-    sections: sections.map((section) => ({
-      id: section.id,
-      label: section.label,
-      inputCount: section.inputs?.length ?? 0,
-      outputCount: section.outputs?.length ?? 0,
-    })),
-  };
+  for (const entry of entries) {
+    if (!entry.isFile() || !entry.name.endsWith('.toml')) {
+      continue;
+    }
+    const fullPath = resolve(directory, entry.name);
+    const contents = await readFile(fullPath, 'utf8');
+    const blueprint = parseBlueprintToml(contents);
+    blueprints.push({
+      path: fullPath,
+      name: blueprint.meta.name,
+      description: blueprint.meta.description,
+      version: blueprint.meta.version,
+      inputCount: blueprint.inputs.length,
+      outputCount: blueprint.outputs.length,
+    });
+  }
+
+  return { blueprints };
 }

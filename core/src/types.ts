@@ -11,26 +11,11 @@ export const cardinalityToDimensions: Record<CardinalityTag, CardinalityDimensio
   perSegmentImage: ["segment", "image"],
 };
 
-export type ConditionKey = "useVideo" | "isImageToVideo";
-
-export interface Condition {
-  key: ConditionKey;
-  equals: boolean;
-}
-
 // --- node kinds ---
 export type NodeKind = "InputSource" | "Producer" | "Artifact";
 
 // --- artifacts ---
-export type ArtifactKind =
-  | "MovieTitle" | "MovieSummary" | "NarrationScript"
-  | "MusicPrompt" | "MusicTrack"
-  | "SegmentAudio"
-  | "ImagePrompt" | "SegmentImage"
-  | "StartImagePrompt" | "StartImage"
-  | "TextToVideoPrompt" | "ImageToVideoPrompt"
-  | "SegmentVideo"
-  | "FinalVideo";
+export type ArtifactKind = string;
 
 export interface Artifact {
   id: Id;
@@ -43,15 +28,7 @@ export interface Artifact {
 }
 
 // --- inputs (CUI) ---
-export type InputSourceKind =
-  | "InquiryPrompt" | "Duration" | "Audience" | "Language"
-  | "MusicPromptInput" | "SegmentNarrationInput"
-  | "VoiceId" | "Emotion"
-  | "UseVideo" | "ImagesPerSegment"
-  | "SegmentImagePromptInput" | "ImageStyle"
-  | "Size" | "AspectRatio" | "IsImageToVideo"
-  | "StartingImagePromptInput" | "MovieDirectionPromptInput"
-  | "AssemblyStrategy" | "SegmentAnimations";
+export type InputSourceKind = string;
 
 export interface InputSource<T = unknown> {
   id: Id;
@@ -62,14 +39,7 @@ export interface InputSource<T = unknown> {
 }
 
 // --- producers (GEN) ---
-export type ProducerKind =
-  | "ScriptProducer"
-  | "TextToMusicPromptProducer" | "TextToMusicProducer"
-  | "AudioProducer"
-  | "TextToImagePromptProducer" | "TextToImageProducer"
-  | "TextToVideoPromptProducer" | "TextToVideoProducer"
-  | "ImageToVideoPromptProducer" | "StartImageProducer" | "ImageToVideoProducer"
-  | "TimelineAssembler";
+export type ProducerKind = string;
 
 export type ProviderName = "openai" | "replicate" | "elevenlabs" | "fal" | "custom" | "internal";
 
@@ -98,10 +68,11 @@ export interface ProducerCatalogEntry {
 
 export type ProducerCatalog = Record<ProducerKind, ProducerCatalogEntry>;
 
+// Allow both strict known types and string for user-defined/namespaced nodes
 type NodeId<K extends NodeKind> =
-  K extends "InputSource" ? InputSourceKind :
-  K extends "Producer" ? ProducerKind :
-  ArtifactKind;
+  K extends "InputSource" ? (InputSourceKind | string) :
+  K extends "Producer" ? (ProducerKind | string) :
+  (ArtifactKind | string);
 
 export type BlueprintNodeRef<K extends NodeKind = NodeKind> = {
   kind: K;
@@ -113,73 +84,106 @@ export interface BlueprintNode<K extends NodeKind = NodeKind> {
   cardinality: CardinalityTag;
   label?: string;
   description?: string;
-  when?: Condition[][];
 }
 
 export interface BlueprintEdge {
   from: BlueprintNodeRef;
   to: BlueprintNodeRef;
   dimensions?: CardinalityDimension[];
-  when?: Condition[];
+  note?: string;
+}
+
+// --- new simplified blueprint system ---
+
+/**
+ * Blueprint metadata.
+ */
+export interface BlueprintMeta {
+  id: string;
+  name: string;
+  version?: string;
+  description?: string;
+  author?: string;
+  license?: string;
+}
+
+/**
+ * Input declaration for validation/documentation.
+ */
+export interface BlueprintInput {
+  name: string;
+  type: string;
+  cardinality: CardinalityTag;
+  required: boolean;
+  description?: string;
+  itemType?: string;  // For array types
+  defaultValue?: unknown;
+}
+
+/**
+ * Output declaration for validation/documentation.
+ */
+export interface BlueprintOutput {
+  name: string;
+  type: string;
+  cardinality: CardinalityTag;
+  required: boolean;
+  description?: string;
+  itemType?: string;  // For array types
+}
+
+/**
+ * Reference to a sub-blueprint.
+ */
+export interface SubBlueprintRef {
+  id: string;           // Used in node refs (e.g., "ScriptGeneration")
+  blueprintId: string;  // Matches loaded blueprint's meta.id
+  path?: string;        // Optional path override for locating the sub-blueprint file
+}
+
+/**
+ * Producer configuration (inline in blueprint).
+ * All properties beyond the core ones are provider-specific and passed through as-is.
+ */
+export interface ProducerConfig {
+  name: string;  // Must match ProducerKind
+  provider: ProviderName;
+  model: string;
+  settings?: Record<string, unknown>;
+  systemPrompt?: string;
+  userPrompt?: string;
+  jsonSchema?: string;
+  textFormat?: string;
+  variables?: string[];
+  // Any other provider-specific attributes
+  [key: string]: unknown;
+}
+
+/**
+ * Unresolved edge with string references (before flattening).
+ * String references support dot notation for sub-blueprint nodes.
+ */
+export interface UnresolvedBlueprintEdge {
+  from: string | BlueprintNodeRef;
+  to: string | BlueprintNodeRef;
+  dimensions?: CardinalityDimension[];
   note?: string;
 }
 
 /**
- * Port declaration for a blueprint section.
- * Represents a public input or output interface point.
+ * Simplified blueprint definition.
+ * Replaces GraphBlueprint and BlueprintSection with a flat structure.
+ * Edges use string references that get resolved during flattening.
  */
-export interface SectionPort {
-  /** Human-readable port name (e.g., "segmentAudio") */
-  name: string;
-
-  /** The actual node ref this port represents */
-  ref: BlueprintNodeRef;
-
-  /** Cardinality of this port */
-  cardinality: CardinalityTag;
-
-  /** Is this port required to be connected? */
-  required: boolean;
-
-  /** Description of what this port represents */
-  description?: string;
-
-  /** Conditions under which this port is active */
-  when?: Condition[][];
-}
-
-/**
- * Extended blueprint section with port-based interface.
- * Backward compatible - ports are optional.
- */
-export interface BlueprintSection {
-  id: string;
-  label: string;
+export interface Blueprint {
+  meta: BlueprintMeta;
+  inputs: BlueprintInput[];
+  outputs: BlueprintOutput[];
+  subBlueprints: SubBlueprintRef[];
   nodes: BlueprintNode[];
-  edges: BlueprintEdge[];
-
-  /** Input ports (optional) */
-  inputs?: SectionPort[];
-
-  /** Output ports (optional) */
-  outputs?: SectionPort[];
+  edges: UnresolvedBlueprintEdge[];
+  producers: ProducerConfig[];
 }
-
-/**
- * Connection between two section ports.
- */
-export interface SectionConnection {
-  from: {
-    section: string;  // Section ID
-    port: string;     // Output port name
-  };
-  to: {
-    section: string;  // Section ID
-    port: string;     // Input port name
-  };
-}
-
-export type ConditionalValue = boolean | boolean[];
 
 /**
  * Configuration for blueprint expansion.
@@ -187,67 +191,6 @@ export type ConditionalValue = boolean | boolean[];
 export interface BlueprintExpansionConfig {
   segmentCount: number;
   imagesPerSegment: number;
-  useVideo: ConditionalValue;
-  isImageToVideo: ConditionalValue;
-}
-
-/**
- * Custom blueprint configuration (user-facing).
- */
-export interface CustomBlueprintConfig {
-  /** Blueprint name */
-  name: string;
-
-  /** Description of this blueprint */
-  description?: string;
-
-  /** Schema version for future compatibility */
-  version: string;
-
-  /** List of section IDs to include */
-  sections: string[];
-
-  /** Explicit port connections */
-  connections: SectionConnection[];
-
-  /** Blueprint expansion config (optional overrides) */
-  blueprintConfig?: Partial<BlueprintExpansionConfig>;
-
-  /** Whether to auto-connect compatible ports */
-  autoConnect?: boolean;
-}
-
-/**
- * Result of composing a custom blueprint.
- */
-export interface ComposedBlueprint {
-  blueprint: GraphBlueprint;
-  warnings: ValidationWarning[];
-}
-
-/**
- * Validation warning (non-fatal).
- */
-export interface ValidationWarning {
-  type: 'unused_output' | 'optional_input_missing' | 'auto_connected';
-  message: string;
-  section?: string;
-  port?: string;
-}
-
-/**
- * Validation error (fatal).
- */
-export interface ValidationError extends Error {
-  type: 'missing_section' | 'missing_port' | 'incompatible_cardinality' |
-        'incompatible_kind' | 'required_input_missing' | 'circular_dependency';
-  section?: string;
-  port?: string;
-  details?: Record<string, unknown>;
-}
-
-export interface GraphBlueprint {
-  sections: BlueprintSection[];
 }
 
 // --- build / planning ---

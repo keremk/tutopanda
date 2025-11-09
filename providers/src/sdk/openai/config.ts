@@ -104,6 +104,25 @@ function normalizeOpenAiConfig(source: Record<string, unknown>): Record<string, 
     normalized.responseFormat = { type: 'text' };
   }
 
+  const hasTextFormat = typeof (normalized as Record<string, unknown>).textFormat === 'string';
+  if (hasTextFormat) {
+    const currentFormat = normalized.responseFormat as { type?: string } | undefined;
+    const isDefaultTextFormat = !currentFormat || currentFormat.type === 'text';
+    if (isDefaultTextFormat) {
+      const pseudoSection: Record<string, unknown> = {
+        textFormat: (normalized as Record<string, unknown>).textFormat,
+      };
+      if ((normalized as Record<string, unknown>).jsonSchema !== undefined) {
+        pseudoSection.jsonSchema = (normalized as Record<string, unknown>).jsonSchema;
+      }
+      const { responseFormat, reasoning } = normalizeResponseFormatFromSection(pseudoSection);
+      normalized.responseFormat = responseFormat;
+      if (reasoning && normalized.reasoning === undefined) {
+        normalized.reasoning = reasoning;
+      }
+    }
+  }
+
   return normalized;
 }
 

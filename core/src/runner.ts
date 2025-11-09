@@ -5,6 +5,7 @@ import type { EventLog } from './event-log.js';
 import { hashInputs } from './event-log.js';
 import { createManifestService, type ManifestService } from './manifest.js';
 import type { StorageContext } from './storage.js';
+import { formatBlobFileName } from './blob-utils.js';
 import {
   type ArtefactEvent,
   type ArtefactEventStatus,
@@ -331,7 +332,8 @@ async function persistBlob(
   const buffer = toBuffer(blob.data);
   const hash = createHash('sha256').update(buffer).digest('hex');
   const prefix = hash.slice(0, 2);
-  const relativePath = storage.resolve(movieId, 'blobs', prefix, hash);
+  const fileName = formatBlobFileName(hash, blob.mimeType);
+  const relativePath = storage.resolve(movieId, 'blobs', prefix, fileName);
 
   if (!(await storage.storage.fileExists(relativePath))) {
     await ensureDirectories(storage, relativePath);
@@ -429,6 +431,24 @@ function mergeResolvedArtifacts(
     ? extras.resolvedInputs
     : {};
 
+  const mergedResolvedInputs: Record<string, unknown> = { ...existingResolvedInputs };
+  const addedAliases: string[] = [];
+
+  for (const [key, value] of Object.entries(resolvedArtifacts)) {
+    for (const alias of buildResolvedInputAliases(key)) {
+      mergedResolvedInputs[alias] = value;
+      addedAliases.push(alias);
+    }
+  }
+
+  if (addedAliases.length > 0) {
+    console.debug('[runner.resolvedInputs.added]', {
+      jobId: job.jobId,
+      producer: job.producer,
+      aliases: addedAliases,
+    });
+  }
+
   // Merge resolved artifacts with existing resolvedInputs
   return {
     ...job,
@@ -436,10 +456,7 @@ function mergeResolvedArtifacts(
       ...jobContext,
       extras: {
         ...extras,
-        resolvedInputs: {
-          ...existingResolvedInputs,
-          ...resolvedArtifacts,
-        },
+        resolvedInputs: mergedResolvedInputs,
       },
     },
   };
@@ -447,4 +464,20 @@ function mergeResolvedArtifacts(
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+
+function buildResolvedInputAliases(kind: string): string[] {
+  if (!kind.includes('.')) {
+    return [kind];
+  }
+  const segments = kind.split('.');
+  const shortName = segments.pop() ?? kind;
+  if (segments.length === 0) {
+    return [kind];
+  }
+  if (shortName === kind) {
+    return [kind];
+  }
+  return [kind, shortName];
 }

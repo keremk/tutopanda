@@ -30,21 +30,8 @@ describe('runInit', () => {
     const buildsStats = await stat(result.buildsFolder);
     expect(buildsStats.isDirectory()).toBe(true);
 
-    const defaultSettings = JSON.parse(await readFile(result.defaultSettingsPath, 'utf8')) as {
-      general: Record<string, unknown>;
-      producers: unknown[];
-    };
-    expect(defaultSettings.general).toBeDefined();
-    expect(defaultSettings.general.useVideo).toBe(false);
-    expect(Array.isArray(defaultSettings.producers)).toBe(true);
-
-    const settingsDir = resolve(result.defaultSettingsPath, '..');
-    const scriptConfig = await readFile(join(settingsDir, 'script-producer.toml'), 'utf8');
-    expect(scriptConfig).toContain('system_prompt');
-
     const cliConfig = await readCliConfig(result.cliConfigPath);
     expect(cliConfig?.storage.root).toBe(result.rootFolder);
     expect(cliConfig?.storage.basePath).toBe('builds');
-    expect(cliConfig?.defaultSettingsPath).toBe(result.defaultSettingsPath);
   });
 });

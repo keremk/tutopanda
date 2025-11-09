@@ -44,7 +44,7 @@ To make producer development predictable—and to keep (provider, model, environ
 - Make testing straightforward with fixtures and mock utilities that mirror the live invocation contract.
 
 ## Core Concepts
-- **ProducerDefinition** – derived directly from CLI inputs (`LoadedProviderOption` in `cli/src/lib/provider-settings.ts`) that already capture provider, model, environment, config payload, attachments, and custom attributes. The SDK will not introduce a new metadata layer; instead it formalises helpers that consume the existing descriptor/context objects emitted by the CLI and registry.
+- **ProducerDefinition** – derived directly from CLI inputs (`LoadedProducerOption` in `cli/src/lib/producer-options.ts`) that already capture provider, model, environment, config payload, attachments, and custom attributes. The SDK will not introduce a new metadata layer; instead it formalises helpers that consume the existing descriptor/context objects emitted by the CLI and registry.
 - **ProducerRuntime** – the object handed to the author inside `invoke`. It exposes resolved secrets, provider-specific SDK client(s), attachment readers, logging hooks, and cancellation signals.
 - **ProducerHandlerFactory** – helper that converts an `invoke` implementation into a `HandlerFactory` tied to the descriptor provided by the registry. Provider/model/environment always come from the registry descriptor so we avoid duplicating selection logic.
 - **ArtefactBuilder** – utilities that materialise inline/blobs, enforce mime-type expectations, and annotate diagnostics consistently.

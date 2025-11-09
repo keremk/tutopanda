@@ -1,47 +1,48 @@
 /* eslint-disable no-console */
-import { mkdir, writeFile } from 'node:fs/promises';
-import { resolve, join } from 'node:path';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { dirname, resolve, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
   createStorageContext,
   initializeMovieStorage,
   createManifestService,
   ManifestNotFoundError,
   createEventLog,
-  createProducerGraphFromConfig,
   createProducerGraph,
   expandBlueprint,
   createPlanner,
   planStore,
   hashPayload,
   nextRevisionId,
+  type BlueprintEdge,
   type InputEvent,
-  type InputValues,
   type Manifest,
   type RevisionId,
   type ExecutionPlan,
   type StorageContext,
 } from 'tutopanda-core';
 import type { CliConfig } from './cli-config.js';
-import type { ProjectConfig } from 'tutopanda-core';
-import { deriveBlueprintAndInputs } from './project-config.js';
-import {
-  buildProducerCatalog,
-  providerOptionsToJSON,
-  type ProviderOptionsMap,
-} from './provider-settings.js';
 import { writePromptFile } from './prompts.js';
-import { loadCustomBlueprint } from './custom-blueprint.js';
+import { loadBlueprintFromToml } from './blueprint-loader/index.js';
+import { loadInputsFromToml, deriveExpansionConfig, type InputMap } from './input-loader.js';
+import {
+  buildProducerOptionsFromBlueprint,
+  buildProducerCatalog,
+  type ProducerOptionsMap,
+} from './producer-options.js';
+import type { BlueprintGraphData } from 'tutopanda-core';
+import { expandPath } from './path.js';
 
 const console = globalThis.console;
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const DEFAULT_BLUEPRINT_PATH = resolve(__dirname, '../../blueprints/audio-only.toml');
 
 export interface GeneratePlanOptions {
   cliConfig: CliConfig;
-  projectConfig: ProjectConfig;
-  providerOptions: ProviderOptionsMap;
-  prompt: string;
   movieId: string; // storage movie id (e.g., movie-q123)
   isNew: boolean;
-  usingBlueprint?: string; // Path to custom blueprint JSON file
+  inputsPath: string;
+  usingBlueprint?: string; // Path to blueprint TOML file
 }
 
 export interface GeneratePlanResult {
@@ -52,10 +53,11 @@ export interface GeneratePlanResult {
   plan: ExecutionPlan;
   manifestHash: string | null;
   resolvedInputs: Record<string, unknown>;
+  providerOptions: ProducerOptionsMap;
 }
 
 export async function generatePlan(options: GeneratePlanOptions): Promise<GeneratePlanResult> {
-  const { cliConfig, projectConfig, providerOptions, prompt, movieId } = options;
+  const { cliConfig, movieId } = options;
   const storageRoot = cliConfig.storage.root;
   const basePath = cliConfig.storage.basePath;
   const movieDir = resolve(storageRoot, basePath, movieId);
@@ -70,14 +72,6 @@ export async function generatePlan(options: GeneratePlanOptions): Promise<Genera
 
   await initializeMovieStorage(storageContext, movieId);
 
-  await writeFile(join(movieDir, 'config.json'), JSON.stringify(projectConfig, null, 2), 'utf8');
-  await writeFile(
-    join(movieDir, 'providers.json'),
-    JSON.stringify(providerOptionsToJSON(providerOptions), null, 2),
-    'utf8',
-  );
-  await writePromptFile(movieDir, join('prompts', 'inquiry.txt'), prompt);
-
   const manifestService = createManifestService(storageContext);
   const eventLog = createEventLog(storageContext);
   const planner = createPlanner();
@@ -86,26 +80,34 @@ export async function generatePlan(options: GeneratePlanOptions): Promise<Genera
   let targetRevision = nextRevisionId(manifest.revision ?? null);
   targetRevision = await ensureUniquePlanRevision(storageContext, movieId, targetRevision);
 
-  const { blueprint, inputValues } = deriveBlueprintAndInputs(projectConfig);
-  const pendingEvents = createInputEvents(prompt, inputValues, targetRevision);
+  const blueprintPath = options.usingBlueprint
+    ? expandPath(options.usingBlueprint)
+    : DEFAULT_BLUEPRINT_PATH;
+  const { blueprint: resolvedBlueprint } = await loadBlueprintFromToml(blueprintPath);
+
+  const inputValues = await loadInputsFromToml(options.inputsPath, resolvedBlueprint);
+  if (typeof inputValues.InquiryPrompt !== 'string' || inputValues.InquiryPrompt.trim().length === 0) {
+    throw new Error('Input TOML must specify inputs.InquiryPrompt as a non-empty string.');
+  }
+  await persistInputs(movieDir, options.inputsPath, inputValues);
+  const pendingEvents = createInputEvents(inputValues, targetRevision);
   const resolvedInputs = buildResolvedInputMap(pendingEvents);
+  console.debug('[planner] resolved inputs', Object.keys(resolvedInputs));
+  const expansionConfig = deriveExpansionConfig(inputValues);
 
   for (const event of pendingEvents) {
     await eventLog.appendInput(movieId, event);
   }
 
+  const providerOptions = buildProducerOptionsFromBlueprint(resolvedBlueprint);
   const catalog = buildProducerCatalog(providerOptions);
-
-  // Use custom blueprint if provided, otherwise use default
-  let producerGraph;
-  if (options.usingBlueprint) {
-    const customBlueprint = await loadCustomBlueprint(options.usingBlueprint);
-    const expanded = expandBlueprint(blueprint, customBlueprint);
-    producerGraph = createProducerGraph(expanded, catalog);
-    console.log(`Using custom blueprint from: ${options.usingBlueprint}`);
-  } else {
-    producerGraph = createProducerGraphFromConfig(blueprint, catalog);
-  }
+  const graphData: BlueprintGraphData = {
+    nodes: resolvedBlueprint.nodes,
+    edges: resolvedBlueprint.edges as BlueprintEdge[],
+  };
+  const expanded = expandBlueprint(expansionConfig, graphData);
+  const producerGraph = createProducerGraph(expanded, catalog);
+  console.log(`Using blueprint: ${blueprintPath}`);
 
   const plan = await planner.computePlan({
     movieId,
@@ -127,6 +129,7 @@ export async function generatePlan(options: GeneratePlanOptions): Promise<Genera
     plan,
     manifestHash,
     resolvedInputs,
+    providerOptions,
   };
 }
 
@@ -156,8 +159,7 @@ async function loadOrCreateManifest(
 }
 
 function createInputEvents(
-  prompt: string,
-  inputValues: InputValues,
+  inputValues: InputMap,
   revision: RevisionId,
 ): InputEvent[] {
   const now = new Date().toISOString();
@@ -168,7 +170,6 @@ function createInputEvents(
     }
     entries.push(makeInputEvent(id, payload, revision, now));
   }
-  entries.push(makeInputEvent('InquiryPrompt', prompt, revision, now));
   return entries;
 }
 
@@ -211,4 +212,13 @@ async function planExists(
 ): Promise<boolean> {
   const planPath = storageContext.resolve(movieId, 'runs', `${revision}-plan.json`);
   return storageContext.storage.fileExists(planPath);
+}
+
+async function persistInputs(movieDir: string, inputsPath: string, values: InputMap): Promise<void> {
+  const contents = await readFile(inputsPath, 'utf8');
+  await writeFile(join(movieDir, 'inputs.toml'), contents, 'utf8');
+  const promptValue = values.InquiryPrompt;
+  if (typeof promptValue === 'string' && promptValue.trim().length > 0) {
+    await writePromptFile(movieDir, join('prompts', 'inquiry.txt'), promptValue);
+  }
 }

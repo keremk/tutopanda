@@ -46,6 +46,11 @@ export function createReplicateAudioHandler(): HandlerFactory {
         const voice = resolveVoice(resolvedInputs);
 
         if (!text) {
+          console.warn('[providers.replicate.audio.missingText]', {
+            producer: request.jobId,
+            keys: Object.keys(resolvedInputs),
+            plannerContext,
+          });
           throw createProviderError('No text available for audio generation.', {
             code: 'missing_text',
             kind: 'user_input',
@@ -136,22 +141,36 @@ function parseReplicateAudioConfig(raw: unknown): ReplicateAudioConfig {
 }
 
 function resolveText(resolvedInputs: Record<string, unknown>, planner: PlannerContext): string | undefined {
-  const narrationInput = resolvedInputs['SegmentNarration'];
   const segmentIndex = planner.index?.segment ?? 0;
+  const candidateKeys = [
+    'SegmentNarration',
+    'ScriptGeneration.NarrationScript',
+    'NarrationScript',
+    'AudioGeneration.TextInput',
+    'TextInput',
+  ];
 
-  // Handle array of narration texts
-  if (Array.isArray(narrationInput) && narrationInput.length > 0) {
-    const text = narrationInput[segmentIndex] ?? narrationInput[0];
-    if (typeof text === 'string' && text.trim()) {
-      return text;
+  for (const key of candidateKeys) {
+    const value = resolvedInputs[key];
+    const resolved = resolveSegmentText(value, segmentIndex);
+    if (resolved) {
+      return resolved;
     }
   }
 
-  // Handle single string narration
-  if (typeof narrationInput === 'string' && narrationInput.trim()) {
-    return narrationInput;
-  }
+  return undefined;
+}
 
+function resolveSegmentText(source: unknown, segmentIndex: number): string | undefined {
+  if (Array.isArray(source) && source.length > 0) {
+    const entry = source[segmentIndex] ?? source[0];
+    if (typeof entry === 'string' && entry.trim()) {
+      return entry;
+    }
+  }
+  if (typeof source === 'string' && source.trim()) {
+    return source;
+  }
   return undefined;
 }
 

@@ -1,10 +1,6 @@
 /* eslint-disable no-console */
 import crypto from 'node:crypto';
 import { resolve } from 'node:path';
-import {
-  mergeProjectConfig,
-  applyShortcutOverrides,
-} from '../lib/project-config.js';
 import { readCliConfig } from '../lib/cli-config.js';
 import { generatePlan } from '../lib/planner.js';
 import {
@@ -15,12 +11,6 @@ import {
   executeBuild,
   type BuildSummary,
 } from '../lib/build.js';
-import {
-  loadSettings,
-  loadSettingsOverrides,
-  mergeProviderOptions,
-  applyProviderShortcutOverrides,
-} from '../lib/provider-settings.js';
 import { expandPath } from '../lib/path.js';
 import { confirmPlanExecution } from '../lib/interactive-confirm.js';
 import { cleanupPlanFiles } from '../lib/plan-cleanup.js';
@@ -28,16 +18,7 @@ import { cleanupPlanFiles } from '../lib/plan-cleanup.js';
 const console = globalThis.console;
 
 export interface QueryOptions {
-  prompt: string;
-  settingsPath?: string;
-  style?: string;
-  voice?: string;
-  useVideo?: boolean;
-  audience?: string;
-  language?: string;
-  duration?: number;
-  aspectRatio?: string;
-  size?: string;
+  inputsPath?: string;
   dryRun?: boolean;
   nonInteractive?: boolean;
   usingBlueprint?: string;
@@ -55,39 +36,15 @@ export interface QueryResult {
 }
 
 export async function runQuery(options: QueryOptions): Promise<QueryResult> {
-  if (!options.prompt || options.prompt.trim().length === 0) {
-    throw new Error('Prompt is required.');
+  const inputsPath = options.inputsPath ? expandPath(options.inputsPath) : undefined;
+  if (!inputsPath) {
+    throw new Error('Input TOML path is required. Provide --inputs=/path/to/inputs.toml');
   }
 
   const cliConfig = await readCliConfig();
   if (!cliConfig) {
     throw new Error('Tutopanda CLI is not initialized. Run "tutopanda init" first.');
   }
-
-  const baseSettings = await loadSettings(cliConfig.defaultSettingsPath);
-  let projectConfig = baseSettings.projectConfig;
-  let providerOptions = baseSettings.providerOptions;
-
-  if (options.settingsPath) {
-    const overrides = await loadSettingsOverrides(expandPath(options.settingsPath));
-    projectConfig = mergeProjectConfig(projectConfig, overrides.projectConfig);
-    providerOptions = mergeProviderOptions(providerOptions, overrides.providerOptions);
-  }
-
-  projectConfig = applyShortcutOverrides(projectConfig, {
-    style: options.style,
-    voice: options.voice,
-    useVideo: options.useVideo,
-    audience: options.audience,
-    language: options.language,
-    duration: options.duration,
-    aspectRatio: options.aspectRatio,
-    size: options.size,
-  });
-
-  providerOptions = applyProviderShortcutOverrides(providerOptions, {
-    voice: options.voice,
-  });
 
   const movieId = generateMovieId();
   const storageMovieId = formatMovieId(movieId);
@@ -96,11 +53,9 @@ export async function runQuery(options: QueryOptions): Promise<QueryResult> {
 
   const planResult = await generatePlan({
     cliConfig,
-    projectConfig,
-    providerOptions,
-    prompt: options.prompt,
     movieId: storageMovieId,
     isNew: true,
+    inputsPath,
     usingBlueprint: options.usingBlueprint,
   });
 
@@ -131,7 +86,7 @@ export async function runQuery(options: QueryOptions): Promise<QueryResult> {
         movieId: storageMovieId,
         plan: planResult.plan,
         manifest: planResult.manifest,
-        providerOptions,
+        providerOptions: planResult.providerOptions,
         resolvedInputs: planResult.resolvedInputs,
         storage: { rootDir: storageRoot, basePath: storageBasePath },
       })
@@ -145,7 +100,7 @@ export async function runQuery(options: QueryOptions): Promise<QueryResult> {
         plan: planResult.plan,
         manifest: planResult.manifest,
         manifestHash: planResult.manifestHash,
-        providerOptions,
+        providerOptions: planResult.providerOptions,
         resolvedInputs: planResult.resolvedInputs,
         logger: console,
       });

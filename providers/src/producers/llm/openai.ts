@@ -17,6 +17,7 @@ export function createOpenAiLlmHandler(): HandlerFactory {
   return (init) => {
     const { descriptor, secretResolver, logger } = init;
     const clientManager = createOpenAiClientManager(secretResolver, logger);
+    const consoleLogger = globalThis.console;
 
     const factory = createProducerHandlerFactory({
       domain: 'prompt',
@@ -38,6 +39,21 @@ export function createOpenAiLlmHandler(): HandlerFactory {
 
         // 1. Parse config
         const config = runtime.config.parse<OpenAiLlmConfig>(parseOpenAiConfig);
+        const schemaInfo = config.responseFormat?.type === 'json_schema'
+          ? {
+              hasSchema: Boolean(config.responseFormat.schema),
+              schema: config.responseFormat.schema,
+            }
+          : { hasSchema: false };
+        const configLogPayload = {
+          producer: request.jobId,
+          provider: descriptor.provider,
+          model: descriptor.model,
+          responseFormat: config.responseFormat?.type,
+          ...schemaInfo,
+        };
+        logger?.debug?.('providers.openai.config', configLogPayload);
+        consoleLogger.log('[providers.openai.config]', configLogPayload);
 
         // 2. Get OpenAI client and model
         await clientManager.ensure();
@@ -47,6 +63,18 @@ export function createOpenAiLlmHandler(): HandlerFactory {
         const inputs = runtime.inputs.all();
         const prompts = renderPrompts(config, inputs);
         const prompt = buildPrompt(prompts);
+        const promptPayload = {
+          systemPrompt: prompts.system,
+          userPrompt: prompts.user,
+        };
+        const promptLogPayload = {
+          producer: request.jobId,
+          provider: descriptor.provider,
+          model: descriptor.model,
+          ...promptPayload,
+        };
+        logger?.debug?.('providers.openai.prompts', promptLogPayload);
+        consoleLogger.log('[providers.openai.prompts]', promptLogPayload);
 
         // 4. Call OpenAI via AI SDK
         const generation = await callOpenAi({

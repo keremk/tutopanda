@@ -27,22 +27,11 @@ const console = globalThis.console;
 type ProviderListOutputEntry = Awaited<ReturnType<typeof runProvidersList>>['entries'][number];
 
 const cli = meow(
-  `\nUsage\n  $ tutopanda <command> [options]\n\nCommands\n  init                Initialize Tutopanda CLI configuration\n  query <prompt>      Generate a plan for a new movie using defaults + overrides\n  inspect             Export prompts or timeline data for a movie\n  edit                Apply prompt/config edits and regenerate a movie\n  providers:list      Show configured provider variants and readiness status\n  blueprints:list     List available blueprint sections\n  blueprints:describe <section>  Show ports for a blueprint section\n  blueprints:validate <file>     Validate a custom blueprint file\n\nExamples\n  $ tutopanda init --rootFolder=~/media/tutopanda --defaultSettings=~/media/tutopanda/default-settings.json\n  $ tutopanda query "Tell me about the Civil War" --style=Pixar --voice=Clara\n  $ tutopanda query "Video from an image" --using-blueprint=./blueprints/full-video.json\n  $ tutopanda providers:list\n  $ tutopanda blueprints:list\n  $ tutopanda blueprints:describe audio\n  $ tutopanda blueprints:validate ./my-blueprint.json\n  $ tutopanda inspect --movieId=q123456 --prompts\n  $ tutopanda edit --movieId=q123456 --inputs=edited-prompts.toml\n`,
+  `\nUsage\n  $ tutopanda <command> [options]\n\nCommands\n  init                Initialize Tutopanda CLI configuration\n  query               Generate a plan using a blueprint and inputs TOML\n  inspect             Export prompts or timeline data for a movie\n  edit                Regenerate a movie with edited inputs\n  providers:list      Show providers defined in a blueprint\n  blueprints:list     List available blueprint TOML files\n  blueprints:describe <path>  Show details for a blueprint TOML file\n  blueprints:validate <path>  Validate a blueprint TOML file\n\nExamples\n  $ tutopanda init --rootFolder=~/media/tutopanda\n  $ tutopanda query --inputs=cli/inputs-sample.toml --using-blueprint=cli/blueprints/audio-only.toml\n  $ tutopanda providers:list --using-blueprint=cli/blueprints/audio-only.toml\n  $ tutopanda blueprints:list\n  $ tutopanda blueprints:describe cli/blueprints/audio-only.toml\n  $ tutopanda blueprints:validate ./my-blueprint.toml\n  $ tutopanda inspect --movieId=q123456 --prompts\n  $ tutopanda edit --movieId=q123456 --inputs=edited-inputs.toml\n`,
   {
     importMeta: import.meta,
     flags: {
       rootFolder: { type: 'string' },
-      defaultSettings: { type: 'string' },
-      settings: { type: 'string' },
-      settingsPath: { type: 'string' },
-      style: { type: 'string' },
-      voice: { type: 'string' },
-      useVideo: { type: 'boolean' },
-      audience: { type: 'string' },
-      language: { type: 'string' },
-      duration: { type: 'number' },
-      aspectRatio: { type: 'string' },
-      size: { type: 'string' },
       movieId: { type: 'string' },
       prompts: { type: 'boolean', default: true },
       inputs: { type: 'string' },
@@ -57,18 +46,7 @@ async function main(): Promise<void> {
   const [command, ...rest] = cli.input;
   const flags = cli.flags as {
     rootFolder?: string;
-    defaultSettings?: string;
     configPath?: string;
-    settings?: string;
-    settingsPath?: string;
-    style?: string;
-    voice?: string;
-    useVideo?: boolean;
-    audience?: string;
-    language?: string;
-    duration?: number;
-    aspectRatio?: string;
-    size?: string;
     movieId?: string;
     prompts?: boolean;
     inputs?: string;
@@ -81,32 +59,25 @@ async function main(): Promise<void> {
     case 'init': {
       const result = await runInit({
         rootFolder: flags.rootFolder,
-        defaultSettings: flags.defaultSettings,
         configPath: flags.configPath,
       });
       console.log(`Initialized Tutopanda CLI at ${result.rootFolder}`);
-      console.log(`Default settings: ${result.defaultSettingsPath}`);
       console.log(`Builds directory: ${result.buildsFolder}`);
       return;
     }
     case 'query': {
-      const prompt = rest.join(' ').trim();
-      if (!prompt) {
-        console.error('Error: prompt is required for query.');
+      if (rest.length > 0) {
+        console.error('Error: query does not accept positional arguments. Provide --inputs instead.');
+        process.exitCode = 1;
+        return;
+      }
+      if (!flags.inputs) {
+        console.error('Error: --inputs is required for query.');
         process.exitCode = 1;
         return;
       }
       const result = await runQuery({
-        prompt,
-        settingsPath: flags.settings ?? flags.settingsPath,
-        style: flags.style,
-        voice: flags.voice,
-        useVideo: flags.useVideo,
-        audience: flags.audience,
-        language: flags.language,
-        duration: flags.duration,
-        aspectRatio: flags.aspectRatio,
-        size: flags.size,
+        inputsPath: flags.inputs,
         dryRun: Boolean(flags.dryrun),
         nonInteractive: Boolean(flags.nonInteractive),
         usingBlueprint: flags.usingBlueprint,
@@ -122,12 +93,13 @@ async function main(): Promise<void> {
       return;
     }
     case 'providers:list': {
+      const blueprintPath = flags.usingBlueprint;
       const result = await runProvidersList({
-        settingsPath: flags.settings ?? flags.settingsPath,
+        blueprintPath,
       });
 
       if (result.entries.length === 0) {
-        console.log('No provider configurations found in the current settings.');
+        console.log('No producer definitions found in the blueprint.');
         return;
       }
 
@@ -144,7 +116,7 @@ async function main(): Promise<void> {
         for (const entry of entries) {
           const statusLabel = entry.status === 'ready' ? 'ready' : `error: ${entry.message ?? 'unavailable'}`;
           console.log(
-            `    [${entry.priority}] ${entry.provider}/${entry.model} (${entry.environment}) -> ${statusLabel}`,
+            `    ${entry.provider}/${entry.model} (${entry.environment}) -> ${statusLabel}`,
           );
         }
       }
@@ -153,54 +125,73 @@ async function main(): Promise<void> {
     case 'blueprints:list': {
       const result = await runBlueprintsList();
 
-      console.log('Available Blueprint Sections:\n');
-      for (const section of result.sections) {
-        console.log(`  ${section.id}`);
-        console.log(`    ${section.label}`);
-        console.log(`    Inputs: ${section.inputCount}, Outputs: ${section.outputCount}`);
+      if (result.blueprints.length === 0) {
+        console.log('No blueprint TOML files found.');
+        return;
+      }
+
+      console.log('Available Blueprints:\n');
+      for (const blueprint of result.blueprints) {
+        console.log(`  ${blueprint.name}`);
+        if (blueprint.description) {
+          console.log(`    ${blueprint.description}`);
+        }
+        if (blueprint.version) {
+          console.log(`    Version: ${blueprint.version}`);
+        }
+        console.log(`    Path: ${blueprint.path}`);
+        console.log(`    Inputs: ${blueprint.inputCount}, Outputs: ${blueprint.outputCount}`);
         console.log('');
       }
       return;
     }
     case 'blueprints:describe': {
-      const sectionId = rest[0];
-      if (!sectionId) {
-        console.error('Error: section ID is required for blueprints:describe.');
-        console.error('Usage: tutopanda blueprints:describe <section-id>');
+      const blueprintPath = rest[0];
+      if (!blueprintPath) {
+        console.error('Error: blueprint path is required for blueprints:describe.');
+        console.error('Usage: tutopanda blueprints:describe <path-to-blueprint.toml>');
         process.exitCode = 1;
         return;
       }
 
       try {
-        const result = await runBlueprintsDescribe({ sectionId });
+        const result = await runBlueprintsDescribe({ blueprintPath });
 
-        console.log(`Section: ${result.id}`);
-        console.log(`Label: ${result.label}\n`);
+        console.log(`Blueprint: ${result.name}`);
+        if (result.description) {
+          console.log(result.description);
+        }
+        if (result.version) {
+          console.log(`Version: ${result.version}`);
+        }
+        console.log(`Path: ${result.path}\n`);
 
-        console.log('Input Ports:');
+        console.log('Inputs:');
         if (result.inputs.length === 0) {
           console.log('  (none)');
         } else {
           for (const input of result.inputs) {
-            console.log(`  • ${input.name} (${input.cardinality}${input.required ? ', required' : ''})`);
+            console.log(
+              `  • ${input.name} (${input.type}, ${input.cardinality}${input.required ? ', required' : ''})`,
+            );
             if (input.description) {
               console.log(`    ${input.description}`);
             }
-            console.log(`    Ref: ${input.ref.kind}:${input.ref.id}`);
             console.log('');
           }
         }
 
-        console.log('Output Ports:');
+        console.log('Outputs:');
         if (result.outputs.length === 0) {
           console.log('  (none)');
         } else {
           for (const output of result.outputs) {
-            console.log(`  • ${output.name} (${output.cardinality}${output.required ? ', required' : ''})`);
+            console.log(
+              `  • ${output.name} (${output.type}, ${output.cardinality}${output.required ? ', required' : ''})`,
+            );
             if (output.description) {
               console.log(`    ${output.description}`);
             }
-            console.log(`    Ref: ${output.ref.kind}:${output.ref.id}`);
             console.log('');
           }
         }
@@ -214,7 +205,7 @@ async function main(): Promise<void> {
       const blueprintPath = rest[0];
       if (!blueprintPath) {
         console.error('Error: blueprint file path is required for blueprints:validate.');
-        console.error('Usage: tutopanda blueprints:validate <file-path>');
+        console.error('Usage: tutopanda blueprints:validate <path-to-blueprint.toml>');
         process.exitCode = 1;
         return;
       }
@@ -222,16 +213,10 @@ async function main(): Promise<void> {
       const result = await runBlueprintsValidate({ blueprintPath });
 
       if (result.valid) {
-        console.log(`✓ Blueprint "${result.config.name}" is valid\n`);
-        console.log(`Description: ${result.config.description || '(none)'}`);
-        console.log(`Sections: ${result.config.sections.join(', ')}`);
-        console.log(`Connections: ${result.config.connections.length}`);
-
-        if (result.warnings.length > 0) {
-          console.log('\nWarnings:');
-          for (const warning of result.warnings) {
-            console.log(`  ⚠ ${warning.message}`);
-          }
+        console.log(`✓ Blueprint "${result.name ?? result.path}" is valid`);
+        console.log(`Path: ${result.path}`);
+        if (typeof result.nodeCount === 'number' && typeof result.edgeCount === 'number') {
+          console.log(`Nodes: ${result.nodeCount}, Edges: ${result.edgeCount}`);
         }
       } else {
         console.error(`✗ Blueprint validation failed\n`);
@@ -263,20 +248,17 @@ async function main(): Promise<void> {
         process.exitCode = 1;
         return;
       }
+      if (!flags.inputs) {
+        console.error('Error: --inputs is required for edit.');
+        process.exitCode = 1;
+        return;
+      }
       const result = await runEdit({
         movieId: flags.movieId,
         inputsPath: flags.inputs,
-        settingsPath: flags.settings ?? flags.settingsPath,
-        style: flags.style,
-        voice: flags.voice,
-        useVideo: flags.useVideo,
-        audience: flags.audience,
-        language: flags.language,
-        duration: flags.duration,
-        aspectRatio: flags.aspectRatio,
-        size: flags.size,
         dryRun: Boolean(flags.dryrun),
         nonInteractive: Boolean(flags.nonInteractive),
+        usingBlueprint: flags.usingBlueprint,
       });
       console.log(`Updated prompts for movie ${flags.movieId}. New revision: ${result.targetRevision}`);
       console.log(`Plan saved to ${result.planPath}`);

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createPlanner, createProducerGraphFromConfig } from './planner.js';
+import { createPlanner, createProducerGraph } from './planner.js';
 import { createEventLog } from './event-log.js';
 import { createStorageContext, initializeMovieStorage } from './storage.js';
 import { createManifestService, ManifestNotFoundError } from './manifest.js';
@@ -12,7 +12,7 @@ import type {
   ProducerGraph,
   RevisionId,
 } from './types.js';
-import type { BlueprintExpansionConfig } from './blueprints.js';
+import { expandBlueprint, type BlueprintGraphData, type BlueprintExpansionConfig } from './blueprints.js';
 
 const testCatalog: ProducerCatalog = {
   ScriptProducer: {
@@ -101,6 +101,47 @@ const testCatalog: ProducerCatalog = {
   },
 };
 
+const TEST_BLUEPRINT: BlueprintGraphData = {
+  nodes: [
+    { ref: { kind: 'InputSource', id: 'InquiryPrompt' }, cardinality: 'single' },
+    { ref: { kind: 'Producer', id: 'ScriptProducer' }, cardinality: 'single' },
+    { ref: { kind: 'Artifact', id: 'NarrationScript' }, cardinality: 'perSegment' },
+    { ref: { kind: 'Producer', id: 'AudioProducer' }, cardinality: 'perSegment' },
+    { ref: { kind: 'Artifact', id: 'SegmentAudio' }, cardinality: 'perSegment' },
+    { ref: { kind: 'Producer', id: 'TimelineAssembler' }, cardinality: 'single' },
+    { ref: { kind: 'Artifact', id: 'FinalVideo' }, cardinality: 'single' },
+  ],
+  edges: [
+    {
+      from: { kind: 'InputSource', id: 'InquiryPrompt' },
+      to: { kind: 'Producer', id: 'ScriptProducer' },
+    },
+    {
+      from: { kind: 'Producer', id: 'ScriptProducer' },
+      to: { kind: 'Artifact', id: 'NarrationScript' },
+      dimensions: ['segment'],
+    },
+    {
+      from: { kind: 'Artifact', id: 'NarrationScript' },
+      to: { kind: 'Producer', id: 'AudioProducer' },
+      dimensions: ['segment'],
+    },
+    {
+      from: { kind: 'Producer', id: 'AudioProducer' },
+      to: { kind: 'Artifact', id: 'SegmentAudio' },
+      dimensions: ['segment'],
+    },
+    {
+      from: { kind: 'Artifact', id: 'SegmentAudio' },
+      to: { kind: 'Producer', id: 'TimelineAssembler' },
+    },
+    {
+      from: { kind: 'Producer', id: 'TimelineAssembler' },
+      to: { kind: 'Artifact', id: 'FinalVideo' },
+    },
+  ],
+};
+
 function memoryContext(basePath = 'builds') {
   return createStorageContext({ kind: 'memory', basePath });
 }
@@ -109,9 +150,12 @@ function blueprintConfig(): BlueprintExpansionConfig {
   return {
     segmentCount: 2,
     imagesPerSegment: 1,
-    useVideo: false,
-    isImageToVideo: false,
   };
+}
+
+function buildProducerGraph(): ProducerGraph {
+  const expanded = expandBlueprint(blueprintConfig(), TEST_BLUEPRINT);
+  return createProducerGraph(expanded, testCatalog);
 }
 
 async function loadManifest(ctx: ReturnType<typeof memoryContext>): Promise<Manifest> {
@@ -174,7 +218,7 @@ describe('planner', () => {
     const ctx = memoryContext();
     await initializeMovieStorage(ctx, 'demo');
     const eventLog = createEventLog(ctx);
-    const graph = createProducerGraphFromConfig(blueprintConfig(), testCatalog);
+    const graph = buildProducerGraph();
     const planner = createPlanner();
     const manifest = await loadManifest(ctx);
 
@@ -195,7 +239,7 @@ describe('planner', () => {
     const ctx = memoryContext();
     await initializeMovieStorage(ctx, 'demo');
     const eventLog = createEventLog(ctx);
-    const graph = createProducerGraphFromConfig(blueprintConfig(), testCatalog);
+    const graph = buildProducerGraph();
     const planner = createPlanner();
 
     const baseline = createInputEvents({ InquiryPrompt: 'Tell me a story' }, 'rev-0001');
@@ -237,7 +281,7 @@ describe('planner', () => {
     const ctx = memoryContext();
     await initializeMovieStorage(ctx, 'demo');
     const eventLog = createEventLog(ctx);
-    const graph = createProducerGraphFromConfig(blueprintConfig(), testCatalog);
+    const graph = buildProducerGraph();
     const planner = createPlanner();
 
     const baseRevision = 'rev-0001';

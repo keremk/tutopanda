@@ -15,8 +15,6 @@ export const InputIdList = [
   'ImageStyle',
   'Size',
   'AspectRatio',
-  'UseVideo',
-  'IsImageToVideo',
   'StartingImagePromptInput',
   'SegmentAnimations',
   'AssemblyStrategy',
@@ -39,8 +37,6 @@ type InputValueTypeMap = {
   ImageStyle: string;
   Size: string;
   AspectRatio: string;
-  UseVideo: boolean;
-  IsImageToVideo: boolean;
   StartingImagePromptInput: string;
   SegmentAnimations: Record<string, unknown>;
   AssemblyStrategy: string;
@@ -62,8 +58,6 @@ const InputValueShape = z
     ImageStyle: z.string(),
     Size: z.string(),
     AspectRatio: z.string(),
-    UseVideo: z.boolean(),
-    IsImageToVideo: z.boolean(),
     StartingImagePromptInput: z.string(),
     SegmentAnimations: z.record(z.string(), z.unknown()),
     AssemblyStrategy: z.string(),

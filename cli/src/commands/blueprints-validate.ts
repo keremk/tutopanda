@@ -1,11 +1,5 @@
-import { readFile } from 'node:fs/promises';
-import {
-  parseCustomBlueprintConfig,
-  composeBlueprint,
-  getSectionById,
-  type CustomBlueprintConfig,
-  type ValidationWarning,
-} from 'tutopanda-core';
+import { resolve } from 'node:path';
+import { loadBlueprintFromToml } from '../lib/blueprint-loader/index.js';
 import { expandPath } from '../lib/path.js';
 
 export interface BlueprintsValidateOptions {
@@ -14,50 +8,30 @@ export interface BlueprintsValidateOptions {
 
 export interface BlueprintsValidateResult {
   valid: boolean;
-  config: CustomBlueprintConfig;
-  warnings: ValidationWarning[];
+  path: string;
+  name?: string;
   error?: string;
+  nodeCount?: number;
+  edgeCount?: number;
 }
 
 export async function runBlueprintsValidate(
   options: BlueprintsValidateOptions,
 ): Promise<BlueprintsValidateResult> {
   try {
-    const expandedPath = expandPath(options.blueprintPath);
-    const fileContent = await readFile(expandedPath, 'utf-8');
-    const config: CustomBlueprintConfig = parseCustomBlueprintConfig(JSON.parse(fileContent));
-
-    // Resolve section IDs to actual section objects
-    const sections = [];
-    for (const sectionId of config.sections) {
-      const section = getSectionById(sectionId);
-      if (!section) {
-        return {
-          valid: false,
-          config,
-          warnings: [],
-          error: `Unknown section "${sectionId}". Available sections: script, music, audio, images, videoFromText, videoFromImage, assembly`,
-        };
-      }
-      sections.push(section);
-    }
-
-    // Compose and validate the blueprint
-    const { warnings } = composeBlueprint(sections, config.connections, {
-      autoConnect: config.autoConnect ?? false,
-      validate: true,
-    });
-
+    const expandedPath = resolve(expandPath(options.blueprintPath));
+    const { blueprint } = await loadBlueprintFromToml(expandedPath);
     return {
       valid: true,
-      config,
-      warnings,
+      path: expandedPath,
+      name: blueprint.meta.name,
+      nodeCount: blueprint.nodes.length,
+      edgeCount: blueprint.edges.length,
     };
   } catch (error) {
     return {
       valid: false,
-      config: {} as CustomBlueprintConfig,
-      warnings: [],
+      path: resolve(options.blueprintPath),
       error: error instanceof Error ? error.message : String(error),
     };
   }

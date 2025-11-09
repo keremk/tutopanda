@@ -1,6 +1,4 @@
-import { expandBlueprint } from './blueprints.js';
 import type {
-  BlueprintExpansionConfig,
   ExpandedBlueprint,
   PlannedEdgeInstance,
   PlannedNodeInstance,
@@ -85,14 +83,6 @@ export function createPlanner(options: PlannerOptions = {}) {
   };
 }
 
-export function createProducerGraphFromConfig(
-  config: BlueprintExpansionConfig,
-  catalog: ProducerCatalog,
-): ProducerGraph {
-  const expanded = expandBlueprint(config);
-  return createProducerGraph(expanded, catalog);
-}
-
 export function createProducerGraph(
   expanded: ExpandedBlueprint,
   catalog: ProducerCatalog,
@@ -114,7 +104,7 @@ export function createProducerGraph(
     const producedArtefacts = collectProducedArtefacts(producer, expanded.edges, nodeMap).map(
       canonicalizeArtifactKey,
     );
-    const catalogEntry = catalog[producer.ref.id as ProducerKind];
+    const catalogEntry = resolveCatalogEntry(producer.ref.id as string, catalog);
     if (!catalogEntry) {
       throw new Error(`Missing producer catalog entry for ${producer.ref.id}`);
     }
@@ -165,6 +155,14 @@ function buildGraphMetadata(blueprint: ProducerGraph): Map<string, GraphMetadata
     });
   }
   return metadata;
+}
+
+function resolveCatalogEntry(id: string, catalog: ProducerCatalog) {
+  if (catalog[id as ProducerKind]) {
+    return catalog[id as ProducerKind];
+  }
+  const baseId = id.includes('.') ? id.split('.').pop() : id;
+  return baseId ? catalog[baseId as ProducerKind] : undefined;
 }
 
 function determineInitialDirtyJobs(
@@ -359,6 +357,8 @@ function collectInputDependencies(
   nodeMap: Map<string, PlannedNodeInstance>,
 ): string[] {
   const dependencies: string[] = [];
+  const upstreamArtefacts = new Set<string>();
+
   for (const edge of edges) {
     if (edge.to !== producer.key) {
       continue;
@@ -368,8 +368,55 @@ function collectInputDependencies(
       continue;
     }
     dependencies.push(edge.from);
+
+    if (fromNode.ref.kind === 'InputSource') {
+      const artefactKeys = collectUpstreamArtefacts(edge.from, edges, nodeMap, new Set());
+      for (const artefactKey of artefactKeys) {
+        if (!upstreamArtefacts.has(artefactKey)) {
+          upstreamArtefacts.add(artefactKey);
+          dependencies.push(artefactKey);
+        }
+      }
+    }
   }
+
   return dependencies;
+}
+
+function collectUpstreamArtefacts(
+  inputKey: string,
+  edges: PlannedEdgeInstance[],
+  nodeMap: Map<string, PlannedNodeInstance>,
+  visited: Set<string>,
+): string[] {
+  if (visited.has(inputKey)) {
+    return [];
+  }
+  visited.add(inputKey);
+
+  const artefacts: string[] = [];
+  const normalizedInputKey = normalizeInputNodeKey(inputKey);
+
+  for (const edge of edges) {
+    if (!inputNodeKeysMatch(edge.to, normalizedInputKey)) {
+      continue;
+    }
+    const fromNode = nodeMap.get(edge.from);
+    if (!fromNode || !fromNode.active) {
+      continue;
+    }
+
+    if (fromNode.ref.kind === 'Artifact') {
+      artefacts.push(edge.from);
+      continue;
+    }
+
+    if (fromNode.ref.kind === 'InputSource') {
+      artefacts.push(...collectUpstreamArtefacts(edge.from, edges, nodeMap, visited));
+    }
+  }
+
+  return artefacts;
 }
 
 function collectProducedArtefacts(
@@ -412,10 +459,18 @@ function computeArtefactProducers(
 function canonicalizeInputs(inputs: string[]): string[] {
   return inputs.map((key) => {
     if (key.startsWith('InputSource:')) {
-      return `Input:${key.slice('InputSource:'.length)}`;
+      return formatInputKey(key.slice('InputSource:'.length));
+    }
+    if (key.startsWith('Input:')) {
+      return formatInputKey(key.slice('Input:'.length));
     }
     return canonicalizeArtifactKey(key);
   });
+}
+
+function formatInputKey(raw: string): string {
+  const normalized = normalizeInputId(raw);
+  return `Input:${normalized}`;
 }
 
 function canonicalizeArtifactKey(key: string): string {
@@ -431,5 +486,32 @@ function extractInputBaseId(input: string): string | null {
   }
   const withoutPrefix = input.slice('Input:'.length);
   const bracket = withoutPrefix.indexOf('[');
-  return bracket >= 0 ? withoutPrefix.slice(0, bracket) : withoutPrefix;
+  const base = bracket >= 0 ? withoutPrefix.slice(0, bracket) : withoutPrefix;
+  return normalizeInputId(base);
+}
+
+function normalizeInputId(id: string): string {
+  if (id.includes('.')) {
+    return id.split('.').pop() ?? id;
+  }
+  return id;
+}
+
+function normalizeInputNodeKey(key: string): string {
+  if (!key.startsWith('InputSource:')) {
+    return key;
+  }
+  const remainder = key.slice('InputSource:'.length);
+  const bracketIndex = remainder.indexOf('[');
+  const idPart = bracketIndex >= 0 ? remainder.slice(0, bracketIndex) : remainder;
+  const dimsPart = bracketIndex >= 0 ? remainder.slice(bracketIndex) : '';
+  const baseId = idPart.includes('.') ? idPart.split('.').pop() ?? idPart : idPart;
+  return `InputSource:${baseId}${dimsPart}`;
+}
+
+function inputNodeKeysMatch(candidate: string, normalized: string): boolean {
+  if (!candidate.startsWith('InputSource:')) {
+    return candidate === normalized;
+  }
+  return normalizeInputNodeKey(candidate) === normalized;
 }

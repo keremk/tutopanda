@@ -1,6 +1,7 @@
 import type { EventLog } from './event-log.js';
 import type { StorageContext } from './storage.js';
 import type { BlobRef, ArtefactEvent } from './types.js';
+import { formatBlobFileName } from './blob-utils.js';
 
 /**
  * Resolves artifact IDs to their actual data by streaming the event log
@@ -48,13 +49,16 @@ export async function resolveArtifactsFromEventLog(args: {
   for (const [artifactId, event] of latestEvents) {
     const kind = extractArtifactKind(artifactId);
 
+    if (event.output.inline !== undefined) {
+      // Prefer inline payloads for text artefacts
+      resolved[kind] = event.output.inline;
+      continue;
+    }
+
     if (event.output.blob) {
-      // Read blob from storage
+      // Fallback to blob if no inline payload is present
       const blobData = await readBlob(args.storage, args.movieId, event.output.blob);
       resolved[kind] = blobData;
-    } else if (event.output.inline !== undefined) {
-      // Use inline string directly
-      resolved[kind] = event.output.inline;
     }
   }
 
@@ -101,10 +105,15 @@ async function readBlob(
   blobRef: BlobRef,
 ): Promise<Uint8Array> {
   const prefix = blobRef.hash.slice(0, 2);
-  const blobPath = storage.resolve(movieId, 'blobs', prefix, blobRef.hash);
-
-  // Use FlyStorage's readToUint8Array method
-  const data = await storage.storage.readToUint8Array(blobPath);
-
-  return data;
+  const fileName = formatBlobFileName(blobRef.hash, blobRef.mimeType);
+  const primaryPath = storage.resolve(movieId, 'blobs', prefix, fileName);
+  try {
+    return await storage.storage.readToUint8Array(primaryPath);
+  } catch (error) {
+    if (fileName !== blobRef.hash) {
+      const legacyPath = storage.resolve(movieId, 'blobs', prefix, blobRef.hash);
+      return await storage.storage.readToUint8Array(legacyPath);
+    }
+    throw error;
+  }
 }
