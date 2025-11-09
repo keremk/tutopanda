@@ -84,7 +84,9 @@ function createJobContext(overrides: Partial<ProviderJobContext> = {}): Provider
       ...baseContext.context,
       ...overrideContext,
       providerConfig:
-        overrideContext.providerConfig ?? baseContext.context.providerConfig,
+        overrideContext.providerConfig !== undefined
+          ? overrideContext.providerConfig
+          : baseContext.context.providerConfig,
       rawAttachments:
         overrideContext.rawAttachments ?? baseContext.context.rawAttachments,
       observability:

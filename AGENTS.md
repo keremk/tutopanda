@@ -27,6 +27,11 @@ Run `pnpm install` once to hydrate the workspaces. Use `pnpm dev` for the combin
 cd cli && pnpm vitest run --pool=threads --poolOptions.threads.singleThread
 ```
 
+> **Agent Rule**: Providers Vitest runs must stay on the threads pool; run `pnpm --filter tutopanda-providers test` from the repo root (the config already pins `pool: 'threads'`). If you need to run it manually inside the package use:
+```bash
+cd providers && pnpm vitest run --config vitest.config.ts --pool=threads
+```
+
 > **Agent Rule**: Never run `git restore`, `git checkout`, `git clean`, or any other destructive git command without explicit user consent. Confirm with the user before invoking any command that might drop local changes.
 
 > **Agent Rule**: Never generate build artefacts (e.g. `.js`, `.d.ts`, `.map`) inside `core/src` or other source directories. Keep generated output inside the designated `dist/` folders by running the appropriate package build.
