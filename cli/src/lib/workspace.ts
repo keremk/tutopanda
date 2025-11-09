@@ -36,6 +36,7 @@ export interface WorkspaceArtefactEntry {
   kind: 'inline' | 'blob';
   mimeType?: string;
   producedBy: string;
+  blob?: BlobRef;
 }
 
 export interface WorkspaceExportResult {
@@ -222,6 +223,7 @@ async function copyArtefactsToWorkspace(args: {
         kind: 'inline',
         mimeType: 'text/plain',
         producedBy: record.producedBy,
+        blob: record.blob,
       });
       continue;
     }
@@ -245,6 +247,7 @@ async function copyArtefactsToWorkspace(args: {
         kind: 'blob',
         mimeType: record.blob.mimeType,
         producedBy: record.producedBy,
+        blob: record.blob,
       });
     }
   }
@@ -258,11 +261,21 @@ async function hashFile(filePath: string): Promise<string> {
 }
 
 async function hashArtefactFile(entry: WorkspaceArtefactEntry, absolutePath: string): Promise<{ nextHash: string }> {
+  if (entry.blob) {
+    const buffer =
+      entry.mimeType && entry.mimeType.startsWith('text/')
+        ? Buffer.from(await readFile(absolutePath, 'utf8'), 'utf8')
+        : await readFile(absolutePath);
+    const nextHash = createHash('sha256').update(buffer).digest('hex');
+    return { nextHash };
+  }
+
   if (entry.kind === 'inline') {
     const inlineValue = await readFile(absolutePath, 'utf8');
     const output: ArtefactEventOutput = { inline: inlineValue };
     return { nextHash: hashArtefactOutput(output) };
   }
+
   const data = await readFile(absolutePath);
   const nextHash = createHash('sha256').update(data).digest('hex');
   return { nextHash };

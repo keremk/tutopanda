@@ -76,8 +76,10 @@ export async function runEdit(options: EditOptions): Promise<EditResult> {
     pendingArtefacts: options.pendingArtefacts,
   });
 
-  // Interactive confirmation (skip if dry-run or non-interactive)
-  if (!options.dryRun && !options.nonInteractive) {
+  const hasJobs = planResult.plan.layers.some((layer) => layer.length > 0);
+
+  // Interactive confirmation (skip if dry-run, non-interactive, or no work to perform)
+  if (hasJobs && !options.dryRun && !options.nonInteractive) {
     const confirmed = await confirmPlanExecution(planResult.plan);
     if (!confirmed) {
       await cleanupPlanFiles(movieDir);
