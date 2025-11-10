@@ -188,4 +188,5 @@ describe('createReplicateTextToImageHandler', () => {
 
     await expect(handler.invoke(request)).rejects.toThrow('No prompt available for image generation.');
   });
+
 });

@@ -43,26 +43,31 @@ export async function resolveArtifactsFromEventLog(args: {
     }
   }
 
-  // Build resolved map with artifact kind as key
-  const resolved: Record<string, unknown> = {};
+  const resolvedById = new Map<string, unknown>();
+  const resolvedByKind = new Map<string, unknown>();
 
   for (const [artifactId, event] of latestEvents) {
     const kind = extractArtifactKind(artifactId);
 
     if (event.output.inline !== undefined) {
       // Prefer inline payloads for text artefacts
-      resolved[kind] = event.output.inline;
+      resolvedByKind.set(kind, event.output.inline);
+      resolvedById.set(formatResolvedKey(artifactId), event.output.inline);
       continue;
     }
 
     if (event.output.blob) {
       // Fallback to blob if no inline payload is present
       const blobData = await readBlob(args.storage, args.movieId, event.output.blob);
-      resolved[kind] = blobData;
+      resolvedByKind.set(kind, blobData);
+      resolvedById.set(formatResolvedKey(artifactId), blobData);
     }
   }
 
-  return resolved;
+  return Object.fromEntries([
+    ...resolvedByKind.entries(),
+    ...resolvedById.entries(),
+  ]);
 }
 
 /**
@@ -116,4 +121,8 @@ async function readBlob(
     }
     throw error;
   }
+}
+
+function formatResolvedKey(artifactId: string): string {
+  return artifactId.replace(/^Artifact:/, '');
 }

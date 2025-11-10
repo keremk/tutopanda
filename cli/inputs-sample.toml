@@ -3,3 +3,6 @@ InquiryPrompt = "Tell me about Battle of Waterloo"
 Duration = 30
 NumOfSegments = 3
 VoiceId = "Wise_Woman"
+ImageStyle = "Ghibli"
+Size = "1K"
+AspectRatio = "16:9"

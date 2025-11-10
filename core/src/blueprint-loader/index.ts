@@ -10,6 +10,5 @@ export {
   prefixNodeRef,
   resolveEdgeRef,
   resolveEdges,
-  detectNodeKind,
 } from './resolver.js';
 export type { ParsedNodeRef } from './resolver.js';

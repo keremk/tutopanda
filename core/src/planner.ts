@@ -110,6 +110,7 @@ export function createProducerGraph(
 
   for (const producer of producerNodes) {
     const rawInputs = collectInputDependencies(producer, expanded.edges, nodeMap);
+    const inputAliasMap = buildInputAliasMap(producer.key, expanded.edges, nodeMap);
     const canonicalInputs = canonicalizeInputs(rawInputs);
     const producedArtefacts = collectProducedArtefacts(producer, expanded.edges, nodeMap).map(
       canonicalizeArtifactKey,
@@ -133,6 +134,14 @@ export function createProducerGraph(
       }
     }
 
+    const nodeContext: Record<string, unknown> = {
+      index: producer.index,
+      label: producer.label,
+      description: producer.description,
+    };
+    if (Object.keys(inputAliasMap).length > 0) {
+      nodeContext.inputAliases = inputAliasMap;
+    }
     nodes.push({
       jobId: producer.key,
       producer: producer.ref.id,
@@ -141,11 +150,7 @@ export function createProducerGraph(
       provider: catalogEntry.provider,
       providerModel: catalogEntry.providerModel,
       rateKey: catalogEntry.rateKey,
-      context: {
-        index: producer.index,
-        label: producer.label,
-        description: producer.description,
-      },
+      context: nodeContext,
     });
   }
 
@@ -435,6 +440,42 @@ function collectInputDependencies(
   return dependencies;
 }
 
+function buildInputAliasMap(
+  producerKey: string,
+  edges: PlannedEdgeInstance[],
+  nodeMap: Map<string, PlannedNodeInstance>,
+): Record<string, string[]> {
+  const aliasMap = new Map<string, Set<string>>();
+
+  for (const edge of edges) {
+    if (edge.to !== producerKey) {
+      continue;
+    }
+    if (!edge.from.startsWith('InputSource:')) {
+      continue;
+    }
+    const upstreamArtefacts = collectUpstreamArtefacts(edge.from, edges, nodeMap, new Set());
+    if (upstreamArtefacts.length === 0) {
+      continue;
+    }
+    const normalizedInputKey = normalizeInputNodeKey(edge.from);
+    const baseId = normalizedInputKey.slice('InputSource:'.length);
+    const inputName = stripDimensions(normalizeInputId(baseId));
+    const target = aliasMap.get(inputName) ?? new Set<string>();
+    for (const artefactKey of upstreamArtefacts) {
+      const canonical = canonicalizeArtifactKey(artefactKey);
+      target.add(canonical);
+    }
+    aliasMap.set(inputName, target);
+  }
+
+  const result: Record<string, string[]> = {};
+  for (const [inputName, sources] of aliasMap) {
+    result[inputName] = Array.from(sources);
+  }
+  return result;
+}
+
 function collectUpstreamArtefacts(
   inputKey: string,
   edges: PlannedEdgeInstance[],
@@ -530,6 +571,11 @@ function canonicalizeArtifactKey(key: string): string {
     return `Artifact:${key.slice('Artifact:'.length)}`;
   }
   return `Artifact:${key}`;
+}
+
+function stripDimensions(id: string): string {
+  const bracket = id.indexOf('[');
+  return bracket >= 0 ? id.slice(0, bracket) : id;
 }
 
 function extractInputBaseId(input: string): string | null {

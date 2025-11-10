@@ -5,6 +5,7 @@ import { createEventLog } from './event-log.js';
 import { createManifestService } from './manifest.js';
 import { createStorageContext, initializeMovieStorage } from './storage.js';
 import type {
+  ArtefactEvent,
   ExecutionPlan,
   Manifest,
   ProduceRequest,
@@ -164,5 +165,76 @@ describe('createRunner', () => {
     const failedJob = result.jobs.find((job) => job.jobId === 'job-2');
     expect(failedJob?.status).toBe('failed');
     expect(failedJob?.error?.message).toContain('boom');
+  });
+
+  it('injects alias inputs derived from upstream artefacts', async () => {
+    const storage = createStorageContext({ kind: 'memory' });
+    await initializeMovieStorage(storage, 'movie-alias');
+    const eventLog = createEventLog(storage);
+    const manifestService = createManifestService(storage);
+
+    const artefactEvent: ArtefactEvent = {
+      artefactId: 'Artifact:ScriptGeneration.NarrationScript[segment=0]',
+      revision: 'rev-0001',
+      inputsHash: 'hash',
+      output: { inline: 'aliased text' },
+      status: 'succeeded',
+      producedBy: 'Producer:ScriptGeneration.ScriptProducer[segment=0]',
+      createdAt: new Date().toISOString(),
+    };
+
+    await eventLog.appendArtefact('movie-alias', artefactEvent);
+
+    let observedResolvedInputs: Record<string, unknown> | undefined;
+
+    const runner = createRunner({
+      produce: async (request) => {
+        observedResolvedInputs = request.job.context?.extras?.resolvedInputs as Record<string, unknown> | undefined;
+        return {
+          jobId: request.job.jobId,
+          status: 'succeeded',
+          artefacts: [],
+        };
+      },
+    });
+
+    const job: JobDescriptor = {
+      jobId: 'job-alias',
+      producer: 'ImagePromptGeneration.ImagePromptProducer[segment=0]',
+      inputs: [
+        'Artifact:ScriptGeneration.NarrationScript[segment=0]',
+        'Input:ImagePromptGeneration.NarrativeText',
+      ],
+      produces: [],
+      provider: 'openai',
+      providerModel: 'gpt-5-mini',
+      rateKey: 'llm:image_prompt',
+      context: {
+        inputAliases: {
+          NarrativeText: ['ScriptGeneration.NarrationScript'],
+        },
+      },
+    };
+
+    const manifest: Manifest = {
+      revision: 'rev-0001',
+      baseRevision: null,
+      createdAt: new Date().toISOString(),
+      inputs: {},
+      artefacts: {},
+    };
+
+    await runner.executeJob(job, {
+      movieId: 'movie-alias',
+      storage,
+      eventLog,
+      manifest,
+      manifestService,
+      layerIndex: 0,
+      attempt: 1,
+      revision: 'rev-0002',
+    });
+
+    expect(observedResolvedInputs?.NarrativeText).toBe('aliased text');
   });
 });

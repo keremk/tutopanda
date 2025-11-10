@@ -56,6 +56,13 @@ export function createReplicateTextToImageHandler(): HandlerFactory {
           });
         }
 
+        console.debug('[providers.replicate.image.prompt]', {
+          producer: request.jobId,
+          prompt,
+          availableInputs: Object.keys(resolvedInputs),
+          plannerContext,
+        });
+
         const input = buildReplicateInput({
           config,
           prompt,
@@ -146,10 +153,13 @@ function parseReplicateImageConfig(raw: unknown): ReplicateImageConfig {
 
 
 function resolvePrompt(resolvedInputs: Record<string, unknown>, planner: PlannerContext): string | undefined {
-  const promptInput = resolvedInputs['SegmentImagePromptInput'];
+  const promptInput = resolvedInputs['SegmentImagePromptInput'] ?? resolvedInputs['Prompt'];
   const segmentIndex = planner.index?.segment ?? 0;
   const imageIndex = planner.index?.image ?? 0;
-  const imagesPerSegment = resolvedInputs['ImagesPerSegment'];
+  const imagesPerSegment =
+    (typeof resolvedInputs['ImagesPerSegment'] === 'number'
+      ? resolvedInputs['ImagesPerSegment']
+      : resolvedInputs['NumOfImagesPerNarrative']) as number | undefined;
 
   // Handle array of prompts
   if (Array.isArray(promptInput) && promptInput.length > 0) {
@@ -175,7 +185,10 @@ function resolvePrompt(resolvedInputs: Record<string, unknown>, planner: Planner
   }
 
   // Fallback to inquiry prompt
-  const inquiryPrompt = resolvedInputs['InquiryPrompt'];
+  const inquiryPrompt =
+    resolvedInputs['InquiryPrompt']
+    ?? resolvedInputs['ImagePrompt']
+    ?? resolvedInputs['ImagePromptGeneration.ImagePrompt'];
   if (typeof inquiryPrompt === 'string' && inquiryPrompt.trim()) {
     return inquiryPrompt;
   }
@@ -234,4 +247,3 @@ function buildReplicateInput(args: {
 
   return input;
 }
-

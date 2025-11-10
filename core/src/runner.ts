@@ -421,6 +421,10 @@ function mergeResolvedArtifacts(
   }
 
   const jobContext = job.context ?? {};
+  const aliasIndex = buildInputAliasIndex(jobContext);
+  if (aliasIndex.size > 0) {
+    console.debug('[runner.inputAliases]', job.jobId, Object.fromEntries(aliasIndex));
+  }
 
   // Extract existing extras and resolvedInputs
   const extras = isRecord(jobContext) && isRecord(jobContext.extras)
@@ -435,7 +439,14 @@ function mergeResolvedArtifacts(
   const addedAliases: string[] = [];
 
   for (const [key, value] of Object.entries(resolvedArtifacts)) {
-    for (const alias of buildResolvedInputAliases(key)) {
+    const aliasNames = new Set(buildResolvedInputAliases(key));
+    const mappedAliases = aliasIndex.get(key);
+    if (mappedAliases) {
+      for (const alias of mappedAliases) {
+        aliasNames.add(alias);
+      }
+    }
+    for (const alias of aliasNames) {
       mergedResolvedInputs[alias] = value;
       addedAliases.push(alias);
     }
@@ -480,4 +491,50 @@ function buildResolvedInputAliases(kind: string): string[] {
     return [kind];
   }
   return [kind, shortName];
+}
+
+function buildInputAliasIndex(jobContext: unknown): Map<string, string[]> {
+  const aliasIndex = new Map<string, string[]>();
+  if (!isRecord(jobContext)) {
+    return aliasIndex;
+  }
+
+  const container = getInputAliasContainer(jobContext);
+  if (!container) {
+    return aliasIndex;
+  }
+
+  for (const [alias, sources] of Object.entries(container)) {
+    const list = Array.isArray(sources) ? sources : [sources];
+    for (const source of list) {
+      if (typeof source !== 'string') {
+        continue;
+      }
+      for (const candidate of buildSourceCandidates(source)) {
+        const existing = aliasIndex.get(candidate) ?? [];
+        existing.push(alias);
+        aliasIndex.set(candidate, existing);
+      }
+    }
+  }
+  return aliasIndex;
+}
+
+function getInputAliasContainer(context: Record<string, unknown>): Record<string, unknown> | undefined {
+  const direct = context.inputAliases;
+  if (isRecord(direct)) {
+    return direct;
+  }
+  const aliases = context.aliases;
+  if (isRecord(aliases) && isRecord(aliases.inputs)) {
+    return aliases.inputs;
+  }
+  return undefined;
+}
+
+function buildSourceCandidates(source: string): string[] {
+  if (source.startsWith('Artifact:')) {
+    return [source, source.replace(/^Artifact:/, '')];
+  }
+  return [source, `Artifact:${source}`];
 }

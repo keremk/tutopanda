@@ -1,0 +1,69 @@
+[meta]
+name = "Image Generator"
+description = "A blueprint for generating images using Seedreem-4 model."
+id = "ImageGenerator"
+version = "0.1.0"
+author = "Tutopanda"
+license = "MIT"
+
+[[inputs]]
+name = "Prompt"
+description = "The prompt describing the image to be generated."
+type = "array"
+cardinality = "perSegment"
+itemType = "string"
+required = true
+
+[[inputs]]
+name = "ImageStyle"
+description = "Text describing the image style to be used."
+type = "string"
+cardinality = "single"
+required = true
+
+[[inputs]]
+name = "Size"
+description = "Enumerated values, 1K, 2K, 4K or custom describing the image size to be used. "
+type = "string"
+cardinality = "single"
+required = false
+default = "1K"
+
+[[inputs]]
+name = "AspectRatio"
+description = "Enumerated values, 1:1, 4:3, 3:4, 16:9, 9:16, 3:2, 2:3, 21:9 or match_input_image describing the image size to be used. "
+type = "string"
+cardinality = "single"
+required = false
+default = "1K"
+
+[[outputs]]
+name = "SegmentImage"
+description = "The generated image segments."
+type = "array"
+cardinality = "perSegment"
+
+[graph]
+nodes = [
+    { inputRef = "Prompt", cardinality = "perSegment" },
+    { inputRef = "ImageStyle", cardinality = "single" },
+    { inputRef = "Size", cardinality = "single" },
+    { inputRef = "AspectRatio", cardinality = "single" },
+    { producerRef = "TextToImageProducer", cardinality = "perSegment"},
+    { outputRef = "SegmentImage", cardinality = "perSegment" }
+]
+edges = [
+    { from = "Prompt", to = "TextToImageProducer", perSegment = true },
+    { from = "ImageStyle", to = "TextToImageProducer" },
+    { from = "Size", to = "TextToImageProducer" },
+    { from = "AspectRatio", to = "TextToImageProducer" },
+    { from = "TextToImageProducer", to = "SegmentImage", perSegment = true }
+]
+
+[[producers]]
+name = "TextToImageProducer"
+provider = "replicate"
+model = "bytedance/seedream-4"
+sequential_image_generation = "disabled"
+max_images = 1
+enhance_prompt = true

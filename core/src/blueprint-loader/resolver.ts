@@ -69,7 +69,7 @@ export function prefixNodeRef(
 export function resolveEdgeRef(
   ref: string | BlueprintNodeRef,
   subBlueprints: SubBlueprintRef[],
-  detectKind: (nodeId: string) => NodeKind,
+  nodeKinds: Map<string, NodeKind>,
 ): BlueprintNodeRef {
   // If already a BlueprintNodeRef, return as is
   if (typeof ref === 'object') {
@@ -90,7 +90,13 @@ export function resolveEdgeRef(
   }
 
   // Detect the node kind from the node ID (last part after dot)
-  const kind = detectKind(parsed.nodeId);
+  const kind = nodeKinds.get(parsed.fullId)
+    ?? nodeKinds.get(parsed.nodeId);
+  if (!kind) {
+    throw new Error(
+      `Edge references unknown node "${parsed.fullId}". Declare the node before referencing it.`,
+    );
+  }
 
   if (kind === 'InputSource') {
     return {
@@ -109,53 +115,14 @@ export function resolveEdgeRef(
  * Detect the node kind from a node ID by checking against known types.
  * This is a heuristic - ideally we'd look it up in the blueprint.
  */
-export function detectNodeKind(nodeId: string): NodeKind {
-  // Common input source patterns
-  const inputSources = [
-    'InquiryPrompt', 'Duration', 'Audience', 'Language',
-    'MusicPromptInput', 'SegmentNarrationInput',
-    'VoiceId', 'Emotion',
-    'ImagesPerSegment',
-    'SegmentImagePromptInput', 'ImageStyle',
-    'Size', 'AspectRatio',
-    'StartingImagePromptInput', 'MovieDirectionPromptInput',
-    'AssemblyStrategy', 'SegmentAnimations',
-    'TextInput', 'NumOfSegments', // Added for sub-blueprints
-  ];
-
-  // Common producer patterns
-  const producers = [
-    'ScriptProducer',
-    'TextToMusicPromptProducer', 'TextToMusicProducer',
-    'AudioProducer',
-    'TextToImagePromptProducer', 'TextToImageProducer',
-    'TextToVideoPromptProducer', 'TextToVideoProducer',
-    'ImageToVideoPromptProducer', 'StartImageProducer', 'ImageToVideoProducer',
-    'TimelineAssembler',
-  ];
-
-  if (inputSources.includes(nodeId)) {
-    return 'InputSource';
-  }
-
-  if (producers.includes(nodeId)) {
-    return 'Producer';
-  }
-
-  // Default to Artifact for outputs
-  return 'Artifact';
-}
-
-/**
- * Resolve all edges in a blueprint, converting string references to BlueprintNodeRef.
- */
 export function resolveEdges(
   edges: UnresolvedBlueprintEdge[],
   subBlueprints: SubBlueprintRef[],
+  nodeKinds: Map<string, NodeKind>,
 ): BlueprintEdge[] {
   return edges.map(edge => ({
-    from: resolveEdgeRef(edge.from, subBlueprints, detectNodeKind),
-    to: resolveEdgeRef(edge.to, subBlueprints, detectNodeKind),
+    from: resolveEdgeRef(edge.from, subBlueprints, nodeKinds),
+    to: resolveEdgeRef(edge.to, subBlueprints, nodeKinds),
     dimensions: edge.dimensions,
     note: edge.note,
   }));

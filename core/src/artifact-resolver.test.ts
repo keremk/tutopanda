@@ -67,7 +67,10 @@ describe('resolveArtifactsFromEventLog', () => {
       movieId: 'test-movie',
     });
 
-    expect(result).toEqual({ SegmentImage: blobData });
+    expect(result).toEqual({
+      SegmentImage: blobData,
+      'SegmentImage[segment=0]': blobData,
+    });
   });
 
   it('resolves inline artifact from event log', async () => {
@@ -91,7 +94,9 @@ describe('resolveArtifactsFromEventLog', () => {
       movieId: 'test-movie',
     });
 
-    expect(result).toEqual({ NarrationScript: 'This is a narration script' });
+    expect(result).toEqual({
+      NarrationScript: 'This is a narration script',
+    });
   });
 
   it('resolves multiple artifacts', async () => {
@@ -137,6 +142,7 @@ describe('resolveArtifactsFromEventLog', () => {
 
     expect(result).toEqual({
       SegmentAudio: blobData,
+      'SegmentAudio[segment=0]': blobData,
       MovieTitle: 'Amazing Documentary',
     });
   });
@@ -184,7 +190,10 @@ describe('resolveArtifactsFromEventLog', () => {
     });
 
     // Should use the newer blob
-    expect(result).toEqual({ SegmentImage: newBlobData });
+    expect(result).toEqual({
+      SegmentImage: newBlobData,
+      'SegmentImage[segment=0]': newBlobData,
+    });
   });
 
   it('ignores failed artifacts', async () => {
@@ -246,7 +255,10 @@ describe('resolveArtifactsFromEventLog', () => {
     });
 
     // Should only contain requested artifact
-    expect(result).toEqual({ SegmentImage: 'image-url' });
+    expect(result).toEqual({
+      SegmentImage: 'image-url',
+      'SegmentImage[segment=0]': 'image-url',
+    });
     expect(result.SegmentAudio).toBeUndefined();
   });
 });

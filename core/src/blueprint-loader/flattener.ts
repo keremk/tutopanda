@@ -34,6 +34,7 @@ export function flattenBlueprint(
   loadedSubBlueprints: Map<string, Blueprint>,
 ): FlattenedBlueprint {
   const uniqueNodes = new Map<string, BlueprintNode>();
+  const nodeKindById = new Map<string, BlueprintNodeRef['kind']>();
   const allEdges: BlueprintEdge[] = [];
 
   // 1. Add parent blueprint's own nodes (no namespace)
@@ -50,6 +51,7 @@ export function flattenBlueprint(
       }
     } else {
       uniqueNodes.set(key, { ...node });
+      nodeKindById.set(node.ref.id, node.ref.kind);
     }
   }
 
@@ -86,6 +88,10 @@ export function flattenBlueprint(
           ...node,
           ref: namespacedRef,
         });
+        nodeKindById.set(namespacedRef.id, namespacedRef.kind);
+        if (node.ref.kind === 'InputSource') {
+          nodeKindById.set(`${subRef.id}.${node.ref.id}`, node.ref.kind);
+        }
       }
     }
 
@@ -104,6 +110,7 @@ export function flattenBlueprint(
   const resolvedParentEdges = resolveEdges(
     blueprint.edges,
     blueprint.subBlueprints,
+    nodeKindById,
   );
   allEdges.push(...resolvedParentEdges);
 

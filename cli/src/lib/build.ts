@@ -286,21 +286,14 @@ function buildProviderContext(
 ): ProviderContextPayload {
   const baseConfig = normalizeProviderConfig(option);
   const rawAttachments = option.attachments.length > 0 ? option.attachments : undefined;
-  const extras: Record<string, unknown> = {};
-  if (isRecord(jobContext) && Object.keys(jobContext).length > 0) {
-    extras.plannerContext = jobContext;
-  }
-  if (Object.keys(resolvedInputs).length > 0) {
-    extras.resolvedInputs = resolvedInputs;
-  }
-  const extrasPayload = Object.keys(extras).length > 0 ? extras : undefined;
+  const extras = mergeContextExtras(jobContext, resolvedInputs);
 
   return {
     providerConfig: baseConfig,
     rawAttachments,
     environment: option.environment,
     observability: undefined,
-    extras: extrasPayload,
+    extras,
   } satisfies ProviderContextPayload;
 }
 
@@ -309,6 +302,32 @@ function normalizeProviderConfig(option: LoadedProducerOption): unknown {
   return option.customAttributes
     ? { customAttributes: option.customAttributes, config }
     : config;
+}
+
+function mergeContextExtras(
+  jobContext: unknown,
+  resolvedInputs: Record<string, unknown>,
+): Record<string, unknown> | undefined {
+  if (!isRecord(jobContext)) {
+    return Object.keys(resolvedInputs).length > 0 ? { resolvedInputs } : undefined;
+  }
+
+  const baseExtras = isRecord(jobContext.extras)
+    ? { ...(jobContext.extras as Record<string, unknown>) }
+    : {};
+
+  if (Object.keys(resolvedInputs).length > 0) {
+    const existingResolvers = isRecord(baseExtras.resolvedInputs)
+      ? ({ ...(baseExtras.resolvedInputs as Record<string, unknown>) })
+      : {};
+    baseExtras.resolvedInputs = {
+      ...existingResolvers,
+      ...resolvedInputs,
+    };
+  }
+
+  baseExtras.plannerContext = jobContext;
+  return baseExtras;
 }
 
 function toDescriptor(option: LoadedProducerOption): ProviderDescriptor {
