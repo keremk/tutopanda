@@ -70,6 +70,7 @@ describe('resolveArtifactsFromEventLog', () => {
     expect(result).toEqual({
       SegmentImage: blobData,
       'SegmentImage[segment=0]': blobData,
+      'Artifact:SegmentImage[segment=0]': blobData,
     });
   });
 
@@ -96,6 +97,7 @@ describe('resolveArtifactsFromEventLog', () => {
 
     expect(result).toEqual({
       NarrationScript: 'This is a narration script',
+      'Artifact:NarrationScript': 'This is a narration script',
     });
   });
 
@@ -143,7 +145,9 @@ describe('resolveArtifactsFromEventLog', () => {
     expect(result).toEqual({
       SegmentAudio: blobData,
       'SegmentAudio[segment=0]': blobData,
+      'Artifact:SegmentAudio[segment=0]': blobData,
       MovieTitle: 'Amazing Documentary',
+      'Artifact:MovieTitle': 'Amazing Documentary',
     });
   });
 
@@ -193,6 +197,7 @@ describe('resolveArtifactsFromEventLog', () => {
     expect(result).toEqual({
       SegmentImage: newBlobData,
       'SegmentImage[segment=0]': newBlobData,
+      'Artifact:SegmentImage[segment=0]': newBlobData,
     });
   });
 
@@ -258,6 +263,7 @@ describe('resolveArtifactsFromEventLog', () => {
     expect(result).toEqual({
       SegmentImage: 'image-url',
       'SegmentImage[segment=0]': 'image-url',
+      'Artifact:SegmentImage[segment=0]': 'image-url',
     });
     expect(result.SegmentAudio).toBeUndefined();
   });

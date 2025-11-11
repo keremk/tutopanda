@@ -50,16 +50,16 @@ export async function resolveArtifactsFromEventLog(args: {
     const kind = extractArtifactKind(artifactId);
 
     if (event.output.inline !== undefined) {
-      // Prefer inline payloads for text artefacts
       resolvedByKind.set(kind, event.output.inline);
+      resolvedById.set(artifactId, event.output.inline);
       resolvedById.set(formatResolvedKey(artifactId), event.output.inline);
       continue;
     }
 
     if (event.output.blob) {
-      // Fallback to blob if no inline payload is present
       const blobData = await readBlob(args.storage, args.movieId, event.output.blob);
       resolvedByKind.set(kind, blobData);
+      resolvedById.set(artifactId, blobData);
       resolvedById.set(formatResolvedKey(artifactId), blobData);
     }
   }

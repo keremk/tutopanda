@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createPlanner, createProducerGraph } from './planner.js';
+import { createPlanner } from './planner.js';
 import { createEventLog } from './event-log.js';
 import { createStorageContext, initializeMovieStorage } from './storage.js';
 import { createManifestService, ManifestNotFoundError } from './manifest.js';
@@ -10,9 +10,10 @@ import type {
   Manifest,
   ProducerCatalog,
   ProducerGraph,
+  ProducerGraphNode,
+  ProducerGraphEdge,
   RevisionId,
 } from './types.js';
-import { expandBlueprint, type BlueprintGraphData, type BlueprintExpansionConfig } from './blueprints.js';
 
 const testCatalog: ProducerCatalog = {
   ScriptProducer: {
@@ -101,61 +102,62 @@ const testCatalog: ProducerCatalog = {
   },
 };
 
-const TEST_BLUEPRINT: BlueprintGraphData = {
-  nodes: [
-    { ref: { kind: 'InputSource', id: 'InquiryPrompt' }, cardinality: 'single' },
-    { ref: { kind: 'Producer', id: 'ScriptProducer' }, cardinality: 'single' },
-    { ref: { kind: 'Artifact', id: 'NarrationScript' }, cardinality: 'perSegment' },
-    { ref: { kind: 'Producer', id: 'AudioProducer' }, cardinality: 'perSegment' },
-    { ref: { kind: 'Artifact', id: 'SegmentAudio' }, cardinality: 'perSegment' },
-    { ref: { kind: 'Producer', id: 'TimelineAssembler' }, cardinality: 'single' },
-    { ref: { kind: 'Artifact', id: 'FinalVideo' }, cardinality: 'single' },
-  ],
-  edges: [
-    {
-      from: { kind: 'InputSource', id: 'InquiryPrompt' },
-      to: { kind: 'Producer', id: 'ScriptProducer' },
-    },
-    {
-      from: { kind: 'Producer', id: 'ScriptProducer' },
-      to: { kind: 'Artifact', id: 'NarrationScript' },
-      dimensions: ['segment'],
-    },
-    {
-      from: { kind: 'Artifact', id: 'NarrationScript' },
-      to: { kind: 'Producer', id: 'AudioProducer' },
-      dimensions: ['segment'],
-    },
-    {
-      from: { kind: 'Producer', id: 'AudioProducer' },
-      to: { kind: 'Artifact', id: 'SegmentAudio' },
-      dimensions: ['segment'],
-    },
-    {
-      from: { kind: 'Artifact', id: 'SegmentAudio' },
-      to: { kind: 'Producer', id: 'TimelineAssembler' },
-    },
-    {
-      from: { kind: 'Producer', id: 'TimelineAssembler' },
-      to: { kind: 'Artifact', id: 'FinalVideo' },
-    },
-  ],
-};
-
 function memoryContext(basePath = 'builds') {
   return createStorageContext({ kind: 'memory', basePath });
 }
 
-function blueprintConfig(): BlueprintExpansionConfig {
-  return {
-    segmentCount: 2,
-    imagesPerSegment: 1,
-  };
-}
-
 function buildProducerGraph(): ProducerGraph {
-  const expanded = expandBlueprint(blueprintConfig(), TEST_BLUEPRINT);
-  return createProducerGraph(expanded, testCatalog);
+  const nodes: ProducerGraphNode[] = [
+    {
+      jobId: 'Producer:ScriptProducer',
+      producer: 'ScriptProducer',
+      inputs: ['Input:InquiryPrompt'],
+      produces: ['Artifact:NarrationScript[0]', 'Artifact:NarrationScript[1]'],
+      provider: 'openai',
+      providerModel: 'openai/GPT-5',
+      rateKey: 'llm:script',
+      context: {},
+    },
+    {
+      jobId: 'Producer:AudioProducer[0]',
+      producer: 'AudioProducer',
+      inputs: ['Artifact:NarrationScript[0]'],
+      produces: ['Artifact:SegmentAudio[0]'],
+      provider: 'replicate',
+      providerModel: 'elevenlabs/turbo-v2.5',
+      rateKey: 'audio:elevenlabs-turbo',
+      context: {},
+    },
+    {
+      jobId: 'Producer:AudioProducer[1]',
+      producer: 'AudioProducer',
+      inputs: ['Artifact:NarrationScript[1]'],
+      produces: ['Artifact:SegmentAudio[1]'],
+      provider: 'replicate',
+      providerModel: 'elevenlabs/turbo-v2.5',
+      rateKey: 'audio:elevenlabs-turbo',
+      context: {},
+    },
+    {
+      jobId: 'Producer:TimelineAssembler',
+      producer: 'TimelineAssembler',
+      inputs: ['Artifact:SegmentAudio[0]', 'Artifact:SegmentAudio[1]'],
+      produces: ['Artifact:FinalVideo'],
+      provider: 'internal',
+      providerModel: 'workflow/timeline-assembler',
+      rateKey: 'internal:timeline',
+      context: {},
+    },
+  ];
+
+  const edges: ProducerGraphEdge[] = [
+    { from: 'Producer:ScriptProducer', to: 'Producer:AudioProducer[0]' },
+    { from: 'Producer:ScriptProducer', to: 'Producer:AudioProducer[1]' },
+    { from: 'Producer:AudioProducer[0]', to: 'Producer:TimelineAssembler' },
+    { from: 'Producer:AudioProducer[1]', to: 'Producer:TimelineAssembler' },
+  ];
+
+  return { nodes, edges };
 }
 
 async function loadManifest(ctx: ReturnType<typeof memoryContext>): Promise<Manifest> {
@@ -338,7 +340,7 @@ describe('planner', () => {
       await eventLog.appendInput('demo', event);
     }
 
-    const scriptArtefactId = 'Artifact:NarrationScript[segment=0]';
+    const scriptArtefactId = 'Artifact:NarrationScript[0]';
     const originalScript = 'Segment 0: original narration';
     const originalHash = hashArtefactOutput({ inline: originalScript });
 
@@ -360,7 +362,7 @@ describe('planner', () => {
         [scriptArtefactId]: {
           hash: originalHash,
           inline: originalScript,
-          producedBy: 'Producer:ScriptProducer[segment=0]',
+          producedBy: 'Producer:ScriptProducer',
           status: 'succeeded',
           createdAt: new Date().toISOString(),
         },

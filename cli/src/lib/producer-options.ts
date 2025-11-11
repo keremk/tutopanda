@@ -1,7 +1,8 @@
 import type {
-  Blueprint,
+  BlueprintTreeNode,
   ProducerCatalog,
   ProducerCatalogEntry,
+  ProducerConfig,
 } from 'tutopanda-core';
 import type {
   ProviderAttachment,
@@ -22,34 +23,71 @@ export interface LoadedProducerOption {
 export type ProducerOptionsMap = Map<string, LoadedProducerOption[]>;
 
 export function buildProducerOptionsFromBlueprint(
-  blueprint: Blueprint,
+  blueprint: BlueprintTreeNode,
 ): ProducerOptionsMap {
   const map: ProducerOptionsMap = new Map();
+  collectProducers(blueprint, map);
+  return map;
+}
 
-  for (const producer of blueprint.producers) {
-    const key = producer.name;
-    const {
-      name: _name,
-      provider,
-      model,
-      ...rest
-    } = producer;
+function collectProducers(node: BlueprintTreeNode, map: ProducerOptionsMap): void {
+  for (const producer of node.document.producers) {
+    const namespacedName = formatProducerName(node.namespacePath, producer.name);
+    const option = toLoadedOption(node, namespacedName, producer);
+    registerProducerOption(map, namespacedName, option);
+    if (namespacedName !== producer.name) {
+      registerProducerOption(map, producer.name, option);
+    }
+  }
+  for (const child of node.children.values()) {
+    collectProducers(child, map);
+  }
+}
 
-    const option: LoadedProducerOption = {
-      priority: 'main',
-      provider,
-      model,
-      environment: 'local',
-      config: Object.keys(rest).length > 0 ? (rest as Record<string, unknown>) : undefined,
-      attachments: [],
-      sourcePath: blueprint.meta.id,
-      customAttributes: undefined,
-    };
-
+function registerProducerOption(
+  map: ProducerOptionsMap,
+  key: string,
+  option: LoadedProducerOption,
+): void {
+  const existing = map.get(key);
+  if (existing) {
+    existing.push(option);
+  } else {
     map.set(key, [option]);
   }
+}
 
-  return map;
+function toLoadedOption(
+  node: BlueprintTreeNode,
+  namespacedName: string,
+  producer: ProducerConfig,
+): LoadedProducerOption {
+  const {
+    name: _name,
+    provider,
+    model,
+    ...rest
+  } = producer;
+
+  const configPayload = Object.keys(rest).length > 0 ? (rest as Record<string, unknown>) : undefined;
+
+  return {
+    priority: 'main',
+    provider,
+    model,
+    environment: 'local',
+    config: configPayload,
+    attachments: [],
+    sourcePath: namespacedName,
+    customAttributes: undefined,
+  };
+}
+
+function formatProducerName(namespacePath: string[], name: string): string {
+  if (namespacePath.length === 0) {
+    return name;
+  }
+  return `${namespacePath.join('.')}.${name}`;
 }
 
 export function buildProducerCatalog(

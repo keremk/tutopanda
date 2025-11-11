@@ -1,16 +1,6 @@
 type Id = string;
 type IsoDatetime = string;
 
-export type CardinalityTag = "single" | "perSegment" | "perSegmentImage";
-
-export type CardinalityDimension = "segment" | "image";
-
-export const cardinalityToDimensions: Record<CardinalityTag, CardinalityDimension[]> = {
-  single: [],
-  perSegment: ["segment"],
-  perSegmentImage: ["segment", "image"],
-};
-
 // --- node kinds ---
 export type NodeKind = "InputSource" | "Producer" | "Artifact";
 
@@ -81,7 +71,6 @@ export type BlueprintNodeRef<K extends NodeKind = NodeKind> = {
 
 export interface BlueprintNode<K extends NodeKind = NodeKind> {
   ref: BlueprintNodeRef<K>;
-  cardinality: CardinalityTag;
   label?: string;
   description?: string;
 }
@@ -89,7 +78,6 @@ export interface BlueprintNode<K extends NodeKind = NodeKind> {
 export interface BlueprintEdge {
   from: BlueprintNodeRef;
   to: BlueprintNodeRef;
-  dimensions?: CardinalityDimension[];
   note?: string;
 }
 
@@ -113,7 +101,6 @@ export interface BlueprintMeta {
 export interface BlueprintInput {
   name: string;
   type: string;
-  cardinality: CardinalityTag;
   required: boolean;
   description?: string;
   itemType?: string;  // For array types
@@ -126,7 +113,6 @@ export interface BlueprintInput {
 export interface BlueprintOutput {
   name: string;
   type: string;
-  cardinality: CardinalityTag;
   required: boolean;
   description?: string;
   itemType?: string;  // For array types
@@ -157,6 +143,8 @@ export interface ProducerConfig {
   variables?: string[];
   // Any other provider-specific attributes
   [key: string]: unknown;
+  sdkMapping?: Record<string, BlueprintProducerSdkMappingField>;
+  outputs?: Record<string, BlueprintProducerOutputDefinition>;
 }
 
 /**
@@ -166,7 +154,6 @@ export interface ProducerConfig {
 export interface UnresolvedBlueprintEdge {
   from: string | BlueprintNodeRef;
   to: string | BlueprintNodeRef;
-  dimensions?: CardinalityDimension[];
   note?: string;
 }
 
@@ -185,6 +172,64 @@ export interface Blueprint {
   producers: ProducerConfig[];
 }
 
+// --- Blueprint V2 definitions ---
+
+export interface BlueprintInputDefinition {
+  name: string;
+  type: string;
+  required: boolean;
+  description?: string;
+  defaultValue?: unknown;
+}
+
+export interface BlueprintArtefactDefinition {
+  name: string;
+  type: string;
+  required?: boolean;
+  description?: string;
+  itemType?: string;
+  countInput?: string;
+}
+
+export interface BlueprintProducerSdkMappingField {
+  field: string;
+  type?: string;
+  required?: boolean;
+}
+
+export interface BlueprintProducerOutputDefinition {
+  type: string;
+  mimeType?: string;
+}
+
+export interface BlueprintEdgeDefinition {
+  from: string;
+  to: string;
+  note?: string;
+}
+
+export interface SubBlueprintDefinition {
+  name: string;
+  path?: string;
+  description?: string;
+}
+
+export interface BlueprintDocument {
+  meta: BlueprintMeta;
+  inputs: BlueprintInputDefinition[];
+  artefacts: BlueprintArtefactDefinition[];
+  producers: ProducerConfig[];
+  subBlueprints: SubBlueprintDefinition[];
+  edges: BlueprintEdgeDefinition[];
+}
+
+export interface BlueprintTreeNode {
+  id: string;
+  namespacePath: string[];
+  document: BlueprintDocument;
+  children: Map<string, BlueprintTreeNode>;
+}
+
 /**
  * Configuration for blueprint expansion.
  */
@@ -196,6 +241,23 @@ export interface BlueprintExpansionConfig {
 // --- build / planning ---
 export type RevisionId = `rev-${string}`;
 
+export interface ProducerJobContextExtras {
+  resolvedInputs?: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
+export interface ProducerJobContext {
+  namespacePath: string[];
+  indices: Record<string, number>;
+  qualifiedName: string;
+  inputs: Id[];
+  produces: Id[];
+  inputBindings?: Record<string, Id>;
+  sdkMapping?: Record<string, BlueprintProducerSdkMappingField>;
+  outputs?: Record<string, BlueprintProducerOutputDefinition>;
+  extras?: ProducerJobContextExtras;
+}
+
 export interface JobDescriptor {
   jobId: Id;
   producer: ProducerKind | string;
@@ -204,7 +266,7 @@ export interface JobDescriptor {
   provider: ProviderName;
   providerModel: string;
   rateKey: string;
-  context?: Record<string, unknown>;
+  context?: ProducerJobContext;
 }
 
 export interface ExecutionPlan {
@@ -266,7 +328,7 @@ export interface ProducerGraphNode {
   provider: ProviderName;
   providerModel: string;
   rateKey: string;
-  context?: Record<string, unknown>;
+  context?: ProducerJobContext;
 }
 
 export interface ProducerGraphEdge {

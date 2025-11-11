@@ -1,14 +1,8 @@
-/**
- * Blueprint loader module for flattening blueprints with sub-blueprint support.
- */
-
-export { flattenBlueprint, refKey } from './flattener.js';
-export type { FlattenedBlueprint } from './flattener.js';
-
-export {
-  parseNodeRefString,
-  prefixNodeRef,
-  resolveEdgeRef,
-  resolveEdges,
-} from './resolver.js';
-export type { ParsedNodeRef } from './resolver.js';
+// Deprecated legacy exports removed. Canonical blueprint graph utilities now live at src/canonical-graph.ts.
+export { buildBlueprintGraph } from '../canonical-graph.js';
+export type {
+  BlueprintGraph,
+  BlueprintGraphEdge,
+  BlueprintGraphEdgeEndpoint,
+  BlueprintGraphNode,
+} from '../canonical-graph.js';

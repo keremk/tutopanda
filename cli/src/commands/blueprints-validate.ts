@@ -1,6 +1,7 @@
 import { resolve } from 'node:path';
-import { loadBlueprintFromToml } from '../lib/blueprint-loader/index.js';
+import { loadBlueprintBundle } from '../lib/blueprint-loader/index.js';
 import { expandPath } from '../lib/path.js';
+import { buildBlueprintGraph } from 'tutopanda-core';
 
 export interface BlueprintsValidateOptions {
   blueprintPath: string;
@@ -20,13 +21,14 @@ export async function runBlueprintsValidate(
 ): Promise<BlueprintsValidateResult> {
   try {
     const expandedPath = resolve(expandPath(options.blueprintPath));
-    const { blueprint } = await loadBlueprintFromToml(expandedPath);
+    const { root } = await loadBlueprintBundle(expandedPath);
+    const graph = buildBlueprintGraph(root);
     return {
       valid: true,
       path: expandedPath,
-      name: blueprint.meta.name,
-      nodeCount: blueprint.nodes.length,
-      edgeCount: blueprint.edges.length,
+      name: root.document.meta.name,
+      nodeCount: graph.nodes.length,
+      edgeCount: graph.edges.length,
     };
   } catch (error) {
     return {

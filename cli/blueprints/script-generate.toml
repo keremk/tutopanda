@@ -38,19 +38,19 @@ type = "string"
 required = false
 default = "en"
 
-[[artefacts]] 
+[[artifacts]] 
 name = "MovieTitle"
 description = "The title of the movie."
 type = "string"
 required = true
 
-[[artefacts]]
+[[artifacts]]
 name = "MovieSummary"
 description = "A brief summary of the movie."
 type = "string"
 required = true
 
-[[artefacts]]
+[[artifacts]]
 name = "NarrationScript"
 description = "The script for the movie narration."
 type = "array"

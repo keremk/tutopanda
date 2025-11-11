@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import { parseBlueprintToml } from '../lib/blueprint-loader/index.js';
+import { parseBlueprintDocument } from '../lib/blueprint-loader/index.js';
 
 export interface BlueprintsDescribeOptions {
   blueprintPath: string;
@@ -14,16 +14,16 @@ export interface BlueprintsDescribeResult {
   inputs: {
     name: string;
     type: string;
-    cardinality: string;
     required: boolean;
     description?: string;
+    defaultValue?: unknown;
   }[];
   outputs: {
     name: string;
     type: string;
-    cardinality: string;
     required: boolean;
     description?: string;
+    countInput?: string;
   }[];
   nodeCount: number;
   edgeCount: number;
@@ -34,7 +34,7 @@ export async function runBlueprintsDescribe(
 ): Promise<BlueprintsDescribeResult> {
   const targetPath = resolve(options.blueprintPath);
   const contents = await readFile(targetPath, 'utf8');
-  const blueprint = parseBlueprintToml(contents);
+  const blueprint = parseBlueprintDocument(contents);
 
   return {
     path: targetPath,
@@ -44,18 +44,18 @@ export async function runBlueprintsDescribe(
     inputs: blueprint.inputs.map((input) => ({
       name: input.name,
       type: input.type,
-      cardinality: input.cardinality,
       required: input.required,
       description: input.description,
+      defaultValue: input.defaultValue,
     })),
-    outputs: blueprint.outputs.map((output) => ({
+    outputs: blueprint.artefacts.map((output) => ({
       name: output.name,
       type: output.type,
-      cardinality: output.cardinality,
-      required: output.required,
+      required: output.required !== false,
       description: output.description,
+      countInput: output.countInput,
     })),
-    nodeCount: blueprint.nodes.length,
+    nodeCount: blueprint.inputs.length + blueprint.artefacts.length + blueprint.producers.length,
     edgeCount: blueprint.edges.length,
   };
 }

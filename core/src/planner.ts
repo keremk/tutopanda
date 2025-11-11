@@ -1,8 +1,7 @@
 import type {
-  ExpandedBlueprint,
-  PlannedEdgeInstance,
-  PlannedNodeInstance,
-} from './blueprints.js';
+  CanonicalBlueprint,
+  CanonicalNodeInstance,
+} from './canonical-expander.js';
 import type { EventLog } from './event-log.js';
 import { hashArtefactOutput, hashPayload } from './hashing.js';
 import {
@@ -11,6 +10,7 @@ import {
   type InputEvent,
   type Manifest,
   type ArtefactEvent,
+  type ProducerJobContext,
   type ProducerCatalog,
   type ProducerGraph,
   type ProducerGraphEdge,
@@ -94,58 +94,65 @@ export function createPlanner(options: PlannerOptions = {}) {
 }
 
 export function createProducerGraph(
-  expanded: ExpandedBlueprint,
+  canonical: CanonicalBlueprint,
   catalog: ProducerCatalog,
 ): ProducerGraph {
-  const nodeMap = new Map(expanded.nodes.map((node) => [node.key, node]));
-  const producerNodes = expanded.nodes.filter(
-    (node) => node.ref.kind === 'Producer' && node.active,
-  );
-
-  const artefactProducers = computeArtefactProducers(expanded.edges, nodeMap);
+  const nodeMap = new Map(canonical.nodes.map((node) => [node.id, node]));
+  const artefactProducers = computeArtefactProducers(canonical, nodeMap);
 
   const nodes: ProducerGraphNode[] = [];
   const edges: ProducerGraphEdge[] = [];
   const edgeSet = new Set<string>();
 
-  for (const producer of producerNodes) {
-    const rawInputs = collectInputDependencies(producer, expanded.edges, nodeMap);
-    const inputAliasMap = buildInputAliasMap(producer.key, expanded.edges, nodeMap);
-    const canonicalInputs = canonicalizeInputs(rawInputs);
-    const producedArtefacts = collectProducedArtefacts(producer, expanded.edges, nodeMap).map(
-      canonicalizeArtifactKey,
-    );
-    const catalogEntry = resolveCatalogEntry(producer.ref.id as string, catalog);
-    if (!catalogEntry) {
-      throw new Error(`Missing producer catalog entry for ${producer.ref.id}`);
+  for (const node of canonical.nodes) {
+    if (node.type !== 'Producer') {
+      continue;
     }
 
-    for (const dependencyKey of rawInputs) {
+    const inbound = canonical.edges.filter((edge) => edge.to === node.id).map((edge) => edge.from);
+    const producedArtefacts = canonical.edges
+      .filter((edge) => edge.from === node.id)
+      .map((edge) => edge.to)
+      .filter((id) => id.startsWith('Artifact:'));
+
+    const qualifiedProducerName = node.qualifiedName;
+    const baseProducerName = node.producer?.name ?? node.name;
+    const catalogEntry =
+      resolveCatalogEntry(qualifiedProducerName, catalog)
+      ?? resolveCatalogEntry(baseProducerName, catalog);
+    if (!catalogEntry) {
+      throw new Error(`Missing producer catalog entry for ${qualifiedProducerName}`);
+    }
+
+    for (const dependencyKey of inbound) {
       if (!dependencyKey.startsWith('Artifact:')) {
         continue;
       }
       const upstream = artefactProducers.get(dependencyKey);
-      if (upstream && upstream !== producer.key) {
-        const edgeKey = `${upstream}->${producer.key}`;
+      if (upstream && upstream !== node.id) {
+        const edgeKey = `${upstream}->${node.id}`;
         if (!edgeSet.has(edgeKey)) {
-          edges.push({ from: upstream, to: producer.key });
+          edges.push({ from: upstream, to: node.id });
           edgeSet.add(edgeKey);
         }
       }
     }
 
-    const nodeContext: Record<string, unknown> = {
-      index: producer.index,
-      label: producer.label,
-      description: producer.description,
+    const inputBindings = canonical.inputBindings[node.id];
+    const nodeContext: ProducerJobContext = {
+      namespacePath: node.namespacePath,
+      indices: node.indices,
+      qualifiedName: qualifiedProducerName,
+      inputs: inbound,
+      produces: producedArtefacts,
+      inputBindings: inputBindings && Object.keys(inputBindings).length > 0 ? inputBindings : undefined,
+      sdkMapping: node.producer?.sdkMapping,
+      outputs: node.producer?.outputs,
     };
-    if (Object.keys(inputAliasMap).length > 0) {
-      nodeContext.inputAliases = inputAliasMap;
-    }
     nodes.push({
-      jobId: producer.key,
-      producer: producer.ref.id,
-      inputs: canonicalInputs,
+      jobId: node.id,
+      producer: baseProducerName,
+      inputs: inbound,
       produces: producedArtefacts,
       provider: catalogEntry.provider,
       providerModel: catalogEntry.providerModel,
@@ -408,174 +415,22 @@ function createEmptyManifest(): Manifest {
   };
 }
 
-function collectInputDependencies(
-  producer: PlannedNodeInstance,
-  edges: PlannedEdgeInstance[],
-  nodeMap: Map<string, PlannedNodeInstance>,
-): string[] {
-  const dependencies: string[] = [];
-  const upstreamArtefacts = new Set<string>();
-
-  for (const edge of edges) {
-    if (edge.to !== producer.key) {
-      continue;
-    }
-    const fromNode = nodeMap.get(edge.from);
-    if (!fromNode || !fromNode.active) {
-      continue;
-    }
-    dependencies.push(edge.from);
-
-    if (fromNode.ref.kind === 'InputSource') {
-      const artefactKeys = collectUpstreamArtefacts(edge.from, edges, nodeMap, new Set());
-      for (const artefactKey of artefactKeys) {
-        if (!upstreamArtefacts.has(artefactKey)) {
-          upstreamArtefacts.add(artefactKey);
-          dependencies.push(artefactKey);
-        }
-      }
-    }
-  }
-
-  return dependencies;
-}
-
-function buildInputAliasMap(
-  producerKey: string,
-  edges: PlannedEdgeInstance[],
-  nodeMap: Map<string, PlannedNodeInstance>,
-): Record<string, string[]> {
-  const aliasMap = new Map<string, Set<string>>();
-
-  for (const edge of edges) {
-    if (edge.to !== producerKey) {
-      continue;
-    }
-    if (!edge.from.startsWith('InputSource:')) {
-      continue;
-    }
-    const upstreamArtefacts = collectUpstreamArtefacts(edge.from, edges, nodeMap, new Set());
-    if (upstreamArtefacts.length === 0) {
-      continue;
-    }
-    const normalizedInputKey = normalizeInputNodeKey(edge.from);
-    const baseId = normalizedInputKey.slice('InputSource:'.length);
-    const inputName = stripDimensions(normalizeInputId(baseId));
-    const target = aliasMap.get(inputName) ?? new Set<string>();
-    for (const artefactKey of upstreamArtefacts) {
-      const canonical = canonicalizeArtifactKey(artefactKey);
-      target.add(canonical);
-    }
-    aliasMap.set(inputName, target);
-  }
-
-  const result: Record<string, string[]> = {};
-  for (const [inputName, sources] of aliasMap) {
-    result[inputName] = Array.from(sources);
-  }
-  return result;
-}
-
-function collectUpstreamArtefacts(
-  inputKey: string,
-  edges: PlannedEdgeInstance[],
-  nodeMap: Map<string, PlannedNodeInstance>,
-  visited: Set<string>,
-): string[] {
-  if (visited.has(inputKey)) {
-    return [];
-  }
-  visited.add(inputKey);
-
-  const artefacts: string[] = [];
-  const normalizedInputKey = normalizeInputNodeKey(inputKey);
-
-  for (const edge of edges) {
-    if (!inputNodeKeysMatch(edge.to, normalizedInputKey)) {
-      continue;
-    }
-    const fromNode = nodeMap.get(edge.from);
-    if (!fromNode || !fromNode.active) {
-      continue;
-    }
-
-    if (fromNode.ref.kind === 'Artifact') {
-      artefacts.push(edge.from);
-      continue;
-    }
-
-    if (fromNode.ref.kind === 'InputSource') {
-      artefacts.push(...collectUpstreamArtefacts(edge.from, edges, nodeMap, visited));
-    }
-  }
-
-  return artefacts;
-}
-
-function collectProducedArtefacts(
-  producer: PlannedNodeInstance,
-  edges: PlannedEdgeInstance[],
-  nodeMap: Map<string, PlannedNodeInstance>,
-): string[] {
-  const outputs: string[] = [];
-  for (const edge of edges) {
-    if (edge.from !== producer.key) {
-      continue;
-    }
-    const toNode = nodeMap.get(edge.to);
-    if (!toNode || !toNode.active || toNode.ref.kind !== 'Artifact') {
-      continue;
-    }
-    outputs.push(edge.to);
-  }
-  return outputs;
-}
-
 function computeArtefactProducers(
-  edges: PlannedEdgeInstance[],
-  nodeMap: Map<string, PlannedNodeInstance>,
+  canonical: CanonicalBlueprint,
+  nodeMap: Map<string, CanonicalNodeInstance>,
 ): Map<string, string> {
   const map = new Map<string, string>();
-  for (const edge of edges) {
+  for (const edge of canonical.edges) {
     const fromNode = nodeMap.get(edge.from);
     const toNode = nodeMap.get(edge.to);
     if (!fromNode || !toNode) {
       continue;
     }
-    if (fromNode.ref.kind === 'Producer' && toNode.ref.kind === 'Artifact') {
+    if (fromNode.type === 'Producer' && toNode.type === 'Artifact') {
       map.set(edge.to, edge.from);
     }
   }
   return map;
-}
-
-function canonicalizeInputs(inputs: string[]): string[] {
-  return inputs.map((key) => {
-    if (key.startsWith('InputSource:')) {
-      return formatInputKey(key.slice('InputSource:'.length));
-    }
-    if (key.startsWith('Input:')) {
-      return formatInputKey(key.slice('Input:'.length));
-    }
-    return canonicalizeArtifactKey(key);
-  });
-}
-
-function formatInputKey(raw: string): string {
-  const normalized = normalizeInputId(raw);
-  return `Input:${normalized}`;
-}
-
-function canonicalizeArtifactKey(key: string): string {
-  if (key.startsWith('Artifact:')) {
-    return `Artifact:${key.slice('Artifact:'.length)}`;
-  }
-  return `Artifact:${key}`;
-}
-
-function stripDimensions(id: string): string {
-  const bracket = id.indexOf('[');
-  return bracket >= 0 ? id.slice(0, bracket) : id;
 }
 
 function extractInputBaseId(input: string): string | null {
@@ -585,31 +440,5 @@ function extractInputBaseId(input: string): string | null {
   const withoutPrefix = input.slice('Input:'.length);
   const bracket = withoutPrefix.indexOf('[');
   const base = bracket >= 0 ? withoutPrefix.slice(0, bracket) : withoutPrefix;
-  return normalizeInputId(base);
-}
-
-function normalizeInputId(id: string): string {
-  if (id.includes('.')) {
-    return id.split('.').pop() ?? id;
-  }
-  return id;
-}
-
-function normalizeInputNodeKey(key: string): string {
-  if (!key.startsWith('InputSource:')) {
-    return key;
-  }
-  const remainder = key.slice('InputSource:'.length);
-  const bracketIndex = remainder.indexOf('[');
-  const idPart = bracketIndex >= 0 ? remainder.slice(0, bracketIndex) : remainder;
-  const dimsPart = bracketIndex >= 0 ? remainder.slice(bracketIndex) : '';
-  const baseId = idPart.includes('.') ? idPart.split('.').pop() ?? idPart : idPart;
-  return `InputSource:${baseId}${dimsPart}`;
-}
-
-function inputNodeKeysMatch(candidate: string, normalized: string): boolean {
-  if (!candidate.startsWith('InputSource:')) {
-    return candidate === normalized;
-  }
-  return normalizeInputNodeKey(candidate) === normalized;
+  return base;
 }

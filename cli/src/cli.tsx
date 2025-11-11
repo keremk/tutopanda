@@ -175,8 +175,15 @@ async function main(): Promise<void> {
           console.log('  (none)');
         } else {
           for (const input of result.inputs) {
+            const details = [
+              `type: ${input.type}`,
+              input.required ? 'required' : 'optional',
+            ];
+            if (input.defaultValue !== undefined) {
+              details.push(`default=${JSON.stringify(input.defaultValue)}`);
+            }
             console.log(
-              `  • ${input.name} (${input.type}, ${input.cardinality}${input.required ? ', required' : ''})`,
+              `  • ${input.name} (${details.join(', ')})`,
             );
             if (input.description) {
               console.log(`    ${input.description}`);
@@ -190,8 +197,15 @@ async function main(): Promise<void> {
           console.log('  (none)');
         } else {
           for (const output of result.outputs) {
+            const details = [
+              `type: ${output.type}`,
+              output.required ? 'required' : 'optional',
+            ];
+            if (output.countInput) {
+              details.push(`countInput=${output.countInput}`);
+            }
             console.log(
-              `  • ${output.name} (${output.type}, ${output.cardinality}${output.required ? ', required' : ''})`,
+              `  • ${output.name} (${details.join(', ')})`,
             );
             if (output.description) {
               console.log(`    ${output.description}`);

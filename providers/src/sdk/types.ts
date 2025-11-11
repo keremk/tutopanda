@@ -6,6 +6,7 @@ import type {
   ProviderDescriptor,
   ProviderLogger,
 } from '../types.js';
+import type { BlueprintProducerSdkMappingField } from 'tutopanda-core';
 
 export type ProducerDomain = 'prompt' | 'media';
 
@@ -43,6 +44,13 @@ export interface AttachmentReader {
 export interface ResolvedInputsAccessor {
   all(): Record<string, unknown>;
   get<T = unknown>(key: string): T | undefined;
+  getByNodeId<T = unknown>(canonicalId: string): T | undefined;
+}
+
+export interface RuntimeSdkHelpers {
+  buildPayload(
+    sdkMapping?: Record<string, BlueprintProducerSdkMappingField>,
+  ): Record<string, unknown>;
 }
 
 export interface ArtefactRegistry {
@@ -56,6 +64,7 @@ export interface ProducerRuntime {
   config: ProducerRuntimeConfig;
   attachments: AttachmentReader;
   inputs: ResolvedInputsAccessor;
+  sdk: RuntimeSdkHelpers;
   artefacts: ArtefactRegistry;
   logger?: ProviderLogger;
 }

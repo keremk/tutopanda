@@ -3,6 +3,7 @@ import { resolve as resolvePath } from 'node:path';
 import {
   createEventLog,
   createManifestService,
+  prepareJobContext,
   createRunner,
   createStorageContext,
   initializeMovieStorage,
@@ -11,6 +12,7 @@ import {
   type ProduceFn,
   type ProduceResult,
   type RunResult,
+  type ProducerJobContext,
 } from 'tutopanda-core';
 import {
   createProviderRegistry,
@@ -185,11 +187,11 @@ export function createProviderProduce(
       handlerCache.set(descriptorKey, handler);
     }
 
-    const mergedResolvedInputs = mergeResolvedInputs(request.job.context, resolvedInputs);
-    const context = buildProviderContext(providerOption, request.job.context, mergedResolvedInputs);
-    const log = formatResolvedInputs(mergedResolvedInputs);
+    const prepared = prepareJobContext(request.job, resolvedInputs);
+    const context = buildProviderContext(providerOption, prepared.context, prepared.resolvedInputs);
+    const log = formatResolvedInputs(prepared.resolvedInputs);
     console.debug('[provider.invoke.inputs]', producerName, log);
-    validateResolvedInputs(producerName, providerOption, mergedResolvedInputs);
+    validateResolvedInputs(producerName, providerOption, prepared.resolvedInputs);
     logger.info?.(
       `provider.invoke.start ${providerOption.provider}/${providerOption.model} [${providerOption.environment}] -> ${request.job.produces.join(', ')}`,
     );
@@ -281,12 +283,12 @@ function resolveProviderOption(
 
 function buildProviderContext(
   option: LoadedProducerOption,
-  jobContext: unknown,
+  jobContext: ProducerJobContext | undefined,
   resolvedInputs: Record<string, unknown>,
 ): ProviderContextPayload {
   const baseConfig = normalizeProviderConfig(option);
   const rawAttachments = option.attachments.length > 0 ? option.attachments : undefined;
-  const extras = mergeContextExtras(jobContext, resolvedInputs);
+  const extras = buildContextExtras(jobContext, resolvedInputs);
 
   return {
     providerConfig: baseConfig,
@@ -304,30 +306,34 @@ function normalizeProviderConfig(option: LoadedProducerOption): unknown {
     : config;
 }
 
-function mergeContextExtras(
-  jobContext: unknown,
+function buildContextExtras(
+  jobContext: ProducerJobContext | undefined,
   resolvedInputs: Record<string, unknown>,
-): Record<string, unknown> | undefined {
-  if (!isRecord(jobContext)) {
-    return Object.keys(resolvedInputs).length > 0 ? { resolvedInputs } : undefined;
+): Record<string, unknown> {
+  const plannerContext = jobContext
+    ? {
+        index: jobContext.indices,
+        namespacePath: jobContext.namespacePath,
+        qualifiedName: jobContext.qualifiedName,
+      }
+    : undefined;
+
+  const extras: Record<string, unknown> = {
+    resolvedInputs,
+    plannerContext,
+  };
+  if (jobContext?.extras) {
+    for (const [key, value] of Object.entries(jobContext.extras)) {
+      if (key === 'resolvedInputs') {
+        continue;
+      }
+      extras[key] = value;
+    }
   }
-
-  const baseExtras = isRecord(jobContext.extras)
-    ? { ...(jobContext.extras as Record<string, unknown>) }
-    : {};
-
-  if (Object.keys(resolvedInputs).length > 0) {
-    const existingResolvers = isRecord(baseExtras.resolvedInputs)
-      ? ({ ...(baseExtras.resolvedInputs as Record<string, unknown>) })
-      : {};
-    baseExtras.resolvedInputs = {
-      ...existingResolvers,
-      ...resolvedInputs,
-    };
+  if (jobContext) {
+    extras.jobContext = jobContext;
   }
-
-  baseExtras.plannerContext = jobContext;
-  return baseExtras;
+  return extras;
 }
 
 function toDescriptor(option: LoadedProducerOption): ProviderDescriptor {
@@ -345,20 +351,6 @@ function makeDescriptorKey(
   environment: ProviderEnvironment,
 ): string {
   return [mode, provider, model, environment].join('|');
-}
-
-function mergeResolvedInputs(
-  jobContext: unknown,
-  baseInputs: Record<string, unknown>,
-): Record<string, unknown> {
-  const merged: Record<string, unknown> = {};
-  if (Object.keys(baseInputs).length > 0) {
-    Object.assign(merged, baseInputs);
-  }
-  if (isRecord(jobContext) && isRecord(jobContext.extras) && isRecord(jobContext.extras.resolvedInputs)) {
-    Object.assign(merged, jobContext.extras.resolvedInputs as Record<string, unknown>);
-  }
-  return merged;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

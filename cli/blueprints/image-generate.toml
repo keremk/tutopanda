@@ -23,11 +23,10 @@ default = "1K"
 name = "AspectRatio"
 description = "Enumerated values, 1:1, 4:3, 3:4, 16:9, 9:16, 3:2, 2:3, 21:9 or match_input_image describing the image size to be used. "
 type = "string"
-cardinality = "single"
 required = false
 default = "1K"
 
-[[outputs]]
+[[artifacts]]
 name = "SegmentImage"
 description = "The generated image segment"
 type = "image"

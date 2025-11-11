@@ -16,6 +16,7 @@ export { renderPrompts, buildPrompt, type RenderedPrompts } from './prompts.js';
 export {
   buildArtefactsFromResponse,
   parseArtefactIdentifier,
+  type BuildArtefactOptions,
   type ParsedArtefactIdentifier,
 } from './artefacts.js';
 

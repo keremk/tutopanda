@@ -58,7 +58,7 @@ type = "string"
 required = false
 default = "Adult"
 
-[[artefacts]]
+[[artifacts]]
 name = "SegmentImage"
 description = "The narrated audio segments for the movie."
 type = "array"

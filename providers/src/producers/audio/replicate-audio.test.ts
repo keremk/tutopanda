@@ -12,6 +12,58 @@ vi.mock('replicate', () => ({
 // Mock fetch globally
 global.fetch = vi.fn();
 
+function attachJobContext(request: ProviderJobContext): ProviderJobContext {
+  const extras = request.context.extras ?? (request.context.extras = {});
+  const resolved = (extras.resolvedInputs = extras.resolvedInputs ?? {});
+  const planner = extras.plannerContext && typeof extras.plannerContext === 'object'
+    ? (extras.plannerContext as { index?: { segment?: number } })
+    : { index: { segment: 0 } };
+  const segmentIndex = planner.index?.segment ?? 0;
+  const canonicalId = `Artifact:ScriptGeneration.NarrationScript[segment=${segmentIndex}]`;
+  const narration = extractNarration(resolved, segmentIndex);
+  if (narration !== undefined) {
+    resolved.TextInput = narration;
+    resolved[canonicalId] = narration;
+    resolved['Input:TextInput'] = narration;
+  }
+  const voiceValue = resolved.VoiceId ?? resolved['Input:VoiceId'];
+  if (voiceValue !== undefined) {
+    resolved.VoiceId = voiceValue as string;
+    resolved['Input:VoiceId'] = voiceValue as string;
+  }
+
+  const jobContext = {
+    inputBindings: {
+      TextInput: canonicalId,
+      ...(voiceValue !== undefined ? { VoiceId: 'Input:VoiceId' } : {}),
+    },
+    sdkMapping: {
+      TextInput: { field: request.context.providerConfig?.textKey ?? 'text', required: true },
+      ...(voiceValue !== undefined ? { VoiceId: { field: 'voice_id', required: false } } : {}),
+    },
+  };
+  extras.jobContext = {
+    ...(extras.jobContext ?? {}),
+    ...jobContext,
+  };
+  return request;
+}
+
+function extractNarration(resolvedInputs: Record<string, unknown>, segmentIndex: number): string | undefined {
+  const source = resolvedInputs.TextInput ?? resolvedInputs.SegmentNarration;
+  if (Array.isArray(source)) {
+    const entry = source[segmentIndex] ?? source[0];
+    if (typeof entry === 'string' && entry.trim()) {
+      return entry;
+    }
+    return undefined;
+  }
+  if (typeof source === 'string' && source.trim()) {
+    return source;
+  }
+  return undefined;
+}
+
 describe('createReplicateAudioHandler', () => {
   let secretResolver: SecretResolver;
 
@@ -58,12 +110,22 @@ describe('createReplicateAudioHandler', () => {
             plannerContext: {
               index: { segment: 0 },
             },
+            jobContext: {
+              inputBindings: {
+                TextInput: 'Artifact:ScriptGeneration.NarrationScript[segment=0]',
+              },
+              sdkMapping: {
+                TextInput: { field: 'text', required: true },
+              },
+            },
             resolvedInputs: {
-              SegmentNarration: ['Test narration'],
+              TextInput: 'Test narration',
+              'Artifact:ScriptGeneration.NarrationScript[segment=0]': 'Test narration',
             },
           },
         },
       };
+      attachJobContext(request);
 
       const testData = new Uint8Array([1, 2, 3]);
       (global.fetch as any).mockResolvedValue({
@@ -121,12 +183,22 @@ describe('createReplicateAudioHandler', () => {
             plannerContext: {
               index: { segment: 0 },
             },
+            jobContext: {
+              inputBindings: {
+                TextInput: 'Artifact:ScriptGeneration.NarrationScript[segment=0]',
+              },
+              sdkMapping: {
+                TextInput: { field: 'prompt', required: true },
+              },
+            },
             resolvedInputs: {
-              SegmentNarration: ['Test narration'],
+              TextInput: 'Test narration',
+              'Artifact:ScriptGeneration.NarrationScript[segment=0]': 'Test narration',
             },
           },
         },
       };
+      attachJobContext(request);
 
       const testData = new Uint8Array([1, 2, 3]);
       (global.fetch as any).mockResolvedValue({
@@ -191,12 +263,25 @@ describe('createReplicateAudioHandler', () => {
             plannerContext: {
               index: { segment: 0 },
             },
-            resolvedInputs: {
-              SegmentNarration: ['Test narration'],
+            jobContext: {
+              inputBindings: {
+                TextInput: 'Artifact:ScriptGeneration.NarrationScript[segment=0]',
+                VoiceId: 'Input:VoiceId',
+              },
+              sdkMapping: {
+                TextInput: { field: 'text', required: true },
+                VoiceId: { field: 'voice_id', required: false },
+              },
             },
-          },
+        resolvedInputs: {
+          'Artifact:ScriptGeneration.NarrationScript[segment=0]': 'Test narration',
+          'Input:VoiceId': 'Narrator',
+          'Input:TextInput': 'Test narration',
         },
-      };
+      },
+    },
+  };
+      attachJobContext(request);
 
       const testData = new Uint8Array([1, 2, 3]);
       (global.fetch as any).mockResolvedValue({
@@ -220,7 +305,7 @@ describe('createReplicateAudioHandler', () => {
           text: 'Test narration',
           speed: 1.2,
           pitch: 0,
-          voice_id: 'Wise_Woman',
+          voice_id: 'Narrator',
         }),
       });
     });
@@ -261,6 +346,7 @@ describe('createReplicateAudioHandler', () => {
           },
         },
       };
+      attachJobContext(request);
 
       const testData = new Uint8Array([1, 2, 3]);
       (global.fetch as any).mockResolvedValue({
@@ -320,6 +406,7 @@ describe('createReplicateAudioHandler', () => {
           },
         },
       };
+      attachJobContext(request);
 
       const testData = new Uint8Array([1, 2, 3]);
       (global.fetch as any).mockResolvedValue({
@@ -381,6 +468,7 @@ describe('createReplicateAudioHandler', () => {
           },
         },
       };
+      attachJobContext(request);
 
       const testData = new Uint8Array([1, 2, 3]);
       (global.fetch as any).mockResolvedValue({
@@ -442,6 +530,7 @@ describe('createReplicateAudioHandler', () => {
           },
         },
       };
+      attachJobContext(request);
 
       const testData = new Uint8Array([1, 2, 3]);
       (global.fetch as any).mockResolvedValue({
@@ -501,10 +590,11 @@ describe('createReplicateAudioHandler', () => {
           },
         },
       };
+      attachJobContext(request);
 
       await handler.warmStart?.({ logger: undefined });
 
-      await expect(handler.invoke(request)).rejects.toThrow('No text available for audio generation.');
+      await expect(handler.invoke(request)).rejects.toThrow('Missing required input \"Artifact:ScriptGeneration.NarrationScript[segment=0]\" for field \"text\" (alias \"TextInput\").');
     });
 
     it('throws error when text is empty string', async () => {
@@ -543,10 +633,11 @@ describe('createReplicateAudioHandler', () => {
           },
         },
       };
+      attachJobContext(request);
 
       await handler.warmStart?.({ logger: undefined });
 
-      await expect(handler.invoke(request)).rejects.toThrow('No text available for audio generation.');
+      await expect(handler.invoke(request)).rejects.toThrow('Missing required input \"Artifact:ScriptGeneration.NarrationScript[segment=0]\" for field \"text\" (alias \"TextInput\").');
     });
   });
 
@@ -588,6 +679,7 @@ describe('createReplicateAudioHandler', () => {
           },
         },
       };
+      attachJobContext(request);
 
       const testData = new Uint8Array([1, 2, 3]);
       (global.fetch as any).mockResolvedValue({
@@ -653,6 +745,7 @@ describe('createReplicateAudioHandler', () => {
           },
         },
       };
+      attachJobContext(request);
 
       const testData = new Uint8Array([1, 2, 3]);
       (global.fetch as any).mockResolvedValue({
@@ -720,6 +813,7 @@ describe('createReplicateAudioHandler', () => {
           },
         },
       };
+      attachJobContext(request);
 
       const testData = new Uint8Array([1, 2, 3]);
       (global.fetch as any).mockResolvedValue({
@@ -782,6 +876,7 @@ describe('createReplicateAudioHandler', () => {
           },
         },
       };
+      attachJobContext(request);
 
       const testData = new Uint8Array([1, 2, 3]);
       (global.fetch as any).mockResolvedValue({
@@ -843,6 +938,7 @@ describe('createReplicateAudioHandler', () => {
           },
         },
       };
+      attachJobContext(request);
 
       const Replicate = (await import('replicate')).default;
       const mockRun = vi.fn().mockRejectedValue(new Error('Replicate API error'));
@@ -891,6 +987,7 @@ describe('createReplicateAudioHandler', () => {
           },
         },
       };
+      attachJobContext(request);
 
       (global.fetch as any).mockResolvedValue({
         ok: false,

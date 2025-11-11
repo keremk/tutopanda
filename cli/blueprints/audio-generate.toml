@@ -25,7 +25,7 @@ type = "string"
 required = false
 default = "neutral"
 
-[[outputs]]
+[[artifacts]]
 name = "SegmentAudio"
 description = "The narrated audio segments for the movie."
 type = "array"

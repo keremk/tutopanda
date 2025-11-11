@@ -1,7 +1,7 @@
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createProviderRegistry, type ProviderDescriptor } from 'tutopanda-providers';
-import { loadBlueprintFromToml } from '../lib/blueprint-loader/index.js';
+import { loadBlueprintBundle } from '../lib/blueprint-loader/index.js';
 import { buildProducerOptionsFromBlueprint } from '../lib/producer-options.js';
 import { expandPath } from '../lib/path.js';
 
@@ -29,8 +29,8 @@ export async function runProvidersList(options: ProvidersListOptions = {}): Prom
   const blueprintPath = options.blueprintPath
     ? expandPath(options.blueprintPath)
     : DEFAULT_BLUEPRINT_PATH;
-  const { blueprint } = await loadBlueprintFromToml(blueprintPath);
-  const providerOptions = buildProducerOptionsFromBlueprint(blueprint);
+  const { root } = await loadBlueprintBundle(blueprintPath);
+  const providerOptions = buildProducerOptionsFromBlueprint(root);
 
   const registry = createProviderRegistry({ mode: 'live' });
   const entries: ProviderListEntry[] = [];

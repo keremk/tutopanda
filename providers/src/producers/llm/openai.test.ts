@@ -160,8 +160,8 @@ describe('createOpenAiLlmHandler', () => {
   it('invokes OpenAI with implicit artifact mapping (camelCase to PascalCase)', async () => {
     mocks.generateObject.mockResolvedValue({
       object: {
-        movieTitle: 'Journey to Mars',
-        movieSummary: 'A thrilling space adventure',
+        MovieTitle: 'Journey to Mars',
+        MovieSummary: 'A thrilling space adventure',
       },
       usage: {
         inputTokens: 120,
@@ -192,8 +192,8 @@ describe('createOpenAiLlmHandler', () => {
             schema: {
               type: 'object',
               properties: {
-                movieTitle: { type: 'string' },
-                movieSummary: { type: 'string' },
+                MovieTitle: { type: 'string' },
+                MovieSummary: { type: 'string' },
               },
             },
           },
@@ -236,8 +236,8 @@ describe('createOpenAiLlmHandler', () => {
   it('handles array properties with segment indexing', async () => {
     mocks.generateObject.mockResolvedValueOnce({
       object: {
-        movieTitle: 'The Great War',
-        narrationScript: ['Segment zero', 'Segment one', 'Segment two'],
+        MovieTitle: 'The Great War',
+        NarrationScript: ['Segment zero', 'Segment one', 'Segment two'],
       },
       usage: {
         inputTokens: 150,
@@ -270,8 +270,8 @@ describe('createOpenAiLlmHandler', () => {
             schema: {
               type: 'object',
               properties: {
-                movieTitle: { type: 'string' },
-                narrationScript: {
+                MovieTitle: { type: 'string' },
+                NarrationScript: {
                   type: 'array',
                   items: { type: 'string' },
                 },
@@ -301,7 +301,7 @@ describe('createOpenAiLlmHandler', () => {
 
   it('marks artefacts as failed when field is missing from JSON response', async () => {
     mocks.generateObject.mockResolvedValueOnce({
-      object: { movieTitle: 'Title only' },
+      object: { MovieTitle: 'Title only' },
       usage: { inputTokens: 5, outputTokens: 10, totalTokens: 15 },
       warnings: [],
       response: { id: 'resp-missing', model: 'openai/gpt5', createdAt: '' },
@@ -378,8 +378,8 @@ describe('createOpenAiLlmHandler', () => {
   it('normalizes TOML config from [prompt_settings] section', async () => {
     mocks.generateObject.mockResolvedValueOnce({
       object: {
-        movieTitle: 'The Battle',
-        movieSummary: 'A historic event',
+        MovieTitle: 'The Battle',
+        MovieSummary: 'A historic event',
       },
       usage: {
         inputTokens: 150,
@@ -401,10 +401,10 @@ describe('createOpenAiLlmHandler', () => {
       schema: {
         type: 'object',
         properties: {
-          movieTitle: { type: 'string' },
-          movieSummary: { type: 'string' },
+          MovieTitle: { type: 'string' },
+          MovieSummary: { type: 'string' },
         },
-        required: ['movieTitle', 'movieSummary'],
+        required: ['MovieTitle', 'MovieSummary'],
       },
     };
 

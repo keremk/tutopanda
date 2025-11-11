@@ -44,11 +44,11 @@ export function createReplicateTextToImageHandler(): HandlerFactory {
       invoke: async ({ request, runtime }) => {
         const replicate = await clientManager.ensure();
         const config = runtime.config.parse<ReplicateImageConfig>(parseReplicateImageConfig);
-        const resolvedInputs = runtime.inputs.all();
         const plannerContext = extractPlannerContext(request);
-        const prompt = resolvePrompt(resolvedInputs, plannerContext);
+        const sdkPayload = runtime.sdk.buildPayload();
+        const promptValue = sdkPayload[config.promptKey];
 
-        if (!prompt) {
+        if (typeof promptValue !== 'string' || promptValue.trim().length === 0) {
           throw createProviderError('No prompt available for image generation.', {
             code: 'missing_prompt',
             kind: 'user_input',
@@ -58,16 +58,18 @@ export function createReplicateTextToImageHandler(): HandlerFactory {
 
         console.debug('[providers.replicate.image.prompt]', {
           producer: request.jobId,
-          prompt,
-          availableInputs: Object.keys(resolvedInputs),
+          prompt: promptValue,
+          availableInputs: Object.keys(runtime.inputs.all()),
           plannerContext,
         });
 
         const input = buildReplicateInput({
           config,
-          prompt,
           request,
-          resolvedInputs,
+          basePayload: sdkPayload,
+          prompt: promptValue,
+          plannerContext,
+          resolvedInputs: runtime.inputs.all(),
         });
 
         let predictionOutput: unknown;
@@ -151,94 +153,44 @@ function parseReplicateImageConfig(raw: unknown): ReplicateImageConfig {
   };
 }
 
-
-function resolvePrompt(resolvedInputs: Record<string, unknown>, planner: PlannerContext): string | undefined {
-  const promptInput = resolvedInputs['SegmentImagePromptInput'] ?? resolvedInputs['Prompt'];
-  const segmentIndex = planner.index?.segment ?? 0;
-  const imageIndex = planner.index?.image ?? 0;
-  const imagesPerSegment =
-    (typeof resolvedInputs['ImagesPerSegment'] === 'number'
-      ? resolvedInputs['ImagesPerSegment']
-      : resolvedInputs['NumOfImagesPerNarrative']) as number | undefined;
-
-  // Handle array of prompts
-  if (Array.isArray(promptInput) && promptInput.length > 0) {
-    // Try flat indexing if we have imagesPerSegment
-    if (typeof imagesPerSegment === 'number' && imagesPerSegment > 0) {
-      const flatIndex = segmentIndex * Math.trunc(imagesPerSegment) + imageIndex;
-      const prompt = promptInput[flatIndex];
-      if (typeof prompt === 'string' && prompt.trim()) {
-        return prompt;
-      }
-    }
-
-    // Fallback to simpler indexing
-    const fallback = promptInput[imageIndex] ?? promptInput[segmentIndex] ?? promptInput[0];
-    if (typeof fallback === 'string' && fallback.trim()) {
-      return fallback;
-    }
-  }
-
-  // Handle single string prompt
-  if (typeof promptInput === 'string' && promptInput.trim()) {
-    return promptInput;
-  }
-
-  // Fallback to inquiry prompt
-  const inquiryPrompt =
-    resolvedInputs['InquiryPrompt']
-    ?? resolvedInputs['ImagePrompt']
-    ?? resolvedInputs['ImagePromptGeneration.ImagePrompt'];
-  if (typeof inquiryPrompt === 'string' && inquiryPrompt.trim()) {
-    return inquiryPrompt;
-  }
-
-  return undefined;
-}
-
 function buildReplicateInput(args: {
   config: ReplicateImageConfig;
   prompt: string;
-  resolvedInputs: Record<string, unknown>;
+  basePayload: Record<string, unknown>;
   request: ProviderJobContext;
+  plannerContext: PlannerContext;
+  resolvedInputs: Record<string, unknown>;
 }): Record<string, unknown> {
-  const { config, prompt, resolvedInputs, request } = args;
-  const input: Record<string, unknown> = { ...config.defaults };
-
-  // Set prompt
+  const { config, prompt, basePayload, request, plannerContext, resolvedInputs } = args;
+  const input: Record<string, unknown> = {
+    ...config.defaults,
+    ...basePayload,
+  };
   input[config.promptKey] = prompt;
 
-  // Set aspect ratio if provided
-  const aspectRatio = resolvedInputs['AspectRatio'];
-  if (typeof aspectRatio === 'string' && aspectRatio.trim()) {
-    input[config.aspectRatioKey] = aspectRatio;
+  if (config.sizeKey && (input[config.sizeKey] === undefined || input[config.sizeKey] === '')) {
+    input[config.sizeKey] = '1K';
   }
 
-  // Set size if provided
-  if (config.sizeKey) {
-    const size = resolvedInputs['Size'];
-    if (typeof size === 'string' && size.trim()) {
-      const sizeMapping: Record<string, string> = {
-        '480p': '1K',
-        '720p': '1K',
-        '1080p': '1K',
-      };
-      input[config.sizeKey] = sizeMapping[size] ?? '1K';
-    } else {
-      input[config.sizeKey] ??= '1K';
-    }
-  }
-
-  // Set image count
-  const imagesPerSegment = resolvedInputs['ImagesPerSegment'];
+  const imagesPerSegment =
+    runtimeNumber(resolvedInputs['ImagesPerSegment'])
+    ?? runtimeNumber(resolvedInputs['NumOfImagesPerNarrative']);
   if (typeof imagesPerSegment === 'number' && imagesPerSegment > 0) {
     input[config.imageCountKey] = Math.min(request.produces.length, Math.trunc(imagesPerSegment));
   } else {
     input[config.imageCountKey] = request.produces.length;
   }
 
-  // Map extra inputs
+  const indexPayload = {
+    segment: plannerContext.index?.segment ?? 0,
+    image: plannerContext.index?.image ?? 0,
+  };
+  input._plannerIndex = indexPayload;
+
   for (const [inputKey, field] of Object.entries(config.extrasMapping)) {
+    if (input[field] !== undefined) {
+      continue;
+    }
     const value = resolvedInputs[inputKey];
     if (value !== undefined) {
       input[field] = value;
@@ -246,4 +198,8 @@ function buildReplicateInput(args: {
   }
 
   return input;
+}
+
+function runtimeNumber(value: unknown): number | undefined {
+  return typeof value === 'number' ? value : undefined;
 }

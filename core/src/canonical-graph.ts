@@ -1,0 +1,476 @@
+import type {
+  BlueprintArtefactDefinition,
+  BlueprintDocument,
+  BlueprintEdgeDefinition,
+  BlueprintInputDefinition,
+  BlueprintTreeNode,
+  NodeKind,
+  ProducerConfig,
+} from './types.js';
+
+export interface BlueprintGraphNode {
+  id: string;
+  type: NodeKind;
+  namespacePath: string[];
+  name: string;
+  dimensions: string[];
+  input?: BlueprintInputDefinition;
+  artefact?: BlueprintArtefactDefinition;
+  producer?: ProducerConfig;
+}
+
+export interface BlueprintGraphEdgeEndpoint {
+  nodeId: string;
+  dimensions: string[];
+}
+
+export interface BlueprintGraphEdge {
+  from: BlueprintGraphEdgeEndpoint;
+  to: BlueprintGraphEdgeEndpoint;
+  note?: string;
+}
+
+export interface BlueprintGraph {
+  meta: BlueprintDocument['meta'];
+  nodes: BlueprintGraphNode[];
+  edges: BlueprintGraphEdge[];
+  namespaceDimensions: Map<string, DimensionSymbol[]>;
+  dimensionLineage: Map<string, string | null>;
+}
+
+interface ParsedSegment {
+  name: string;
+  dimensions: string[];
+}
+
+interface ParsedReference {
+  namespaceSegments: ParsedSegment[];
+  node: ParsedSegment;
+}
+
+interface DimensionSymbol {
+  raw: string;
+  ordinal: number;
+}
+
+interface DimensionSlot {
+  scope: 'namespace' | 'local';
+  scopeKey: string;
+  ordinal: number;
+  raw: string;
+}
+
+interface NamespaceDimensionEntry extends DimensionSymbol {
+  namespaceKey: string;
+}
+
+type LocalNodeDims = Map<string, DimensionSymbol[]>;
+
+export function buildBlueprintGraph(root: BlueprintTreeNode): BlueprintGraph {
+  const namespaceDims = new Map<string, DimensionSymbol[]>();
+  namespaceDims.set('', []);
+  collectNamespaceDimensions(root, namespaceDims);
+  const localDimsMap = new Map<BlueprintTreeNode, LocalNodeDims>();
+  collectLocalNodeDimensions(root, localDimsMap);
+  const namespaceParents = initializeNamespaceParentMap(namespaceDims);
+  const namespaceMembership = new Map<string, string>();
+
+  const nodes: BlueprintGraphNode[] = [];
+  collectGraphNodes(root, namespaceDims, localDimsMap, nodes, namespaceMembership);
+
+  const edges: BlueprintGraphEdge[] = [];
+  collectGraphEdges(root, namespaceDims, localDimsMap, edges, root);
+
+  resolveNamespaceDimensionParents(edges, namespaceMembership, namespaceParents);
+  const dimensionLineage = buildDimensionLineage(nodes, namespaceMembership, namespaceParents);
+
+  return {
+    meta: root.document.meta,
+    nodes,
+    edges,
+    namespaceDimensions: namespaceDims,
+    dimensionLineage,
+  };
+}
+
+function collectNamespaceDimensions(
+  tree: BlueprintTreeNode,
+  namespaceDims: Map<string, DimensionSymbol[]>,
+): void {
+  for (const edge of tree.document.edges) {
+    registerNamespaceDims(edge.from, tree.namespacePath, namespaceDims);
+    registerNamespaceDims(edge.to, tree.namespacePath, namespaceDims);
+  }
+  for (const child of tree.children.values()) {
+    collectNamespaceDimensions(child, namespaceDims);
+  }
+}
+
+function registerNamespaceDims(
+  reference: string,
+  currentNamespace: string[],
+  namespaceDims: Map<string, DimensionSymbol[]>,
+): void {
+  const parsed = parseReference(reference);
+  let path: string[] = [...currentNamespace];
+  for (const segment of parsed.namespaceSegments) {
+    path = [...path, segment.name];
+    if (segment.dimensions.length === 0) {
+      continue;
+    }
+    const key = namespaceKey(path);
+    const existing = namespaceDims.get(key);
+    if (!existing) {
+      namespaceDims.set(key, createDimensionSymbols(segment.dimensions));
+      continue;
+    }
+    if (existing.length !== segment.dimensions.length) {
+      throw new Error(
+        `Namespace "${path.join('.')}" referenced with conflicting dimension counts (${existing.length} vs ${segment.dimensions.length}).`,
+      );
+    }
+    for (let index = 0; index < existing.length; index += 1) {
+      if (existing[index]?.raw !== segment.dimensions[index]) {
+        throw new Error(
+          `Namespace "${path.join('.')}" referenced with conflicting dimensions (${existing.map((entry) => entry.raw).join(', ')} vs ${segment.dimensions.join(', ')}).`,
+        );
+      }
+    }
+  }
+}
+
+function collectLocalNodeDimensions(
+  tree: BlueprintTreeNode,
+  map: Map<BlueprintTreeNode, LocalNodeDims>,
+): void {
+  const localDims = new Map<string, DimensionSymbol[]>();
+  for (const edge of tree.document.edges) {
+    registerLocalDims(edge.from, localDims);
+    registerLocalDims(edge.to, localDims);
+  }
+  map.set(tree, localDims);
+  for (const child of tree.children.values()) {
+    collectLocalNodeDimensions(child, map);
+  }
+}
+
+function registerLocalDims(reference: string, dimsMap: LocalNodeDims): void {
+  if (reference.includes('.')) {
+    return;
+  }
+  const parsed = parseReference(reference);
+  const identifier = parsed.node.name;
+  const dims = parsed.node.dimensions;
+  const symbols = createDimensionSymbols(dims);
+  const existing = dimsMap.get(identifier);
+  if (!existing) {
+    dimsMap.set(identifier, symbols);
+    return;
+  }
+  if (existing.length !== symbols.length) {
+    throw new Error(
+      `Node "${identifier}" referenced with inconsistent dimension counts (${existing.length} vs ${symbols.length}).`,
+    );
+  }
+  for (let index = 0; index < existing.length; index += 1) {
+    if (existing[index]?.raw !== symbols[index]?.raw) {
+      throw new Error(
+        `Node "${identifier}" referenced with inconsistent dimensions (${existing.map((entry) => entry.raw).join(', ')} vs ${symbols.map((entry) => entry.raw).join(', ')}).`,
+      );
+    }
+  }
+}
+
+function createDimensionSymbols(dims: string[]): DimensionSymbol[] {
+  return dims.map((raw, ordinal) => ({ raw, ordinal }));
+}
+
+function toLocalSlots(nodeId: string, symbols: DimensionSymbol[]): DimensionSlot[] {
+  return symbols.map((symbol) => ({
+    scope: 'local',
+    scopeKey: nodeId,
+    ordinal: symbol.ordinal,
+    raw: symbol.raw,
+  }));
+}
+
+function qualifyDimensionSlots(nodeId: string, slots: DimensionSlot[]): string[] {
+  return slots.map((slot) => formatDimensionSlot(nodeId, slot));
+}
+
+function formatDimensionSlot(nodeId: string, slot: DimensionSlot): string {
+  const scopeLabel = slot.scope === 'namespace'
+    ? `ns:${slot.scopeKey || '__root__'}`
+    : `local:${slot.scopeKey}`;
+  return `${nodeId}::${scopeLabel}:${slot.ordinal}:${slot.raw}`;
+}
+
+function makeNamespaceSlot(entry: NamespaceDimensionEntry): DimensionSlot {
+  return {
+    scope: 'namespace',
+    scopeKey: entry.namespaceKey,
+    ordinal: entry.ordinal,
+    raw: entry.raw,
+  };
+}
+
+function registerNamespaceSymbol(
+  symbol: string,
+  slot: DimensionSlot,
+  namespaceMembership: Map<string, string>,
+): void {
+  if (slot.scope === 'namespace') {
+    namespaceMembership.set(symbol, formatNamespaceParentKey(slot.scopeKey, slot.ordinal));
+  }
+}
+
+function collectGraphNodes(
+  tree: BlueprintTreeNode,
+  namespaceDims: Map<string, DimensionSymbol[]>,
+  localDims: Map<BlueprintTreeNode, LocalNodeDims>,
+  output: BlueprintGraphNode[],
+  namespaceMembership: Map<string, string>,
+): void {
+  const namespaceSlots = collectNamespacePrefixDims(tree.namespacePath, namespaceDims);
+  const local = localDims.get(tree) ?? new Map();
+  for (const input of tree.document.inputs) {
+    const nodeKey = nodeId(tree.namespacePath, input.name);
+    const namespaceQualified = qualifyDimensionSlots(nodeKey, namespaceSlots);
+    namespaceQualified.forEach((symbol, index) => {
+      registerNamespaceSymbol(symbol, namespaceSlots[index]!, namespaceMembership);
+    });
+    const localSymbols = toLocalSlots(nodeKey, local.get(input.name) ?? []);
+    const localQualified = qualifyDimensionSlots(nodeKey, localSymbols);
+    output.push({
+      id: nodeKey,
+      type: 'InputSource',
+      namespacePath: tree.namespacePath,
+      name: input.name,
+      dimensions: [...namespaceQualified, ...localQualified],
+      input,
+    });
+  }
+  for (const artefact of tree.document.artefacts) {
+    const nodeKey = nodeId(tree.namespacePath, artefact.name);
+    const namespaceQualified = qualifyDimensionSlots(nodeKey, namespaceSlots);
+    namespaceQualified.forEach((symbol, index) => {
+      registerNamespaceSymbol(symbol, namespaceSlots[index]!, namespaceMembership);
+    });
+    const localSymbols = toLocalSlots(nodeKey, local.get(artefact.name) ?? []);
+    const localQualified = qualifyDimensionSlots(nodeKey, localSymbols);
+    output.push({
+      id: nodeKey,
+      type: 'Artifact',
+      namespacePath: tree.namespacePath,
+      name: artefact.name,
+      dimensions: [...namespaceQualified, ...localQualified],
+      artefact,
+    });
+  }
+  for (const producer of tree.document.producers) {
+    const nodeKey = nodeId(tree.namespacePath, producer.name);
+    const namespaceQualified = qualifyDimensionSlots(nodeKey, namespaceSlots);
+    namespaceQualified.forEach((symbol, index) => {
+      registerNamespaceSymbol(symbol, namespaceSlots[index]!, namespaceMembership);
+    });
+    const localSymbols = toLocalSlots(nodeKey, local.get(producer.name) ?? []);
+    const localQualified = qualifyDimensionSlots(nodeKey, localSymbols);
+    output.push({
+      id: nodeKey,
+      type: 'Producer',
+      namespacePath: tree.namespacePath,
+      name: producer.name,
+      dimensions: [...namespaceQualified, ...localQualified],
+      producer,
+    });
+  }
+  for (const child of tree.children.values()) {
+    collectGraphNodes(child, namespaceDims, localDims, output, namespaceMembership);
+  }
+}
+
+function collectGraphEdges(
+  tree: BlueprintTreeNode,
+  namespaceDims: Map<string, DimensionSymbol[]>,
+  localDims: Map<BlueprintTreeNode, LocalNodeDims>,
+  output: BlueprintGraphEdge[],
+  root: BlueprintTreeNode,
+): void {
+  for (const edge of tree.document.edges) {
+    output.push({
+      from: resolveEdgeEndpoint(edge.from, tree, namespaceDims, localDims, root),
+      to: resolveEdgeEndpoint(edge.to, tree, namespaceDims, localDims, root),
+      note: edge.note,
+    });
+  }
+  for (const child of tree.children.values()) {
+    collectGraphEdges(child, namespaceDims, localDims, output, root);
+  }
+}
+
+function initializeNamespaceParentMap(namespaceDims: Map<string, DimensionSymbol[]>): Map<string, string | null> {
+  const parents = new Map<string, string | null>();
+  for (const [key, dims] of namespaceDims.entries()) {
+    if (!dims) {
+      continue;
+    }
+    for (const symbol of dims) {
+      parents.set(formatNamespaceParentKey(key, symbol.ordinal), null);
+    }
+  }
+  return parents;
+}
+
+function resolveNamespaceDimensionParents(
+  edges: BlueprintGraphEdge[],
+  namespaceMembership: Map<string, string>,
+  namespaceParents: Map<string, string | null>,
+): void {
+  for (const edge of edges) {
+    const limit = Math.min(edge.from.dimensions.length, edge.to.dimensions.length);
+    for (let index = 0; index < limit; index += 1) {
+      const targetSymbol = edge.to.dimensions[index];
+      const namespaceKey = namespaceMembership.get(targetSymbol);
+      if (!namespaceKey) {
+        continue;
+      }
+      const sourceSymbol = edge.from.dimensions[index];
+      if (!sourceSymbol) {
+        continue;
+      }
+      const sourceNamespace = namespaceMembership.get(sourceSymbol);
+      if (sourceNamespace === namespaceKey) {
+        continue;
+      }
+      const existing = namespaceParents.get(namespaceKey);
+      if (existing && existing !== sourceSymbol) {
+        throw new Error(
+          `Namespace dimension "${namespaceKey}" derives from conflicting parents (${existing} vs ${sourceSymbol}).`,
+        );
+      }
+      namespaceParents.set(namespaceKey, sourceSymbol);
+    }
+  }
+}
+
+function buildDimensionLineage(
+  nodes: BlueprintGraphNode[],
+  namespaceMembership: Map<string, string>,
+  namespaceParents: Map<string, string | null>,
+): Map<string, string | null> {
+  const lineage = new Map<string, string | null>();
+  for (const node of nodes) {
+    for (const symbol of node.dimensions) {
+      const namespaceKey = namespaceMembership.get(symbol);
+      if (namespaceKey) {
+        lineage.set(symbol, namespaceParents.get(namespaceKey) ?? null);
+      } else {
+        lineage.set(symbol, null);
+      }
+    }
+  }
+  return lineage;
+}
+
+function resolveEdgeEndpoint(
+  reference: string,
+  context: BlueprintTreeNode,
+  namespaceDims: Map<string, DimensionSymbol[]>,
+  localDims: Map<BlueprintTreeNode, LocalNodeDims>,
+  root: BlueprintTreeNode,
+): BlueprintGraphEdgeEndpoint {
+  const parsed = parseReference(reference);
+  const targetPath = [...context.namespacePath, ...parsed.namespaceSegments.map((segment) => segment.name)];
+  const nodeName = parsed.node.name;
+  const owner = findNodeByNamespace(root, targetPath);
+  const prefixDims = collectNamespacePrefixDims(targetPath, namespaceDims);
+  const ownerLocalDims = localDims.get(owner) ?? new Map();
+  const targetNodeId = nodeId(targetPath, nodeName);
+  const nodeDims = toLocalSlots(targetNodeId, ownerLocalDims.get(nodeName) ?? []);
+  return {
+    nodeId: targetNodeId,
+    dimensions: qualifyDimensionSlots(targetNodeId, [...prefixDims, ...nodeDims]),
+  };
+}
+
+function findNodeByNamespace(tree: BlueprintTreeNode, namespacePath: string[]): BlueprintTreeNode {
+  if (namespacePath.length === 0) {
+    return tree;
+  }
+  let current: BlueprintTreeNode | undefined = tree;
+  for (const segment of namespacePath) {
+    current = current?.children.get(segment);
+    if (!current) {
+      throw new Error(`Unknown sub-blueprint namespace "${namespacePath.join('.')}".`);
+    }
+  }
+  return current;
+}
+
+function parseReference(reference: string): ParsedReference {
+  if (typeof reference !== 'string' || reference.trim().length === 0) {
+    throw new Error(`Invalid reference: "${reference}"`);
+  }
+  const parts = reference.split('.');
+  const segments = parts.map(parseSegment);
+  const node = segments.pop();
+  if (!node) {
+    throw new Error(`Malformed reference: "${reference}"`);
+  }
+  return {
+    namespaceSegments: segments,
+    node,
+  };
+}
+
+function parseSegment(segment: string): ParsedSegment {
+  const dims: string[] = [];
+  const nameMatch = segment.match(/^[^[]+/);
+  const name = nameMatch ? nameMatch[0] : '';
+  if (!name) {
+    throw new Error(`Invalid segment "${segment}"`);
+  }
+  const dimMatches = segment.slice(name.length).match(/\[[^\]]*]/g) ?? [];
+  for (const match of dimMatches) {
+    const symbol = match.slice(1, -1).trim();
+    if (!symbol) {
+      throw new Error(`Invalid dimension in "${segment}"`);
+    }
+    dims.push(symbol);
+  }
+  return { name, dimensions: dims };
+}
+
+function collectNamespacePrefixDims(
+  namespacePath: string[],
+  namespaceDims: Map<string, DimensionSymbol[]>,
+): DimensionSlot[] {
+  const slots: DimensionSlot[] = [];
+  for (let i = 1; i <= namespacePath.length; i += 1) {
+    const key = namespaceKey(namespacePath.slice(0, i));
+    const dims = namespaceDims.get(key);
+    if (!dims) {
+      continue;
+    }
+    for (const symbol of dims) {
+      slots.push(makeNamespaceSlot({ namespaceKey: key, raw: symbol.raw, ordinal: symbol.ordinal }));
+    }
+  }
+  return slots;
+}
+
+function namespaceKey(path: string[]): string {
+  return path.join('.');
+}
+
+function formatNamespaceParentKey(namespacePathKey: string, ordinal: number): string {
+  const normalized = namespacePathKey === '' ? '__root__' : namespacePathKey;
+  return `namespace:${normalized}#${ordinal}`;
+}
+
+function nodeId(namespacePath: string[], name: string): string {
+  if (namespacePath.length === 0) {
+    return name;
+  }
+  return `${namespacePath.join('.')}.${name}`;
+}

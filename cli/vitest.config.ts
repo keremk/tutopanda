@@ -6,8 +6,15 @@ export default defineConfig({
     environment: 'node',
   },
   resolve: {
-    alias: {
-      'tutopanda-core': new URL('../core/src/index.ts', import.meta.url).pathname,
-    },
+    alias: [
+      {
+        find: 'tutopanda-core/blueprint-loader',
+        replacement: new URL('../core/src/blueprint-loader/index.ts', import.meta.url).pathname,
+      },
+      {
+        find: 'tutopanda-core',
+        replacement: new URL('../core/src/index.ts', import.meta.url).pathname,
+      },
+    ],
   },
 });

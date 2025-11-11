@@ -48,11 +48,10 @@ default = "neutral"
 name = "Language"
 description = "The language in which the movie will be narrated."
 type = "string"
-cardinality = "single"
 required = false
 default = "en"
 
-[[outputs]]
+[[artifacts]]
 name = "SegmentAudio"
 description = "The narrated audio segments for the movie."
 type = "array"

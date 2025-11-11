@@ -1,12 +1,18 @@
 /* eslint-env node */
 import process from 'node:process';
+import './__testutils__/mock-providers.js';
 import { mkdtemp, readFile, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { runInit } from './init.js';
 import { runQuery, formatMovieId } from './query.js';
 import { readCliConfig } from '../lib/cli-config.js';
+import { createInputsFile } from './__testutils__/inputs.js';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const SCRIPT_BLUEPRINT_PATH = resolve(__dirname, '../../blueprints/script-generate.toml');
 
 const tmpRoots: string[] = [];
 const originalEnvConfig = process.env.TUTOPANDA_CLI_CONFIG;
@@ -39,7 +45,12 @@ describe('runQuery', () => {
 
     await runInit({ rootFolder: root, configPath: cliConfigPath });
 
-    const result = await runQuery({ prompt: 'Tell me a story about the sea' });
+    const inputsPath = await createInputsFile({ root, prompt: 'Tell me a story about the sea' });
+    const result = await runQuery({
+      inputsPath,
+      nonInteractive: true,
+      usingBlueprint: SCRIPT_BLUEPRINT_PATH,
+    });
 
     expect(result.movieId).toHaveLength(8);
     expect(result.dryRun).toBeUndefined();
@@ -52,12 +63,16 @@ describe('runQuery', () => {
 
     const planStats = await stat(join(movieDir, 'runs', `${result.targetRevision}-plan.json`));
     expect(planStats.isFile()).toBe(true);
+    const plan = JSON.parse(
+      await readFile(join(movieDir, 'runs', `${result.targetRevision}-plan.json`), 'utf8'),
+    );
+    const firstJob = plan.layers.flat()[0];
+    expect(firstJob.context.inputBindings.InquiryPrompt).toBe('Input:InquiryPrompt');
+    expect(firstJob.context.inputs).toContain('Input:InquiryPrompt');
+    expect(firstJob.context.produces.some((id: string) => id.startsWith('Artifact:NarrationScript'))).toBe(true);
 
     const prompt = await readFile(join(movieDir, 'prompts', 'inquiry.txt'), 'utf8');
     expect(prompt.trim()).toBe('Tell me a story about the sea');
-
-    const providersConfig = JSON.parse(await readFile(join(movieDir, 'providers.json'), 'utf8'));
-    expect(providersConfig.ScriptProducer).toBeDefined();
 
     expect(result.build?.status).toBe('succeeded');
     expect(result.manifestPath).toBeDefined();
@@ -77,7 +92,13 @@ describe('runQuery', () => {
 
     await runInit({ rootFolder: root, configPath: cliConfigPath });
 
-    const result = await runQuery({ prompt: 'Explain gravity', dryRun: true });
+    const inputsPath = await createInputsFile({ root, prompt: 'Explain gravity' });
+    const result = await runQuery({
+      inputsPath,
+      dryRun: true,
+      nonInteractive: true,
+      usingBlueprint: SCRIPT_BLUEPRINT_PATH,
+    });
 
     expect(result.dryRun).toBeDefined();
     expect(result.dryRun?.status).toBe('succeeded');

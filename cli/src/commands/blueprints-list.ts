@@ -1,7 +1,7 @@
 import { readdir, readFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { parseBlueprintToml } from '../lib/blueprint-loader/index.js';
+import { parseBlueprintDocument } from '../lib/blueprint-loader/index.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DEFAULT_BLUEPRINT_DIR = resolve(__dirname, '../../blueprints');
@@ -29,14 +29,14 @@ export async function runBlueprintsList(
     }
     const fullPath = resolve(directory, entry.name);
     const contents = await readFile(fullPath, 'utf8');
-    const blueprint = parseBlueprintToml(contents);
+    const blueprint = parseBlueprintDocument(contents);
     blueprints.push({
       path: fullPath,
       name: blueprint.meta.name,
       description: blueprint.meta.description,
       version: blueprint.meta.version,
       inputCount: blueprint.inputs.length,
-      outputCount: blueprint.outputs.length,
+      outputCount: blueprint.artefacts.length,
     });
   }
 

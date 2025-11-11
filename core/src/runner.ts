@@ -22,6 +22,8 @@ import {
   type RunResult,
   type SerializedError,
   type RevisionId,
+  type ProducerJobContext,
+  type ProducerJobContextExtras,
 } from './types.js';
 
 /* eslint-disable no-unused-vars */
@@ -407,6 +409,32 @@ function serializeError(error: unknown): SerializedError {
   };
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function readResolvedValue(
+  canonicalId: string,
+  resolved: Record<string, unknown>,
+): unknown {
+  if (canonicalId in resolved) {
+    return resolved[canonicalId];
+  }
+  const withoutPrefix = trimIdPrefix(canonicalId);
+  if (withoutPrefix in resolved) {
+    return resolved[withoutPrefix];
+  }
+  const withoutDimensions = withoutPrefix.replace(/\[.*?\]/g, '');
+  if (withoutDimensions in resolved) {
+    return resolved[withoutDimensions];
+  }
+  return undefined;
+}
+
+function trimIdPrefix(id: string): string {
+  return id.replace(/^(Artifact|Input):/, '');
+}
+
 /**
  * Merges resolved artifact data into the job context.
  * Preserves existing resolvedInputs and adds newly resolved artifacts.
@@ -415,49 +443,36 @@ function mergeResolvedArtifacts(
   job: JobDescriptor,
   resolvedArtifacts: Record<string, unknown>,
 ): JobDescriptor {
-  // If no artifacts were resolved, return job as-is
   if (Object.keys(resolvedArtifacts).length === 0) {
     return job;
   }
 
-  const jobContext = job.context ?? {};
-  const aliasIndex = buildInputAliasIndex(jobContext);
-  if (aliasIndex.size > 0) {
-    console.debug('[runner.inputAliases]', job.jobId, Object.fromEntries(aliasIndex));
-  }
-
-  // Extract existing extras and resolvedInputs
-  const extras = isRecord(jobContext) && isRecord(jobContext.extras)
-    ? jobContext.extras
-    : {};
-
-  const existingResolvedInputs = isRecord(extras) && isRecord(extras.resolvedInputs)
-    ? extras.resolvedInputs
-    : {};
+  const jobContext: ProducerJobContext = job.context ?? {
+    namespacePath: [],
+    indices: {},
+    qualifiedName: typeof job.producer === 'string' ? job.producer : job.jobId,
+    inputs: job.inputs,
+    produces: job.produces,
+  };
+  const existingExtras: ProducerJobContextExtras = jobContext.extras ?? {};
+  const existingResolvedInputs = (existingExtras.resolvedInputs ?? {}) as Record<string, unknown>;
 
   const mergedResolvedInputs: Record<string, unknown> = { ...existingResolvedInputs };
-  const addedAliases: string[] = [];
 
-  for (const [key, value] of Object.entries(resolvedArtifacts)) {
-    const aliasNames = new Set(buildResolvedInputAliases(key));
-    const mappedAliases = aliasIndex.get(key);
-    if (mappedAliases) {
-      for (const alias of mappedAliases) {
-        aliasNames.add(alias);
-      }
-    }
-    for (const alias of aliasNames) {
-      mergedResolvedInputs[alias] = value;
-      addedAliases.push(alias);
-    }
+  for (const [resolvedKey, value] of Object.entries(resolvedArtifacts)) {
+    mergedResolvedInputs[resolvedKey] = value;
   }
 
-  if (addedAliases.length > 0) {
-    console.debug('[runner.resolvedInputs.added]', {
-      jobId: job.jobId,
-      producer: job.producer,
-      aliases: addedAliases,
-    });
+  if (jobContext.inputBindings) {
+    for (const [alias, canonicalId] of Object.entries(jobContext.inputBindings)) {
+      const resolvedValue = readResolvedValue(canonicalId, resolvedArtifacts);
+      if (resolvedValue !== undefined) {
+        mergedResolvedInputs[canonicalId] = resolvedValue;
+        const trimmed = trimIdPrefix(canonicalId);
+        mergedResolvedInputs[trimmed] = resolvedValue;
+        mergedResolvedInputs[alias] = resolvedValue;
+      }
+    }
   }
 
   // Merge resolved artifacts with existing resolvedInputs
@@ -466,75 +481,9 @@ function mergeResolvedArtifacts(
     context: {
       ...jobContext,
       extras: {
-        ...extras,
+        ...existingExtras,
         resolvedInputs: mergedResolvedInputs,
       },
     },
   };
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-
-function buildResolvedInputAliases(kind: string): string[] {
-  if (!kind.includes('.')) {
-    return [kind];
-  }
-  const segments = kind.split('.');
-  const shortName = segments.pop() ?? kind;
-  if (segments.length === 0) {
-    return [kind];
-  }
-  if (shortName === kind) {
-    return [kind];
-  }
-  return [kind, shortName];
-}
-
-function buildInputAliasIndex(jobContext: unknown): Map<string, string[]> {
-  const aliasIndex = new Map<string, string[]>();
-  if (!isRecord(jobContext)) {
-    return aliasIndex;
-  }
-
-  const container = getInputAliasContainer(jobContext);
-  if (!container) {
-    return aliasIndex;
-  }
-
-  for (const [alias, sources] of Object.entries(container)) {
-    const list = Array.isArray(sources) ? sources : [sources];
-    for (const source of list) {
-      if (typeof source !== 'string') {
-        continue;
-      }
-      for (const candidate of buildSourceCandidates(source)) {
-        const existing = aliasIndex.get(candidate) ?? [];
-        existing.push(alias);
-        aliasIndex.set(candidate, existing);
-      }
-    }
-  }
-  return aliasIndex;
-}
-
-function getInputAliasContainer(context: Record<string, unknown>): Record<string, unknown> | undefined {
-  const direct = context.inputAliases;
-  if (isRecord(direct)) {
-    return direct;
-  }
-  const aliases = context.aliases;
-  if (isRecord(aliases) && isRecord(aliases.inputs)) {
-    return aliases.inputs;
-  }
-  return undefined;
-}
-
-function buildSourceCandidates(source: string): string[] {
-  if (source.startsWith('Artifact:')) {
-    return [source, source.replace(/^Artifact:/, '')];
-  }
-  return [source, `Artifact:${source}`];
 }

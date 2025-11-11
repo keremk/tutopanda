@@ -6,29 +6,44 @@ type JsonObject = Record<string, unknown>;
 export interface ParsedArtefactIdentifier {
   kind: string;
   index?: Record<string, number>;
+  ordinal?: number[];
 }
 
 /**
- * Builds artifacts from OpenAI response using implicit mapping.
- * Convention: camelCase JSON field → PascalCase Artifact ID
+ * Builds artifacts from OpenAI response using canonical mapping.
+ * Convention: JSON field names **must** match the canonical artefact kind
+ * (PascalCase, without namespace). No heuristics or fallbacks.
  *
  * @example
- * JSON response: { movieTitle: "...", narrationScript: ["seg1", "seg2", "seg3"] }
+ * JSON response: { MovieTitle: "...", NarrationScript: ["seg1", "seg2", "seg3"] }
  * Produces:
- *   - "Artifact:MovieTitle" → movieTitle
- *   - "Artifact:NarrationScript[segment=0]" → narrationScript[0]
- *   - "Artifact:NarrationScript[segment=1]" → narrationScript[1]
- *   - "Artifact:NarrationScript[segment=2]" → narrationScript[2]
+ *   - "Artifact:MovieTitle" → MovieTitle
+ *   - "Artifact:NarrationScript[segment=0]" → NarrationScript[0]
+ *   - "Artifact:NarrationScript[segment=1]" → NarrationScript[1]
+ *   - "Artifact:NarrationScript[segment=2]" → NarrationScript[2]
  */
+export interface BuildArtefactOptions {
+  producerId?: string;
+  namespaceOrdinalDepth?: number;
+}
+
+interface ArtefactExtractionContext {
+  skipNamespaceOrdinals: number;
+}
+
 export function buildArtefactsFromResponse(
   response: JsonObject | string,
   produces: string[],
+  options: BuildArtefactOptions = {},
 ): ProducedArtefact[] {
   const artefacts: ProducedArtefact[] = [];
   const jsonResponse = typeof response === 'string' ? response : response;
+  const context: ArtefactExtractionContext = {
+    skipNamespaceOrdinals: resolveNamespaceOrdinalDepth(options),
+  };
 
   for (const artefactId of produces) {
-    const artefact = buildSingleArtefact(jsonResponse, artefactId);
+    const artefact = buildSingleArtefact(jsonResponse, artefactId, context);
     artefacts.push(artefact);
   }
 
@@ -38,6 +53,7 @@ export function buildArtefactsFromResponse(
 function buildSingleArtefact(
   response: JsonObject | string,
   artefactId: string,
+  context: ArtefactExtractionContext,
 ): ProducedArtefact {
   const diagnostics: Record<string, unknown> = {};
 
@@ -61,11 +77,11 @@ function buildSingleArtefact(
     };
   }
 
-  // Convert PascalCase to camelCase: MovieTitle → movieTitle, NarrationScript → narrationScript
+  // Field names must match the canonical kind (without namespace)
   const kindBase = parsed.kind.includes('.')
     ? parsed.kind.slice(parsed.kind.lastIndexOf('.') + 1)
     : parsed.kind;
-  const fieldName = toCamelCase(kindBase);
+  const fieldName = kindBase;
   diagnostics.field = fieldName;
   diagnostics.kind = parsed.kind;
 
@@ -79,40 +95,28 @@ function buildSingleArtefact(
     };
   }
 
-  // Handle arrays with segment indexing
-  let value: unknown;
-  if (parsed.index?.segment !== undefined) {
-    if (!Array.isArray(fieldValue)) {
-      return {
-        artefactId,
-        status: 'failed',
-        diagnostics: {
-          ...diagnostics,
-          reason: 'expected_array',
-          actualType: typeof fieldValue,
-        },
-      };
-    }
+  let value: unknown = fieldValue;
 
-    const segmentIndex = parsed.index.segment;
-    value = fieldValue[segmentIndex];
+  const effectiveOrdinal = trimNamespaceOrdinals(parsed.ordinal, context);
 
+  if (effectiveOrdinal && effectiveOrdinal.length > 0) {
+    value = selectByOrdinal(fieldValue, effectiveOrdinal, diagnostics);
     if (value === undefined) {
       return {
         artefactId,
         status: 'failed',
-        diagnostics: {
-          ...diagnostics,
-          reason: 'segment_out_of_bounds',
-          segmentIndex,
-          arrayLength: fieldValue.length,
-        },
+        diagnostics,
       };
     }
-
-    diagnostics.segmentIndex = segmentIndex;
-  } else {
-    value = fieldValue;
+  } else if (parsed.index?.segment !== undefined) {
+    value = selectArrayElement(fieldValue, parsed.index.segment, diagnostics);
+    if (value === undefined) {
+      return {
+        artefactId,
+        status: 'failed',
+        diagnostics,
+      };
+    }
   }
 
   // Materialize value to string
@@ -155,16 +159,22 @@ export function parseArtefactIdentifier(identifier: string): ParsedArtefactIdent
   }
 
   const index: Record<string, number> = {};
+  const ordinal: number[] = [];
   for (const part of dimensionParts) {
     const cleaned = part.replace(/\]$/, '');
     const pairs = cleaned.split('&');
 
     for (const pair of pairs) {
       const [key, value] = pair.split('=');
-      if (key && value) {
+      if (key && value !== undefined) {
         const parsedValue = Number(value.trim());
         if (!Number.isNaN(parsedValue) && Number.isInteger(parsedValue)) {
           index[key.trim()] = parsedValue;
+        }
+      } else if (key) {
+        const parsedValue = Number(key.trim());
+        if (!Number.isNaN(parsedValue) && Number.isInteger(parsedValue)) {
+          ordinal.push(parsedValue);
         }
       }
     }
@@ -173,20 +183,88 @@ export function parseArtefactIdentifier(identifier: string): ParsedArtefactIdent
   return {
     kind,
     index: Object.keys(index).length > 0 ? index : undefined,
+    ordinal: ordinal.length > 0 ? ordinal : undefined,
   };
 }
 
-/**
- * Converts PascalCase to camelCase.
- *
- * @example
- * "MovieTitle" → "movieTitle"
- * "NarrationScript" → "narrationScript"
- * "ImagePrompt" → "imagePrompt"
- */
-function toCamelCase(str: string): string {
-  if (!str || str.length === 0) return str;
-  return str.charAt(0).toLowerCase() + str.slice(1);
+function trimNamespaceOrdinals(
+  ordinal: number[] | undefined,
+  context: ArtefactExtractionContext,
+): number[] | undefined {
+  if (!ordinal || ordinal.length === 0) {
+    return ordinal;
+  }
+  const skip = context.skipNamespaceOrdinals;
+  if (skip <= 0) {
+    return ordinal;
+  }
+  if (skip >= ordinal.length) {
+    return [];
+  }
+  return ordinal.slice(skip);
+}
+
+function resolveNamespaceOrdinalDepth(options: BuildArtefactOptions): number {
+  if (typeof options.namespaceOrdinalDepth === 'number' && options.namespaceOrdinalDepth >= 0) {
+    return options.namespaceOrdinalDepth;
+  }
+  if (options.producerId) {
+    return countBracketSegments(options.producerId);
+  }
+  return 0;
+}
+
+function countBracketSegments(identifier: string): number {
+  const matches = identifier.match(/\[[^\]]+\]/g);
+  return matches ? matches.length : 0;
+}
+
+function selectArrayElement(
+  fieldValue: unknown,
+  elementIndex: number,
+  diagnostics: Record<string, unknown>,
+): unknown {
+  if (!Array.isArray(fieldValue)) {
+    diagnostics.reason = 'expected_array';
+    diagnostics.actualType = typeof fieldValue;
+    return undefined;
+  }
+  const value = fieldValue[elementIndex];
+  if (value === undefined) {
+    diagnostics.reason = 'segment_out_of_bounds';
+    diagnostics.segmentIndex = elementIndex;
+    diagnostics.arrayLength = fieldValue.length;
+    return undefined;
+  }
+  diagnostics.segmentIndex = elementIndex;
+  return value;
+}
+
+function selectByOrdinal(
+  fieldValue: unknown,
+  ordinal: number[],
+  diagnostics: Record<string, unknown>,
+): unknown {
+  let current: unknown = fieldValue;
+  for (const [depth, index] of ordinal.entries()) {
+    if (!Array.isArray(current)) {
+      diagnostics.reason = 'expected_array';
+      diagnostics.depth = depth;
+      diagnostics.actualType = typeof current;
+      return undefined;
+    }
+    const arr = current as unknown[];
+    current = arr[index];
+    if (current === undefined) {
+      diagnostics.reason = 'segment_out_of_bounds';
+      diagnostics.depth = depth;
+      diagnostics.segmentIndex = index;
+      diagnostics.arrayLength = arr.length;
+      return undefined;
+    }
+  }
+  diagnostics.ordinal = ordinal;
+  return current;
 }
 
 /**

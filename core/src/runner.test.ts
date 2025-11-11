@@ -7,6 +7,7 @@ import { createStorageContext, initializeMovieStorage } from './storage.js';
 import type {
   ArtefactEvent,
   ExecutionPlan,
+  JobDescriptor,
   Manifest,
   ProduceRequest,
   ProduceResult,
@@ -210,8 +211,16 @@ describe('createRunner', () => {
       providerModel: 'gpt-5-mini',
       rateKey: 'llm:image_prompt',
       context: {
-        inputAliases: {
-          NarrativeText: ['ScriptGeneration.NarrationScript'],
+        namespacePath: ['ImagePromptGeneration'],
+        indices: { segment: 0 },
+        qualifiedName: 'ImagePromptGeneration.ImagePromptProducer',
+        inputs: [
+          'Artifact:ScriptGeneration.NarrationScript[segment=0]',
+          'Input:ImagePromptGeneration.NarrativeText',
+        ],
+        produces: [],
+        inputBindings: {
+          NarrativeText: 'Artifact:ScriptGeneration.NarrationScript[segment=0]',
         },
       },
     };

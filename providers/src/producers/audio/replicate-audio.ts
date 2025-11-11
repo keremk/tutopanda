@@ -8,7 +8,6 @@ import {
   extractPlannerContext,
   mergeInputs,
   isRecord,
-  type PlannerContext,
 } from '../../sdk/replicate/index.js';
 
 interface ReplicateAudioConfig {
@@ -40,15 +39,15 @@ export function createReplicateAudioHandler(): HandlerFactory {
       invoke: async ({ request, runtime }) => {
         const replicate = await clientManager.ensure();
         const config = runtime.config.parse<ReplicateAudioConfig>(parseReplicateAudioConfig);
-        const resolvedInputs = runtime.inputs.all();
         const plannerContext = extractPlannerContext(request);
-        const text = resolveText(resolvedInputs, plannerContext);
-        const voice = resolveVoice(resolvedInputs);
+        const sdkPayload = runtime.sdk.buildPayload();
+        const text = sdkPayload[config.textKey] as string | undefined;
+        const voice = sdkPayload.voice_id ?? sdkPayload.voice;
 
         if (!text) {
           console.warn('[providers.replicate.audio.missingText]', {
             producer: request.jobId,
-            keys: Object.keys(resolvedInputs),
+            keys: Object.keys(runtime.inputs.all()),
             plannerContext,
           });
           throw createProviderError('No text available for audio generation.', {
@@ -64,12 +63,15 @@ export function createReplicateAudioHandler(): HandlerFactory {
           : undefined;
 
         const input = mergeInputs(config.defaults ?? {}, customAttributes as Record<string, unknown> | undefined);
+        Object.assign(input, sdkPayload);
         input[config.textKey] = text;
 
         // Map voice from input if provided (takes precedence over customAttributes)
         if (voice) {
           const voiceFieldName = getVoiceFieldName(request.model);
-          input[voiceFieldName] = voice;
+          if (!input[voiceFieldName]) {
+            input[voiceFieldName] = voice;
+          }
         }
 
         let predictionOutput: unknown;
@@ -138,51 +140,6 @@ function parseReplicateAudioConfig(raw: unknown): ReplicateAudioConfig {
     defaults,
     outputMimeType,
   };
-}
-
-function resolveText(resolvedInputs: Record<string, unknown>, planner: PlannerContext): string | undefined {
-  const segmentIndex = planner.index?.segment ?? 0;
-  const candidateKeys = [
-    'SegmentNarration',
-    'ScriptGeneration.NarrationScript',
-    'NarrationScript',
-    'AudioGeneration.TextInput',
-    'TextInput',
-  ];
-
-  for (const key of candidateKeys) {
-    const value = resolvedInputs[key];
-    const resolved = resolveSegmentText(value, segmentIndex);
-    if (resolved) {
-      return resolved;
-    }
-  }
-
-  return undefined;
-}
-
-function resolveSegmentText(source: unknown, segmentIndex: number): string | undefined {
-  if (Array.isArray(source) && source.length > 0) {
-    const entry = source[segmentIndex] ?? source[0];
-    if (typeof entry === 'string' && entry.trim()) {
-      return entry;
-    }
-  }
-  if (typeof source === 'string' && source.trim()) {
-    return source;
-  }
-  return undefined;
-}
-
-function resolveVoice(resolvedInputs: Record<string, unknown>): string | undefined {
-  const voiceInput = resolvedInputs['VoiceId'];
-
-  // Handle single string value (voice is uniform across segments)
-  if (typeof voiceInput === 'string' && voiceInput.trim()) {
-    return voiceInput;
-  }
-
-  return undefined;
 }
 
 /**

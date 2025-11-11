@@ -1,12 +1,24 @@
-import type { ProviderAttachment, ProviderDescriptor, ProviderJobContext, ProviderLogger } from '../types.js';
+import type {
+  ProviderAttachment,
+  ProviderDescriptor,
+  ProviderJobContext,
+  ProviderLogger,
+} from '../types.js';
 import type {
   ProducerRuntime,
   ProducerDomain,
   ProducerRuntimeConfig,
   AttachmentReader,
   ResolvedInputsAccessor,
+  RuntimeSdkHelpers,
   ArtefactRegistry,
 } from './types.js';
+import type { BlueprintProducerSdkMappingField } from 'tutopanda-core';
+
+interface SerializedJobContext {
+  inputBindings?: Record<string, string>;
+  sdkMapping?: Record<string, BlueprintProducerSdkMappingField>;
+}
 
 type ConfigValidator<T = unknown> = (value: unknown) => T;
 
@@ -22,7 +34,10 @@ export function createProducerRuntime(init: RuntimeInit): ProducerRuntime {
   const { descriptor, domain, request, logger, configValidator } = init;
   const config = createRuntimeConfig(request.context.providerConfig, configValidator);
   const attachments = createAttachmentReader(request.context.rawAttachments ?? []);
-  const inputs = createInputsAccessor(resolveInputs(request.context.extras));
+  const resolvedInputs = resolveInputs(request.context.extras);
+  const jobContext = extractJobContext(request.context.extras);
+  const inputs = createInputsAccessor(resolvedInputs);
+  const sdk = createSdkHelper(inputs, jobContext);
   const artefacts = createArtefactRegistry(request.produces);
 
   return {
@@ -31,6 +46,7 @@ export function createProducerRuntime(init: RuntimeInit): ProducerRuntime {
     config,
     attachments,
     inputs,
+    sdk,
     artefacts,
     logger,
   };
@@ -76,13 +92,58 @@ function resolveInputs(extras: Record<string, unknown> | undefined): Record<stri
   return { ...(resolved as Record<string, unknown>) };
 }
 
-function createInputsAccessor(source: Record<string, unknown>): ResolvedInputsAccessor {
+function extractJobContext(extras: Record<string, unknown> | undefined): SerializedJobContext | undefined {
+  if (!extras || typeof extras !== 'object') {
+    return undefined;
+  }
+  const jobContext = (extras as Record<string, unknown>).jobContext;
+  if (jobContext && typeof jobContext === 'object') {
+    return jobContext as SerializedJobContext;
+  }
+  return undefined;
+}
+
+function createInputsAccessor(
+  source: Record<string, unknown>,
+): ResolvedInputsAccessor {
   return {
     all() {
       return source;
     },
     get<T = unknown>(key: string) {
       return source[key] as T | undefined;
+    },
+    getByNodeId<T = unknown>(canonicalId: string) {
+      return source[canonicalId] as T | undefined;
+    },
+  };
+}
+
+function createSdkHelper(
+  inputs: ResolvedInputsAccessor,
+  jobContext?: SerializedJobContext,
+): RuntimeSdkHelpers {
+  return {
+    buildPayload(mapping) {
+      const effectiveMapping = mapping ?? jobContext?.sdkMapping;
+      if (!effectiveMapping) {
+        return {};
+      }
+      const payload: Record<string, unknown> = {};
+      for (const [alias, fieldDef] of Object.entries(effectiveMapping)) {
+        const canonicalId = jobContext?.inputBindings?.[alias] ?? alias;
+        const value = inputs.getByNodeId(canonicalId);
+        if (value === undefined) {
+          if (fieldDef.required !== false) {
+            throw new Error(
+              `Missing required input "${canonicalId}" for field "${fieldDef.field}" (alias "${alias}").`,
+            );
+          }
+          continue;
+        }
+        payload[fieldDef.field] = value;
+      }
+      return payload;
     },
   };
 }

@@ -1,12 +1,18 @@
 /* eslint-env node */
 import process from 'node:process';
-import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import './__testutils__/mock-providers.js';
+import { mkdtemp, readFile, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { runInit } from './init.js';
 import { runQuery, formatMovieId } from './query.js';
 import { runEdit } from './edit.js';
+import { createInputsFile } from './__testutils__/inputs.js';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const SCRIPT_BLUEPRINT_PATH = resolve(__dirname, '../../blueprints/script-generate.toml');
 
 const tmpRoots: string[] = [];
 const originalEnvConfig = process.env.TUTOPANDA_CLI_CONFIG;
@@ -27,6 +33,10 @@ async function createTempRoot(): Promise<string> {
   return dir;
 }
 
+async function createInputsFixture(root: string, prompt: string, fileName: string, overrides?: Record<string, string | number>): Promise<string> {
+  return createInputsFile({ root, prompt, fileName, overrides });
+}
+
 describe('runEdit', () => {
   beforeEach(() => {
     process.env.TUTOPANDA_CLI_CONFIG = undefined;
@@ -38,12 +48,21 @@ describe('runEdit', () => {
     process.env.TUTOPANDA_CLI_CONFIG = cliConfigPath;
 
     await runInit({ rootFolder: root, configPath: cliConfigPath });
-    const queryResult = await runQuery({ prompt: 'Describe the planets' });
+    const queryInputsPath = await createInputsFixture(root, 'Describe the planets', 'query-inputs.toml');
+    const queryResult = await runQuery({
+      inputsPath: queryInputsPath,
+      nonInteractive: true,
+      usingBlueprint: SCRIPT_BLUEPRINT_PATH,
+    });
 
-    const promptTomlPath = join(root, 'edit-prompts.toml');
-    await writeFile(promptTomlPath, ' [prompts]\n inquiry = "Tell me about stars"\n', 'utf8');
+    const editInputsPath = await createInputsFixture(root, 'Tell me about stars', 'edit-inputs.toml');
 
-    const editResult = await runEdit({ movieId: queryResult.movieId, inputsPath: promptTomlPath });
+    const editResult = await runEdit({
+      movieId: queryResult.movieId,
+      inputsPath: editInputsPath,
+      nonInteractive: true,
+      usingBlueprint: SCRIPT_BLUEPRINT_PATH,
+    });
 
     expect(editResult.targetRevision).toBe('rev-0002');
     expect(editResult.dryRun).toBeUndefined();
@@ -68,9 +87,23 @@ describe('runEdit', () => {
     process.env.TUTOPANDA_CLI_CONFIG = cliConfigPath;
 
     await runInit({ rootFolder: root, configPath: cliConfigPath });
-    const queryResult = await runQuery({ prompt: 'Describe oceans' });
+    const queryInputsPath = await createInputsFixture(root, 'Describe oceans', 'query-inputs.toml');
+    const queryResult = await runQuery({
+      inputsPath: queryInputsPath,
+      nonInteractive: true,
+      usingBlueprint: SCRIPT_BLUEPRINT_PATH,
+    });
 
-    const editResult = await runEdit({ movieId: queryResult.movieId, dryRun: true, style: 'Pixar' });
+    const editInputsPath = await createInputsFixture(root, 'Describe oceans with drama', 'edit-inputs.toml', {
+      ImageStyle: 'storybook',
+    });
+
+    const editResult = await runEdit({
+      movieId: queryResult.movieId,
+      dryRun: true,
+      inputsPath: editInputsPath,
+      usingBlueprint: SCRIPT_BLUEPRINT_PATH,
+    });
 
     expect(editResult.dryRun).toBeDefined();
     expect(editResult.dryRun?.jobCount).toBeGreaterThan(0);

@@ -38,7 +38,7 @@ type = "string"
 required = false
 default = "adult"
 
-[[artefacts]]
+[[artifacts]]
 name = "ImagePrompt"
 description = "The generated image prompts."
 type = "array"

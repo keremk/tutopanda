@@ -84,6 +84,21 @@ function createJobContext(overrides: Partial<ProviderJobContext> = {}): Provider
       rawAttachments: [],
       observability: undefined,
       extras: {
+        jobContext: {
+          inputBindings: {
+            Prompt: 'Artifact:ImagePromptGeneration.ImagePrompt[segment=0][image=0]',
+            AspectRatio: 'Input:AspectRatio',
+            Size: 'Input:Size',
+          },
+          sdkMapping: {
+            Prompt: { field: 'prompt', required: true },
+            AspectRatio: { field: 'aspect_ratio', required: false },
+            Size: { field: 'size', required: false },
+          },
+          indices: { segment: 0, image: 0 },
+          namespacePath: ['ImagePromptGeneration'],
+          qualifiedName: 'ImagePromptGeneration.ImagePromptProducer',
+        },
         plannerContext: {
           index: {
             segment: 0,
@@ -91,9 +106,11 @@ function createJobContext(overrides: Partial<ProviderJobContext> = {}): Provider
           },
         },
         resolvedInputs: {
-          SegmentImagePromptInput: ['A cinematic view of mountains at sunrise'],
-          ImagesPerSegment: 1,
-          AspectRatio: '16:9',
+          'Artifact:ImagePromptGeneration.ImagePrompt[segment=0][image=0]': 'A cinematic view of mountains at sunrise',
+          'Input:ImagesPerSegment': 1,
+          'Input:NumOfImagesPerNarrative': 1,
+          'Input:AspectRatio': '16:9',
+          'Input:Size': '1K',
         },
       },
     },
@@ -108,6 +125,10 @@ function createJobContext(overrides: Partial<ProviderJobContext> = {}): Provider
       extras: {
         ...(base.context.extras ?? {}),
         ...(overrides.context?.extras ?? {}),
+        jobContext: {
+          ...(base.context.extras?.jobContext ?? {}),
+          ...(overrides.context?.extras?.jobContext ?? {}),
+        },
         resolvedInputs: {
           ...(base.context.extras?.resolvedInputs ?? {}),
           ...(overrides.context?.extras?.resolvedInputs ?? {}),
@@ -181,6 +202,8 @@ describe('createReplicateTextToImageHandler', () => {
         extras: {
           resolvedInputs: {
             SegmentImagePromptInput: [],
+            Prompt: '',
+            'Artifact:ImagePromptGeneration.ImagePrompt[segment=0][image=0]': '',
           },
         },
       },

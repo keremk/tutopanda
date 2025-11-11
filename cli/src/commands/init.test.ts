@@ -25,7 +25,8 @@ async function createTempRoot(): Promise<string> {
 describe('runInit', () => {
   it('creates builds folder, default settings file, config files, and CLI config', async () => {
     const root = await createTempRoot();
-    const result = await runInit({ rootFolder: root });
+    const configPath = resolve(root, 'cli-config.json');
+    const result = await runInit({ rootFolder: root, configPath });
 
     const buildsStats = await stat(result.buildsFolder);
     expect(buildsStats.isDirectory()).toBe(true);
