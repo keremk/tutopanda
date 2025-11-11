@@ -10,37 +10,39 @@ license = "MIT"
 name = "InquiryPrompt"
 description = "The prompt describing the movie script to be generated."
 type = "string"
-cardinality = "single"
 required = true
 
 [[inputs]]
 name = "Duration"
 description = "The desired duration of the movie in seconds"
 type = "int"
-cardinality = "single"
 required = true
 
 [[inputs]]
 name = "NumOfSegments"
 description = "The number of segments to divide the movie into."
 type = "int"
-cardinality = "single"
 required = true
 
 [[inputs]]
 name = "VoiceId"
 description = "The ID of the voice to be used for narration."
 type = "string"
-cardinality = "single"
 required = true
 
 [[inputs]]
 name = "Audience"
 description = "The target audience for the movie (e.g., children, adults, experts)."
 type = "string"
-cardinality = "single"
 required = false
-default = "Adults"
+default = "Adult"
+
+[[inputs]]
+name = "Emotion"
+description = "The emotion description for the audio."
+type = "string"
+required = false
+default = "neutral"
 
 [[inputs]]
 name = "Language"
@@ -54,32 +56,25 @@ default = "en"
 name = "SegmentAudio"
 description = "The narrated audio segments for the movie."
 type = "array"
-cardinality = "perSegment"
-required = true
+itemType = "audio"
+
+[[subBlueprints]]
+name = "ScriptGenerator"
+path = "./script-generate.toml"
+
+[[subBlueprints]]
+name = "AudioGenerator"
+path = "./audio-generate.toml"
 
 [graph]
-subBlueprints = [
-    { blueprintRef = "ScriptGeneration", path = "./script-generate.toml"},
-    { blueprintRef = "AudioGeneration", path = "./audio-generate.toml" }
-]
-nodes = [
-    { inputRef = "InquiryPrompt", cardinality = "single" },
-    { inputRef = "Audience", cardinality = "single" },
-    { inputRef = "Duration", cardinality = "single" },
-    { inputRef = "Language", cardinality = "single" },
-    { inputRef = "NumOfSegments", cardinality = "single" },
-    { inputRef = "VoiceId", cardinality = "single" },
-    { subBlueprintRef = "ScriptGeneration", cardinality = "single" },
-    { subBlueprintRef = "AudioGeneration", cardinality = "perSegment" },
-    { outputRef = "SegmentAudio", cardinality = "perSegment" }
-]
 edges = [
-    { from = "InquiryPrompt", to = "ScriptGeneration.InquiryPrompt" },
-    { from = "Audience", to = "ScriptGeneration.Audience" },
-    { from = "Duration", to = "ScriptGeneration.Duration" },
-    { from = "Language", to = "ScriptGeneration.Language" },
-    { from = "NumOfSegments", to = "ScriptGeneration.NumOfSegments" },
-    { from = "VoiceId", to = "AudioGeneration.VoiceId" },
-    { from = "ScriptGeneration.NarrationScript", to = "AudioGeneration.TextInput", perSegment = true },
-    { from = "AudioGeneration.SegmentAudio", to = "SegmentAudio", perSegment = true }
+    { from = "InquiryPrompt", to = "ScriptGenerator.InquiryPrompt" },
+    { from = "Audience", to = "ScriptGenerator.Audience" },
+    { from = "Duration", to = "ScriptGenerator.Duration" },
+    { from = "Language", to = "ScriptGenerator.Language" },
+    { from = "NumOfSegments", to = "ScriptGenerator.NumOfSegments" },
+    { from = "ScriptGenerator.NarrationScript[i]", to = "AudioGenerator[i].TextInput" },
+    { from = "VoiceId", to = "AudioGenerator[i].VoiceId" },
+    { from = "Emotion", to = "AudioGenerator[i].Emotion" },
+    { from = "AudioGenerator[i].SegmentAudio", to = "SegmentAudio[i]" }
 ]

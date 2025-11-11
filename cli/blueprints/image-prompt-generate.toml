@@ -1,7 +1,7 @@
 [meta]
 name = "Image Prompt Generation"
 description = "A blueprint for generating scripts using AI."
-id = "ImagePromptGeneration"
+id = "ImagePromptGenerator"
 version = "0.1.0"
 author = "Tutopanda"
 license = "MIT"
@@ -9,16 +9,13 @@ license = "MIT"
 [[inputs]]
 name = "NarrativeText"
 description = "The narrative text to generate images based on."
-type = "array"
-cardinality = "perSegment"
-itemType = "string"
+type = "string"
 required = true
 
 [[inputs]]
 name = "NumOfImagesPerNarrative"
 description = "Number of images to generate per narrative text."
 type = "int"
-cardinality = "single"
 required = false
 default = 1
 
@@ -26,47 +23,36 @@ default = 1
 name = "OverallSummary"
 description = "The overall summary that gives broader context."
 type = "string"
-cardinality = "single"
 required = true
 
 [[inputs]]
 name = "ImageStyle"
 description = "Image style to be taken into account"
 type = "string"
-cardinality = "single"
 required = true
 
 [[inputs]]
 name = "Audience"
 description = "The intended audience"
 type = "string"
-cardinality = "single"
 required = false
 default = "adult"
 
-[[outputs]]
+[[artefacts]]
 name = "ImagePrompt"
 description = "The generated image prompts."
 type = "array"
-cardinality = "perSegment"
+itemType = "string"
+countInput = "NumOfImagesPerNarrative"
 
 [graph]
-nodes = [
-    { inputRef = "NarrativeText", cardinality = "perSegment" },
-    { inputRef = "ImageStyle", cardinality = "single" },
-    { inputRef = "OverallSummary", cardinality = "single" },
-    { inputRef = "Audience", cardinality = "single" },
-    { inputRef = "NumOfImagesPerNarrative", cardinality = "single" },
-    { producerRef = "ImagePromptProducer", cardinality = "perSegment"},
-    { outputRef = "ImagePrompt", cardinality = "perSegment" }
-]
 edges = [
-    { from = "NarrativeText", to = "ImagePromptProducer", perSegment = true },
+    { from = "NarrativeText", to = "ImagePromptProducer" },
     { from = "ImageStyle", to = "ImagePromptProducer" },
     { from = "OverallSummary", to = "ImagePromptProducer" },
     { from = "Audience", to = "ImagePromptProducer" },
     { from = "NumOfImagesPerNarrative", to = "ImagePromptProducer" },
-    { from = "ImagePromptProducer", to = "ImagePrompt", perSegment = true }
+    { from = "ImagePromptProducer", to = "ImagePrompt[i]" }
 ]
 
 [[producers]]
@@ -80,13 +66,13 @@ jsonSchema = """
   "schema": {
     "type": "object",
     "properties": {
-      "imagePrompt": {
+      "ImagePrompt": {
         "type": "array",
         "description": "Provide an image prompt for the image generator per segment.",
         "items": { "type": "string" }
       }
     },
-    "required": ["imagePrompt"],
+    "required": ["ImagePrompt"],
     "additionalProperties": false
   }
 }

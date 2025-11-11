@@ -1,7 +1,7 @@
 [meta]
 name = "Audio Generation"
 description = "A blueprint for generating narrated audio segments using AI."
-id = "AudioGeneration"
+id = "AudioGenerator"
 version = "0.1.0"
 author = "Tutopanda"
 license = "MIT"
@@ -9,48 +9,54 @@ license = "MIT"
 [[inputs]]
 name = "TextInput"
 description = "The text describing the content to be converted into narrated audio."
-type = "array"
-cardinality = "perSegment"
-itemType = "string"
+type = "string"
 required = true
 
 [[inputs]]
 name = "VoiceId"
 description = "The ID of the voice to be used for narration."
 type = "string"
-cardinality = "single"
 required = true
+
+[[inputs]]
+name = "Emotion"
+description = "The emotion description for the audio."
+type = "string"
+required = false
+default = "neutral"
 
 [[outputs]]
 name = "SegmentAudio"
 description = "The narrated audio segments for the movie."
 type = "array"
-cardinality = "perSegment"
-required = true
+itemType = "audio"
 
 [graph]
-nodes = [
-    { inputRef = "TextInput", cardinality = "perSegment" },
-    { inputRef = "VoiceId", cardinality = "single" },
-    { producerRef = "AudioProducer", cardinality = "perSegment"},
-    { outputRef = "SegmentAudio", cardinality = "perSegment" }
-]
 edges = [
-    { from = "TextInput", to = "AudioProducer", perSegment = true },
+    { from = "TextInput", to = "AudioProducer" },
     { from = "VoiceId", to = "AudioProducer" },
-    { from = "AudioProducer", to = "SegmentAudio", perSegment = true }
+    { from = "AudioProducer", to = "SegmentAudio" }
 ]
 
 [[producers]]
 name = "AudioProducer"
 provider = "replicate"
 model = "minimax/speech-2.6-hd"
+
+[[producers.config]]
 speed = 1.0
 pitch = 0
 volume = 1
-emotion = 'neutral'
 english_normalization = true
 sample_rate = 32000
 bitrate = 128000
 channel = 'mono'
 language_boost = 'English'
+
+[[producers.sdkMapping]]
+TextInput = { field = "text", type = "string", required = true }
+Emotion = { field = "emotion", type = "string", required = false }
+VoiceId = { field = "voice_id", type = "string", required = false }
+
+[producers.outputs]
+SegmentAudio = { type = "audio", mimeType = "audio/mp3" }

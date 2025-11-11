@@ -9,23 +9,13 @@ license = "MIT"
 [[inputs]]
 name = "Prompt"
 description = "The prompt describing the image to be generated."
-type = "array"
-cardinality = "perSegment"
-itemType = "string"
-required = true
-
-[[inputs]]
-name = "ImageStyle"
-description = "Text describing the image style to be used."
 type = "string"
-cardinality = "single"
 required = true
 
 [[inputs]]
 name = "Size"
 description = "Enumerated values, 1K, 2K, 4K or custom describing the image size to be used. "
 type = "string"
-cardinality = "single"
 required = false
 default = "1K"
 
@@ -39,31 +29,31 @@ default = "1K"
 
 [[outputs]]
 name = "SegmentImage"
-description = "The generated image segments."
-type = "array"
-cardinality = "perSegment"
+description = "The generated image segment"
+type = "image"
 
 [graph]
-nodes = [
-    { inputRef = "Prompt", cardinality = "perSegment" },
-    { inputRef = "ImageStyle", cardinality = "single" },
-    { inputRef = "Size", cardinality = "single" },
-    { inputRef = "AspectRatio", cardinality = "single" },
-    { producerRef = "TextToImageProducer", cardinality = "perSegment"},
-    { outputRef = "SegmentImage", cardinality = "perSegment" }
-]
 edges = [
-    { from = "Prompt", to = "TextToImageProducer", perSegment = true },
-    { from = "ImageStyle", to = "TextToImageProducer" },
+    { from = "Prompt", to = "TextToImageProducer" },
     { from = "Size", to = "TextToImageProducer" },
     { from = "AspectRatio", to = "TextToImageProducer" },
-    { from = "TextToImageProducer", to = "SegmentImage", perSegment = true }
+    { from = "TextToImageProducer", to = "SegmentImage" }
 ]
 
 [[producers]]
 name = "TextToImageProducer"
 provider = "replicate"
 model = "bytedance/seedream-4"
+
+[[producers.config]]
 sequential_image_generation = "disabled"
 max_images = 1
 enhance_prompt = true
+
+[[producers.sdkMapping]]
+Prompt = { field = "prompt", type = "string", required = true }
+AspectRatio = { field = "aspect_ratio", type = "string", required = false }
+Size = { field = "output_size", type = "string", required = false }
+
+[producers.outputs]
+SegmentImage = { type = "image", mimeType = "image/png" }
