@@ -82,6 +82,13 @@ function resolveDimensionSizes(
     const symbol = node.dimensions[node.dimensions.length - 1];
     const size = readPositiveInteger(inputValues[definition.countInput], definition.countInput);
     assignDimensionSize(sizes, symbol, size);
+    const targetLabel = extractDimensionLabel(symbol);
+    for (let index = node.dimensions.length - 2; index >= 0; index -= 1) {
+      const candidate = node.dimensions[index];
+      if (extractDimensionLabel(candidate) === targetLabel) {
+        assignDimensionSize(sizes, candidate, size);
+      }
+    }
   }
 
   // Build inbound edge lookup for derived dimensions.
@@ -279,7 +286,7 @@ function dimensionsMatch(
 ): boolean {
   for (const symbol of required) {
     if (!(symbol in source)) {
-      throw new Error(`Dimension \"${symbol}\" missing on node instance.`);
+      throw new Error(`Dimension "${symbol}" missing on node instance.`);
     }
     const sourceValue = source[symbol];
     if (symbol in target && target[symbol] !== sourceValue) {
@@ -488,7 +495,7 @@ function formatCanonicalId(node: BlueprintGraphNode, indices: Record<string, num
       : 'Producer';
   const suffix = node.dimensions.map((symbol) => {
     if (!(symbol in indices)) {
-      throw new Error(`Missing index value for dimension \"${symbol}\" on node ${baseName}`);
+      throw new Error(`Missing index value for dimension "${symbol}" on node ${baseName}`);
     }
     return `[${indices[symbol]}]`;
   }).join('');
@@ -517,6 +524,11 @@ function formatQualifiedNameForNode(node: BlueprintGraphNode): string {
   return node.type === 'InputSource'
     ? node.name
     : formatQualifiedName(node.namespacePath, node.name);
+}
+
+function extractDimensionLabel(symbol: string): string {
+  const parts = symbol.split(':');
+  return parts.length > 0 ? parts[parts.length - 1] ?? symbol : symbol;
 }
 
 function readPositiveInteger(value: unknown, field: string): number {
