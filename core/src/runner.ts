@@ -24,6 +24,7 @@ import {
   type RevisionId,
   type ProducerJobContext,
   type ProducerJobContextExtras,
+  type FanInDescriptor,
 } from './types.js';
 
 /* eslint-disable no-unused-vars */
@@ -435,6 +436,38 @@ function trimIdPrefix(id: string): string {
   return id.replace(/^(Artifact|Input):/, '');
 }
 
+interface FanInResolvedValue {
+  groupBy: string;
+  orderBy?: string;
+  groups: string[][];
+}
+
+function materializeFanInValue(descriptor: FanInDescriptor): FanInResolvedValue {
+  const groups = new Map<number, Array<{ id: string; order?: number }>>();
+  for (const member of descriptor.members) {
+    const list = groups.get(member.group) ?? [];
+    list.push({ id: member.id, order: member.order });
+    groups.set(member.group, list);
+  }
+  const sortedKeys = Array.from(groups.keys()).sort((a, b) => a - b);
+  const maxGroup = sortedKeys.length ? Math.max(...sortedKeys) : -1;
+  const collection: string[][] = Array.from({ length: maxGroup + 1 }, () => []);
+  for (const key of sortedKeys) {
+    const entries = groups.get(key)!;
+    entries.sort((a, b) => {
+      const orderA = a.order ?? 0;
+      const orderB = b.order ?? 0;
+      return orderA - orderB;
+    });
+    collection[key] = entries.map((entry) => entry.id);
+  }
+  return {
+    groupBy: descriptor.groupBy,
+    orderBy: descriptor.orderBy,
+    groups: collection,
+  };
+}
+
 /**
  * Merges resolved artifact data into the job context.
  * Preserves existing resolvedInputs and adds newly resolved artifacts.
@@ -443,10 +476,7 @@ function mergeResolvedArtifacts(
   job: JobDescriptor,
   resolvedArtifacts: Record<string, unknown>,
 ): JobDescriptor {
-  if (Object.keys(resolvedArtifacts).length === 0) {
-    return job;
-  }
-
+  const hasResolvedArtifacts = Object.keys(resolvedArtifacts).length > 0;
   const jobContext: ProducerJobContext = job.context ?? {
     namespacePath: [],
     indices: {},
@@ -454,16 +484,24 @@ function mergeResolvedArtifacts(
     inputs: job.inputs,
     produces: job.produces,
   };
+  const hasFanIn = Boolean(jobContext.fanIn && Object.keys(jobContext.fanIn).length > 0);
+
+  if (!hasResolvedArtifacts && !hasFanIn) {
+    return job;
+  }
+
   const existingExtras: ProducerJobContextExtras = jobContext.extras ?? {};
   const existingResolvedInputs = (existingExtras.resolvedInputs ?? {}) as Record<string, unknown>;
 
   const mergedResolvedInputs: Record<string, unknown> = { ...existingResolvedInputs };
 
-  for (const [resolvedKey, value] of Object.entries(resolvedArtifacts)) {
-    mergedResolvedInputs[resolvedKey] = value;
+  if (hasResolvedArtifacts) {
+    for (const [resolvedKey, value] of Object.entries(resolvedArtifacts)) {
+      mergedResolvedInputs[resolvedKey] = value;
+    }
   }
 
-  if (jobContext.inputBindings) {
+  if (hasResolvedArtifacts && jobContext.inputBindings) {
     for (const [alias, canonicalId] of Object.entries(jobContext.inputBindings)) {
       const resolvedValue = readResolvedValue(canonicalId, resolvedArtifacts);
       if (resolvedValue !== undefined) {
@@ -472,6 +510,15 @@ function mergeResolvedArtifacts(
         mergedResolvedInputs[trimmed] = resolvedValue;
         mergedResolvedInputs[alias] = resolvedValue;
       }
+    }
+  }
+
+  if (jobContext.fanIn) {
+    for (const [inputId, descriptor] of Object.entries(jobContext.fanIn)) {
+      const fanInValue = materializeFanInValue(descriptor);
+      mergedResolvedInputs[inputId] = fanInValue;
+      const trimmed = trimIdPrefix(inputId);
+      mergedResolvedInputs[trimmed] = fanInValue;
     }
   }
 

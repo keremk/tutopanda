@@ -246,4 +246,104 @@ describe('createRunner', () => {
 
     expect(observedResolvedInputs?.NarrativeText).toBe('aliased text');
   });
+
+  it('injects fan-in groupings even when no upstream artefacts are resolved', async () => {
+    const storage = createStorageContext({ kind: 'memory' });
+    await initializeMovieStorage(storage, 'movie-fanin');
+    const eventLog = createEventLog(storage);
+    const manifestService = createManifestService(storage);
+
+    let observedResolvedInputs: Record<string, unknown> | undefined;
+
+    const runner = createRunner({
+      produce: async (request) => {
+        observedResolvedInputs = request.job.context?.extras?.resolvedInputs as Record<string, unknown> | undefined;
+        return {
+          jobId: request.job.jobId,
+          status: 'succeeded',
+          artefacts: [],
+        };
+      },
+    });
+
+    const fanInJob: JobDescriptor = {
+      jobId: 'job-fanin',
+      producer: 'TimelineComposer.TimelineProducer',
+      inputs: [
+        'Input:TimelineComposer.ImageSegments',
+        'Input:TimelineComposer.AudioSegments',
+      ],
+      produces: ['Artifact:TimelineComposer.Timeline'],
+      provider: 'tutopanda',
+      providerModel: 'OrderedTimeline',
+      rateKey: 'timeline:ordered',
+      context: {
+        namespacePath: ['TimelineComposer'],
+        indices: {},
+        qualifiedName: 'TimelineComposer.TimelineProducer',
+        inputs: [
+          'Input:TimelineComposer.ImageSegments',
+          'Input:TimelineComposer.AudioSegments',
+        ],
+        produces: ['Artifact:TimelineComposer.Timeline'],
+        fanIn: {
+          'Input:TimelineComposer.ImageSegments': {
+            groupBy: 'segment',
+            orderBy: 'image',
+            members: [
+              { id: 'Artifact:ImageGenerator.SegmentImage[0][0]', group: 0, order: 0 },
+              { id: 'Artifact:ImageGenerator.SegmentImage[1][0]', group: 1, order: 0 },
+            ],
+          },
+          'Input:TimelineComposer.AudioSegments': {
+            groupBy: 'segment',
+            members: [
+              { id: 'Artifact:AudioGenerator.SegmentAudio[0]', group: 0 },
+              { id: 'Artifact:AudioGenerator.SegmentAudio[1]', group: 1 },
+            ],
+          },
+        },
+      },
+    };
+
+    const manifest: Manifest = {
+      revision: 'rev-0001',
+      baseRevision: null,
+      createdAt: new Date().toISOString(),
+      inputs: {},
+      artefacts: {},
+    };
+
+    await runner.executeJob(fanInJob, {
+      movieId: 'movie-fanin',
+      storage,
+      eventLog,
+      manifest,
+      manifestService,
+      layerIndex: 0,
+      attempt: 1,
+      revision: 'rev-0002',
+    });
+
+    expect(observedResolvedInputs).toBeDefined();
+    const imageSegments = observedResolvedInputs?.['Input:TimelineComposer.ImageSegments'] as
+      | { groupBy: string; orderBy?: string; groups: string[][] }
+      | undefined;
+    expect(imageSegments?.groupBy).toBe('segment');
+    expect(imageSegments?.orderBy).toBe('image');
+    expect(imageSegments?.groups).toEqual([
+      ['Artifact:ImageGenerator.SegmentImage[0][0]'],
+      ['Artifact:ImageGenerator.SegmentImage[1][0]'],
+    ]);
+    expect(observedResolvedInputs?.['TimelineComposer.ImageSegments']).toEqual(imageSegments);
+
+    const audioSegments = observedResolvedInputs?.['Input:TimelineComposer.AudioSegments'] as
+      | { groupBy: string; groups: string[][] }
+      | undefined;
+    expect(audioSegments?.groupBy).toBe('segment');
+    expect(audioSegments?.groups).toEqual([
+      ['Artifact:AudioGenerator.SegmentAudio[0]'],
+      ['Artifact:AudioGenerator.SegmentAudio[1]'],
+    ]);
+  });
 });

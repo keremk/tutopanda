@@ -31,7 +31,7 @@ export interface InputSource<T = unknown> {
 // --- producers (GEN) ---
 export type ProducerKind = string;
 
-export type ProviderName = "openai" | "replicate" | "elevenlabs" | "fal" | "custom" | "internal";
+export type ProviderName = "openai" | "replicate" | "elevenlabs" | "fal" | "custom" | "internal" | "tutopanda";
 
 export interface Producer {
   id: Id;
@@ -180,6 +180,7 @@ export interface BlueprintInputDefinition {
   required: boolean;
   description?: string;
   defaultValue?: unknown;
+  fanIn?: boolean;
 }
 
 export interface BlueprintArtefactDefinition {
@@ -215,6 +216,14 @@ export interface SubBlueprintDefinition {
   loop?: string;
 }
 
+export interface BlueprintCollectorDefinition {
+  name: string;
+  from: string;
+  into: string;
+  groupBy: string;
+  orderBy?: string;
+}
+
 export interface BlueprintDocument {
   meta: BlueprintMeta;
   inputs: BlueprintInputDefinition[];
@@ -222,6 +231,7 @@ export interface BlueprintDocument {
   producers: ProducerConfig[];
   subBlueprints: SubBlueprintDefinition[];
   edges: BlueprintEdgeDefinition[];
+  collectors?: BlueprintCollectorDefinition[];
 }
 
 export interface BlueprintTreeNode {
@@ -247,6 +257,18 @@ export interface ProducerJobContextExtras {
   [key: string]: unknown;
 }
 
+export interface FanInDescriptor {
+  groupBy: string;
+  orderBy?: string;
+  members: FanInMember[];
+}
+
+export interface FanInMember {
+  id: Id;
+  group: number;
+  order?: number;
+}
+
 export interface ProducerJobContext {
   namespacePath: string[];
   indices: Record<string, number>;
@@ -257,6 +279,7 @@ export interface ProducerJobContext {
   sdkMapping?: Record<string, BlueprintProducerSdkMappingField>;
   outputs?: Record<string, BlueprintProducerOutputDefinition>;
   extras?: ProducerJobContextExtras;
+  fanIn?: Record<string, FanInDescriptor>;
 }
 
 export interface JobDescriptor {

@@ -14,6 +14,8 @@ const DEFAULT_INPUT_VALUES: Record<string, string | number> = {
   NumOfImagesPerNarrative: 1,
   ImageStyle: 'cinematic',
   Audience: 'Adult',
+  VoiceId: 'default-voice',
+  Language: 'en',
 };
 
 export async function createInputsFile(options: CreateInputsFileOptions): Promise<string> {

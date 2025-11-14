@@ -86,6 +86,9 @@ export async function parseYamlBlueprintFile(
   const producers = Array.isArray(raw.producers)
     ? await parseProducers(raw.producers, baseDir, reader)
     : [];
+  const collectors = Array.isArray(raw.collectors)
+    ? parseCollectors(raw.collectors, loopSymbols)
+    : [];
 
   return {
     meta: parseMeta(raw.meta, filePath),
@@ -94,6 +97,7 @@ export async function parseYamlBlueprintFile(
     producers,
     subBlueprints: modules,
     edges,
+    collectors,
   };
 }
 
@@ -156,8 +160,10 @@ interface RawBlueprint {
   inputs?: unknown[];
   artifacts?: unknown[];
   artefacts?: unknown[];
+  loops?: unknown[];
   modules?: unknown[];
   connections?: unknown[];
+  collectors?: unknown[];
   producers?: unknown[];
 }
 
@@ -217,6 +223,7 @@ function parseInput(raw: unknown): BlueprintInputDefinition {
     required,
     description,
     defaultValue,
+    fanIn: input.fanIn === true,
   };
 }
 
@@ -249,6 +256,48 @@ function parseModule(raw: unknown): SubBlueprintDefinition {
     description: typeof entry.description === 'string' ? entry.description : undefined,
     loop: typeof entry.loop === 'string' ? entry.loop.trim() : undefined,
   };
+}
+
+function parseCollectors(
+  rawCollectors: unknown[],
+  loopSymbols: Set<string>,
+): BlueprintDocument['collectors'] {
+  const collectors: BlueprintDocument['collectors'] = [];
+  const seenTargets = new Set<string>();
+  for (const raw of rawCollectors) {
+    if (!raw || typeof raw !== 'object') {
+      throw new Error(`Invalid collector entry: ${JSON.stringify(raw)}`);
+    }
+    const entry = raw as Record<string, unknown>;
+    const name = readString(entry, 'name');
+    const from = readString(entry, 'from');
+    const into = readString(entry, 'into');
+    const groupBy = readString(entry, 'groupBy');
+    if (!loopSymbols.has(groupBy)) {
+      throw new Error(`Collector "${name}" references unknown loop "${groupBy}". Declare it under loops[].`);
+    }
+    const orderByRaw = entry.orderBy;
+    const orderBy =
+      typeof orderByRaw === 'string' && orderByRaw.trim().length > 0
+        ? orderByRaw.trim()
+        : undefined;
+    if (orderBy && !loopSymbols.has(orderBy)) {
+      throw new Error(`Collector "${name}" references unknown orderBy loop "${orderBy}".`);
+    }
+    const targetKey = `${into}:${groupBy}`;
+    if (seenTargets.has(targetKey)) {
+      throw new Error(`Collector "${name}" duplicates collection for target "${into}" and group "${groupBy}".`);
+    }
+    seenTargets.add(targetKey);
+    collectors.push({
+      name,
+      from,
+      into,
+      groupBy,
+      orderBy,
+    });
+  }
+  return collectors;
 }
 
 function parseEdge(raw: unknown, allowedDimensions: Set<string>): BlueprintEdgeDefinition {

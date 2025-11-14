@@ -27,6 +27,7 @@ export interface DryRunJobSummary {
   producer: string;
   status: ArtefactEventStatus;
   layerIndex: number;
+  errorMessage?: string;
 }
 
 export interface DryRunSummary {
@@ -87,6 +88,7 @@ function summarizeRun(runResult: RunResult, plan: ExecutionPlan): DryRunSummary 
     producer: job.producer,
     status: job.status,
     layerIndex: job.layerIndex,
+    errorMessage: job.error?.message,
   }));
 
   const counts: DryRunStatusCounts = {

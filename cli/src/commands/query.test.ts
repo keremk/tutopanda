@@ -13,6 +13,7 @@ import { createInputsFile } from './__testutils__/inputs.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const SCRIPT_BLUEPRINT_PATH = resolve(__dirname, '../../blueprints/yaml/modules/script-generator.yaml');
+const IMAGE_AUDIO_BLUEPRINT_PATH = resolve(__dirname, '../../blueprints/yaml/image-audio.yaml');
 
 const tmpRoots: string[] = [];
 const originalEnvConfig = process.env.TUTOPANDA_CLI_CONFIG;
@@ -105,5 +106,64 @@ describe('runQuery', () => {
     expect(result.dryRun?.jobCount).toBeGreaterThan(0);
     expect(result.dryRun?.statusCounts.succeeded).toBeGreaterThan(0);
     expect(result.build).toBeUndefined();
+  });
+
+  it('runs the image + audio blueprint with timeline stub', async () => {
+    const root = await createTempRoot();
+    const cliConfigPath = join(root, 'cli-config.json');
+    process.env.TUTOPANDA_CLI_CONFIG = cliConfigPath;
+
+    await runInit({ rootFolder: root, configPath: cliConfigPath });
+
+    const inputsPath = await createInputsFile({
+      root,
+      prompt: 'History of comets',
+      overrides: {
+        VoiceId: 'timeline-voice',
+        NumOfSegments: 2,
+        NumOfImagesPerNarrative: 2,
+      },
+    });
+    const result = await runQuery({
+      inputsPath,
+      nonInteractive: true,
+      usingBlueprint: IMAGE_AUDIO_BLUEPRINT_PATH,
+    });
+
+    expect(result.build?.status).toBe('succeeded');
+    expect(result.manifestPath).toBeDefined();
+  });
+
+  it('schedules TimelineProducer after upstream image/audio jobs', async () => {
+    const root = await createTempRoot();
+    const cliConfigPath = join(root, 'cli-config.json');
+    process.env.TUTOPANDA_CLI_CONFIG = cliConfigPath;
+
+    await runInit({ rootFolder: root, configPath: cliConfigPath });
+
+    const inputsPath = await createInputsFile({
+      root,
+      prompt: 'Formation of galaxies',
+      overrides: {
+        VoiceId: 'timeline-voice',
+        NumOfSegments: 2,
+        NumOfImagesPerNarrative: 2,
+      },
+    });
+    const result = await runQuery({
+      inputsPath,
+      dryRun: true,
+      nonInteractive: true,
+      usingBlueprint: IMAGE_AUDIO_BLUEPRINT_PATH,
+    });
+
+    expect(result.dryRun).toBeDefined();
+    const jobs = result.dryRun?.jobs ?? [];
+    const timelineJob = jobs.find((job) =>
+      job.jobId.includes('TimelineComposer.TimelineProducer') || job.producer === 'TimelineProducer',
+    );
+    expect(timelineJob).toBeDefined();
+    const maxLayer = Math.max(...jobs.map((job) => job.layerIndex));
+    expect(timelineJob?.layerIndex).toBe(maxLayer);
   });
 });

@@ -30,12 +30,21 @@ export interface BlueprintGraphEdge {
   note?: string;
 }
 
+export interface BlueprintGraphCollector {
+  name: string;
+  from: BlueprintGraphEdgeEndpoint;
+  to: BlueprintGraphEdgeEndpoint;
+  groupBy: string;
+  orderBy?: string;
+}
+
 export interface BlueprintGraph {
   meta: BlueprintDocument['meta'];
   nodes: BlueprintGraphNode[];
   edges: BlueprintGraphEdge[];
   namespaceDimensions: Map<string, DimensionSymbol[]>;
   dimensionLineage: Map<string, string | null>;
+  collectors: BlueprintGraphCollector[];
 }
 
 interface ParsedSegment {
@@ -77,9 +86,19 @@ export function buildBlueprintGraph(root: BlueprintTreeNode): BlueprintGraph {
 
   const nodes: BlueprintGraphNode[] = [];
   collectGraphNodes(root, namespaceDims, localDimsMap, nodes, namespaceMembership);
+  const nodeMap = new Map(nodes.map((node) => [node.id, node]));
 
   const edges: BlueprintGraphEdge[] = [];
   collectGraphEdges(root, namespaceDims, localDimsMap, edges, root);
+  const collectors: BlueprintGraphCollector[] = [];
+  collectGraphCollectors(root, namespaceDims, localDimsMap, collectors, root);
+
+  for (const collector of collectors) {
+    const target = nodeMap.get(collector.to.nodeId);
+    if (target?.type === 'InputSource' && target.input) {
+      target.input.fanIn = true;
+    }
+  }
 
   resolveNamespaceDimensionParents(edges, namespaceMembership, namespaceParents);
   const dimensionLineage = buildDimensionLineage(nodes, namespaceMembership, namespaceParents);
@@ -90,6 +109,7 @@ export function buildBlueprintGraph(root: BlueprintTreeNode): BlueprintGraph {
     edges,
     namespaceDimensions: namespaceDims,
     dimensionLineage,
+    collectors,
   };
 }
 
@@ -305,6 +325,29 @@ function collectGraphEdges(
   }
   for (const child of tree.children.values()) {
     collectGraphEdges(child, namespaceDims, localDims, output, root);
+  }
+}
+
+function collectGraphCollectors(
+  tree: BlueprintTreeNode,
+  namespaceDims: Map<string, DimensionSymbol[]>,
+  localDims: Map<BlueprintTreeNode, LocalNodeDims>,
+  output: BlueprintGraphCollector[],
+  root: BlueprintTreeNode,
+): void {
+  if (Array.isArray(tree.document.collectors)) {
+    for (const collector of tree.document.collectors) {
+      output.push({
+        name: collector.name,
+        from: resolveEdgeEndpoint(collector.from, tree, namespaceDims, localDims, root),
+        to: resolveEdgeEndpoint(collector.into, tree, namespaceDims, localDims, root),
+        groupBy: collector.groupBy,
+        orderBy: collector.orderBy,
+      });
+    }
+  }
+  for (const child of tree.children.values()) {
+    collectGraphCollectors(child, namespaceDims, localDims, output, root);
   }
 }
 

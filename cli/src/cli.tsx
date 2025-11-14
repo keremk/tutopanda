@@ -19,7 +19,7 @@ import { runProvidersList } from './commands/providers-list.js';
 import { runBlueprintsList } from './commands/blueprints-list.js';
 import { runBlueprintsDescribe } from './commands/blueprints-describe.js';
 import { runBlueprintsValidate } from './commands/blueprints-validate.js';
-import type { DryRunSummary } from './lib/dry-run.js';
+import type { DryRunSummary, DryRunJobSummary } from './lib/dry-run.js';
 import type { BuildSummary } from './lib/build.js';
 
 const console = globalThis.console;
@@ -337,34 +337,66 @@ void main();
 
 function printDryRunSummary(summary: DryRunSummary, storagePath: string): void {
   const counts = summary.statusCounts;
+  const layersLabel = summary.layers === 1 ? 'layer' : 'layers';
+  const jobsLabel = summary.jobCount === 1 ? 'job' : 'jobs';
   console.log(
-    `Dry run status: ${summary.status}. Layers: ${summary.layers}. Jobs: ${summary.jobCount} (succeeded ${counts.succeeded}, failed ${counts.failed}, skipped ${counts.skipped}).`,
+    `Dry run status: ${summary.status}. ${summary.layers} ${layersLabel}, ${summary.jobCount} ${jobsLabel} (succeeded ${counts.succeeded}, failed ${counts.failed}, skipped ${counts.skipped}).`,
   );
 
-  const byProducer = new Map<string, number>();
-  for (const job of summary.jobs) {
-    byProducer.set(job.producer, (byProducer.get(job.producer) ?? 0) + 1);
-  }
-  if (byProducer.size > 0) {
-    console.log('Re-executed producers:');
-    for (const [producer, count] of byProducer) {
-      console.log(`  ${producer}: ${count}`);
-    }
-  }
-
-  const preview = summary.jobs.slice(0, 5);
-  if (preview.length === 0) {
+  const layerMap = buildLayerMap(summary.jobs);
+  if (layerMap.size === 0) {
+    console.log('Layer breakdown: no jobs scheduled.');
     console.log(`Mock artefacts and logs stored under: ${storagePath}`);
     return;
   }
-  console.log('Sample jobs:');
-  for (const job of preview) {
-    console.log(`  [Layer ${job.layerIndex}] ${job.producer} -> ${job.status}`);
+
+  console.log('Layer breakdown:');
+  const sortedLayers = Array.from(layerMap.entries()).sort((a, b) => a[0] - b[0]);
+  for (const [layerIndex, jobs] of sortedLayers) {
+    const layerCounts = { succeeded: 0, failed: 0, skipped: 0 };
+    const producerCounts = new Map<string, number>();
+    for (const job of jobs) {
+      layerCounts[job.status] += 1;
+      producerCounts.set(job.producer, (producerCounts.get(job.producer) ?? 0) + 1);
+    }
+    const statusParts = [
+      layerCounts.succeeded ? `succeeded ${layerCounts.succeeded}` : undefined,
+      layerCounts.failed ? `failed ${layerCounts.failed}` : undefined,
+      layerCounts.skipped ? `skipped ${layerCounts.skipped}` : undefined,
+    ].filter(Boolean);
+    const statusText = statusParts.length > 0 ? ` (${statusParts.join(', ')})` : '';
+    console.log(`  Layer ${layerIndex}: ${jobs.length} job(s)${statusText}`);
+    const producerParts = Array.from(producerCounts.entries())
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([producer, count]) => `${producer} ×${count}`);
+    if (producerParts.length > 0) {
+      console.log(`    Producers: ${producerParts.join(', ')}`);
+    }
   }
-  if (summary.jobs.length > preview.length) {
-    console.log(`  … ${summary.jobs.length - preview.length} more`);
+
+  const failingJob = summary.jobs.find((job) => job.status === 'failed');
+  if (failingJob) {
+    console.log('First failure:');
+    console.log(`  Layer ${failingJob.layerIndex} – ${failingJob.producer} (${failingJob.jobId})`);
+    if (failingJob.errorMessage) {
+      console.log(`  Error: ${failingJob.errorMessage}`);
+    }
   }
+
   console.log(`Mock artefacts and logs stored under: ${storagePath}`);
+}
+
+function buildLayerMap(jobs: DryRunJobSummary[]): Map<number, DryRunJobSummary[]> {
+  const map = new Map<number, DryRunJobSummary[]>();
+  for (const job of jobs) {
+    const bucket = map.get(job.layerIndex);
+    if (bucket) {
+      bucket.push(job);
+    } else {
+      map.set(job.layerIndex, [job]);
+    }
+  }
+  return map;
 }
 
 function printBuildSummary(summary: BuildSummary, manifestPath?: string): void {

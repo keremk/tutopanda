@@ -121,6 +121,8 @@ connections:
     to: ImageGenerator[segment][image].AspectRatio
   - from: ImageGenerator[segment][image].SegmentImage
     to: SegmentImage[segment][image]
+  - from: ImageGenerator[segment][image].SegmentImage
+    to: TimelineComposer.ImageSegments
 
   - from: ScriptGenerator.NarrationScript[segment]
     to: AudioGenerator[segment].TextInput
@@ -130,6 +132,8 @@ connections:
     to: AudioGenerator[segment].Emotion
   - from: AudioGenerator[segment].SegmentAudio
     to: SegmentAudio[segment]
+  - from: AudioGenerator[segment].SegmentAudio
+    to: TimelineComposer.AudioSegments
 
   - from: Duration
     to: TimelineComposer.Duration

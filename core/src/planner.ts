@@ -17,6 +17,7 @@ import {
   type ProducerGraphNode,
   type ProducerKind,
   type RevisionId,
+  type FanInDescriptor,
 } from './types.js';
 
 interface PlannerOptions {
@@ -109,7 +110,7 @@ export function createProducerGraph(
       continue;
     }
 
-    const inbound = canonical.edges.filter((edge) => edge.to === node.id).map((edge) => edge.from);
+    const inboundInputs = canonical.edges.filter((edge) => edge.to === node.id).map((edge) => edge.from);
     const producedArtefacts = canonical.edges
       .filter((edge) => edge.from === node.id)
       .map((edge) => edge.to)
@@ -124,10 +125,25 @@ export function createProducerGraph(
       throw new Error(`Missing producer catalog entry for ${qualifiedProducerName}`);
     }
 
-    for (const dependencyKey of inbound) {
-      if (!dependencyKey.startsWith('Artifact:')) {
-        continue;
+    const fanInSpecs = canonical.fanIn;
+    const fanInForJob: Record<string, FanInDescriptor> = {};
+    if (fanInSpecs) {
+      for (const inputId of inboundInputs) {
+        const spec = fanInSpecs[inputId];
+        if (spec) {
+          fanInForJob[inputId] = spec;
+        }
       }
+    }
+
+    const dependencyKeys = new Set(inboundInputs.filter((key) => key.startsWith('Artifact:')));
+    for (const spec of Object.values(fanInForJob)) {
+      for (const member of spec.members) {
+        dependencyKeys.add(member.id);
+      }
+    }
+
+    for (const dependencyKey of dependencyKeys) {
       const upstream = artefactProducers.get(dependencyKey);
       if (upstream && upstream !== node.id) {
         const edgeKey = `${upstream}->${node.id}`;
@@ -143,16 +159,17 @@ export function createProducerGraph(
       namespacePath: node.namespacePath,
       indices: node.indices,
       qualifiedName: qualifiedProducerName,
-      inputs: inbound,
+      inputs: inboundInputs,
       produces: producedArtefacts,
       inputBindings: inputBindings && Object.keys(inputBindings).length > 0 ? inputBindings : undefined,
       sdkMapping: node.producer?.sdkMapping,
       outputs: node.producer?.outputs,
+      fanIn: Object.keys(fanInForJob).length > 0 ? fanInForJob : undefined,
     };
     nodes.push({
       jobId: node.id,
       producer: baseProducerName,
-      inputs: inbound,
+      inputs: inboundInputs,
       produces: producedArtefacts,
       provider: catalogEntry.provider,
       providerModel: catalogEntry.providerModel,

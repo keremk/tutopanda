@@ -2,11 +2,13 @@ import type {
   BlueprintGraph,
   BlueprintGraphNode,
   BlueprintGraphEdge,
+  BlueprintGraphCollector,
 } from './canonical-graph.js';
 import type {
   BlueprintArtefactDefinition,
   BlueprintInputDefinition,
   ProducerConfig,
+  FanInDescriptor,
 } from './types.js';
 
 export interface CanonicalNodeInstance {
@@ -16,6 +18,7 @@ export interface CanonicalNodeInstance {
   namespacePath: string[];
   name: string;
   indices: Record<string, number>;
+  dimensions: string[];
   artefact?: BlueprintArtefactDefinition;
   input?: BlueprintInputDefinition;
   producer?: ProducerConfig;
@@ -31,6 +34,7 @@ export interface CanonicalBlueprint {
   nodes: CanonicalNodeInstance[];
   edges: CanonicalEdgeInstance[];
   inputBindings: Record<string, Record<string, string>>;
+  fanIn: Record<string, FanInDescriptor>;
 }
 
 export function expandBlueprintGraph(
@@ -40,20 +44,31 @@ export function expandBlueprintGraph(
   const dimensionSizes = resolveDimensionSizes(graph.nodes, inputValues, graph.edges, graph.dimensionLineage);
   const instancesByNodeId = new Map<string, CanonicalNodeInstance[]>();
   const allNodes: CanonicalNodeInstance[] = [];
+  const instanceByCanonicalId = new Map<string, CanonicalNodeInstance>();
 
   for (const node of graph.nodes) {
     const instances = expandNodeInstances(node, dimensionSizes);
     instancesByNodeId.set(node.id, instances);
-    allNodes.push(...instances);
+    for (const instance of instances) {
+      allNodes.push(instance);
+      instanceByCanonicalId.set(instance.id, instance);
+    }
   }
 
   const rawEdges = expandEdges(graph.edges, instancesByNodeId);
   const { edges, nodes, inputBindings } = collapseInputNodes(rawEdges, allNodes);
+  const fanIn = buildFanInCollections(
+    graph.collectors,
+    nodes,
+    edges,
+    instanceByCanonicalId,
+  );
 
   return {
     nodes,
     edges,
     inputBindings,
+    fanIn,
   };
 }
 
@@ -232,6 +247,7 @@ function expandNodeInstances(
     namespacePath: node.namespacePath,
     name: node.name,
     indices,
+    dimensions: node.dimensions,
     artefact: node.artefact,
     input: node.input,
     producer: node.producer,
@@ -292,6 +308,78 @@ function expandEdges(
     }
   }
   return results;
+}
+
+function buildFanInCollections(
+  collectors: BlueprintGraphCollector[],
+  nodes: CanonicalNodeInstance[],
+  edges: CanonicalEdgeInstance[],
+  instancesById: Map<string, CanonicalNodeInstance>,
+): Record<string, FanInDescriptor> {
+  if (collectors.length === 0) {
+    return {};
+  }
+  const collectorMetaByNodeId = new Map<string, { groupBy: string; orderBy?: string }>();
+  for (const collector of collectors) {
+    const canonicalTargetId = `Input:${collector.to.nodeId}`;
+    collectorMetaByNodeId.set(canonicalTargetId, {
+      groupBy: collector.groupBy,
+      orderBy: collector.orderBy,
+    });
+  }
+  const targets = new Map<string, { groupBy: string; orderBy?: string }>();
+  for (const node of nodes) {
+    if (node.type !== 'Input') {
+      continue;
+    }
+    if (!node.input?.fanIn) {
+      continue;
+    }
+    const meta = collectorMetaByNodeId.get(node.id);
+    if (meta) {
+      targets.set(node.id, meta);
+    }
+  }
+  if (targets.size === 0) {
+    return {};
+  }
+  const inbound = new Map<string, string[]>();
+  for (const edge of edges) {
+    if (!edge.to.startsWith('Input:')) {
+      continue;
+    }
+    const list = inbound.get(edge.to) ?? [];
+    list.push(edge.from);
+    inbound.set(edge.to, list);
+  }
+  const fanIn: Record<string, FanInDescriptor> = {};
+  for (const [targetId, meta] of targets.entries()) {
+    const sources = inbound.get(targetId) ?? [];
+    if (sources.length === 0) {
+      fanIn[targetId] = {
+        groupBy: meta.groupBy,
+        orderBy: meta.orderBy,
+        members: [],
+      };
+      continue;
+    }
+    const members = sources.map((sourceId) => {
+      const instance = instancesById.get(sourceId);
+      const group = instance ? getDimensionIndex(instance, meta.groupBy) ?? 0 : 0;
+      const order = meta.orderBy && instance ? getDimensionIndex(instance, meta.orderBy) : undefined;
+      return {
+        id: sourceId,
+        group,
+        order,
+      };
+    });
+    fanIn[targetId] = {
+      groupBy: meta.groupBy,
+      orderBy: meta.orderBy,
+      members,
+    };
+  }
+  return fanIn;
 }
 
 function dimensionsMatch(
@@ -366,6 +454,10 @@ function collapseInputNodes(
     }
     const node = nodeById.get(id);
     if (!node || node.type !== 'Input') {
+      aliasCache.set(id, id);
+      return id;
+    }
+    if (node.input?.fanIn) {
       aliasCache.set(id, id);
       return id;
     }
@@ -526,6 +618,15 @@ function mapOfMapsToRecord(
     record[key] = Object.fromEntries(inner.entries());
   }
   return record;
+}
+
+function getDimensionIndex(node: CanonicalNodeInstance, label: string): number | undefined {
+  for (const symbol of node.dimensions) {
+    if (extractDimensionLabel(symbol) === label) {
+      return node.indices[symbol];
+    }
+  }
+  return undefined;
 }
 
 function formatQualifiedName(namespacePath: string[], name: string): string {
