@@ -1,7 +1,7 @@
 /**
  * CLI blueprint loader module.
- * Handles loading TOML blueprint files and recursively resolving sub-blueprints.
+ * Handles loading YAML blueprint files and recursively resolving modules.
  */
 
-export { parseBlueprintDocument } from './toml-parser.js';
+export { parseYamlBlueprintFile as parseBlueprintDocument } from 'tutopanda-core/blueprint-loader';
 export { loadBlueprintBundle } from './loader.js';

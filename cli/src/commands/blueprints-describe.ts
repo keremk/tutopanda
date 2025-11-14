@@ -1,4 +1,3 @@
-import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { parseBlueprintDocument } from '../lib/blueprint-loader/index.js';
 
@@ -33,8 +32,7 @@ export async function runBlueprintsDescribe(
   options: BlueprintsDescribeOptions,
 ): Promise<BlueprintsDescribeResult> {
   const targetPath = resolve(options.blueprintPath);
-  const contents = await readFile(targetPath, 'utf8');
-  const blueprint = parseBlueprintDocument(contents);
+  const blueprint = await parseBlueprintDocument(targetPath);
 
   return {
     path: targetPath,

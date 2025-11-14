@@ -1,0 +1,64 @@
+meta:
+  name: Image Generator
+  description: Generate cinematic stills via Seedream-4.
+  id: ImageGenerator
+  version: 0.1.0
+  author: Tutopanda
+  license: MIT
+
+inputs:
+  - name: Prompt
+    description: The prompt describing the target image.
+    type: string
+    required: true
+  - name: Size
+    description: Image resolution (1K, 2K, 4K, or custom).
+    type: string
+    required: false
+    default: 1K
+  - name: AspectRatio
+    description: Aspect ratio such as 16:9 or 3:2.
+    type: string
+    required: false
+    default: 1K
+
+artifacts:
+  - name: SegmentImage
+    description: Generated still image for the narrative beat.
+    type: image
+
+connections:
+  - from: Prompt
+    to: TextToImageProducer
+  - from: Size
+    to: TextToImageProducer
+  - from: AspectRatio
+    to: TextToImageProducer
+  - from: TextToImageProducer
+    to: SegmentImage
+
+producers:
+  - name: TextToImageProducer
+    provider: replicate
+    model: bytedance/seedream-4
+    config:
+      sequential_image_generation: disabled
+      max_images: 1
+      enhance_prompt: true
+    sdkMapping:
+      Prompt:
+        field: prompt
+        type: string
+        required: true
+      AspectRatio:
+        field: aspect_ratio
+        type: string
+        required: false
+      Size:
+        field: output_size
+        type: string
+        required: false
+    outputs:
+      SegmentImage:
+        type: image
+        mimeType: image/png

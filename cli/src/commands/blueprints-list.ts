@@ -1,10 +1,10 @@
-import { readdir, readFile } from 'node:fs/promises';
+import { readdir } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseBlueprintDocument } from '../lib/blueprint-loader/index.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const DEFAULT_BLUEPRINT_DIR = resolve(__dirname, '../../blueprints');
+const DEFAULT_BLUEPRINT_DIR = resolve(__dirname, '../../blueprints/yaml');
 
 export interface BlueprintsListResult {
   blueprints: Array<{
@@ -24,12 +24,11 @@ export async function runBlueprintsList(
   const blueprints: BlueprintsListResult['blueprints'] = [];
 
   for (const entry of entries) {
-    if (!entry.isFile() || !entry.name.endsWith('.toml')) {
+    if (!entry.isFile() || !entry.name.endsWith('.yaml')) {
       continue;
     }
     const fullPath = resolve(directory, entry.name);
-    const contents = await readFile(fullPath, 'utf8');
-    const blueprint = parseBlueprintDocument(contents);
+    const blueprint = await parseBlueprintDocument(fullPath);
     blueprints.push({
       path: fullPath,
       name: blueprint.meta.name,

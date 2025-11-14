@@ -1,0 +1,69 @@
+[meta]
+name = "Timeline Composer"
+description = "A blueprint for composing a timeline for ReMotion movies"
+id = "TimelineComposer"
+version = "0.1.0"
+author = "Tutopanda"
+license = "MIT"
+
+[[inputs]]
+name = "ImageSegments"
+description = "The images to be used in the timeline"
+nodeType = "FanIn" 
+type = "array"
+dimensions = 2
+itemType = "image"
+countInput = "inferred"
+required = true
+
+[[inputs]]
+name = "AudioSegments"
+description = "The audio segments to be used in the timeline"
+nodeType = "FanIn" 
+type = "array"
+itemType = "audio"
+countInput = "inferred"
+required = true
+
+[[inputs]]
+name = "Duration"
+description = "Total duration of the timeline in seconds"
+type = "int"
+required = true
+
+[[inputs]]
+name = "MovieTitle"
+description = "Title of the movie"
+type = "string"
+required = true
+
+[[artifacts]]
+name = "Timeline"
+description = "The composed timeline"
+type = "json"
+
+[graph]
+edges = [
+    {from = "Duration", to="TimelineProducer" },
+    {from = "ImageSegments", to="TimelineProducer" },
+    {from = "AudioSegments", to="TimelineProducer" },
+    {from = "MovieTitle", to="TimelineProducer" },
+    {from = "TimelineProducer", to= "Timeline"}
+]
+
+[[producers]]
+name = "TimelineProducer"
+provider = "Tutopanda"
+model = "OrderedTimeline"
+
+[[producers.config]]
+numTracks = 2
+masterTrack = { kind = "Audio" }
+clips = [
+    { kind = "Image", inputs="ImageSegments[i]" },
+    { kind = "Audio", inputs="AudioSegments" }
+]
+movieTitle = {inputs = "MovieTitle"}
+
+[producers.outputs]
+Timeline = { type = "text", mimeType = "json" }

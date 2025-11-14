@@ -29,7 +29,7 @@ import { mergeMovieMetadata } from './movie-metadata.js';
 const console = globalThis.console;
 const planningService = createPlanningService();
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const DEFAULT_BLUEPRINT_PATH = resolve(__dirname, '../../blueprints/audio-only.toml');
+const DEFAULT_BLUEPRINT_PATH = resolve(__dirname, '../../blueprints/yaml/audio-only.yaml');
 
 export interface GeneratePlanOptions {
   cliConfig: CliConfig;

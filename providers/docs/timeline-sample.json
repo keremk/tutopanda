@@ -1,0 +1,142 @@
+{
+  "id": "timeline-06ce5533-ad9c-4210-8bdc-ae4887286ea8",
+  "name": "Timeline",
+  "tracks": {
+    "music": [
+      {
+        "id": "music-06ce5533-ad9c-4210-8bdc-ae4887286ea8",
+        "kind": "music",
+        "name": "Background Score",
+        "volume": 0.3,
+        "duration": 39.564,
+        "startTime": 0,
+        "musicAssetId": "music-06ce5533-ad9c-4210-8bdc-ae4887286ea8",
+        "fadeInDuration": 2,
+        "fadeOutDuration": 3
+      }
+    ],
+    "voice": [
+      {
+        "id": "voice-0",
+        "kind": "voice",
+        "name": "Narration 1",
+        "volume": 1,
+        "duration": 14.904,
+        "startTime": 0,
+        "narrationAssetId": "narration-06ce5533-ad9c-4210-8bdc-ae4887286ea8-0"
+      },
+      {
+        "id": "voice-1",
+        "kind": "voice",
+        "name": "Narration 2",
+        "volume": 1,
+        "duration": 13.32,
+        "startTime": 14.904,
+        "narrationAssetId": "narration-06ce5533-ad9c-4210-8bdc-ae4887286ea8-1"
+      },
+      {
+        "id": "voice-2",
+        "kind": "voice",
+        "name": "Narration 3",
+        "volume": 1,
+        "duration": 11.34,
+        "startTime": 28.224,
+        "narrationAssetId": "narration-06ce5533-ad9c-4210-8bdc-ae4887286ea8-2"
+      }
+    ],
+    "visual": [
+      {
+        "id": "visual-0-0",
+        "endX": 0,
+        "endY": 0,
+        "kind": "kenBurns",
+        "name": "Segment 1 Image 1",
+        "startX": 0,
+        "startY": 0,
+        "duration": 7.452,
+        "endScale": 1.2,
+        "startTime": 0,
+        "effectName": "portraitZoomIn",
+        "startScale": 1,
+        "imageAssetId": "img-06ce5533-ad9c-4210-8bdc-ae4887286ea8-0-0"
+      },
+      {
+        "id": "visual-0-1",
+        "endX": -30,
+        "endY": 30,
+        "kind": "kenBurns",
+        "name": "Segment 1 Image 2",
+        "startX": 40,
+        "startY": -40,
+        "duration": 7.452,
+        "endScale": 1.3,
+        "startTime": 7.452,
+        "effectName": "diagonalZoomInDownLeft",
+        "startScale": 1,
+        "imageAssetId": "img-06ce5533-ad9c-4210-8bdc-ae4887286ea8-0-1"
+      },
+      {
+        "id": "visual-1-0",
+        "endX": -30,
+        "endY": 0,
+        "kind": "kenBurns",
+        "name": "Segment 2 Image 1",
+        "startX": 50,
+        "startY": 0,
+        "duration": 6.66,
+        "endScale": 1.3,
+        "startTime": 14.904,
+        "effectName": "zoomInPanLeft",
+        "startScale": 1,
+        "imageAssetId": "img-06ce5533-ad9c-4210-8bdc-ae4887286ea8-1-0"
+      },
+      {
+        "id": "visual-1-1",
+        "endX": 30,
+        "endY": 0,
+        "kind": "kenBurns",
+        "name": "Segment 2 Image 2",
+        "startX": -50,
+        "startY": 0,
+        "duration": 6.66,
+        "endScale": 1.3,
+        "startTime": 21.564,
+        "effectName": "zoomInPanRight",
+        "startScale": 1,
+        "imageAssetId": "img-06ce5533-ad9c-4210-8bdc-ae4887286ea8-1-1"
+      },
+      {
+        "id": "visual-2-0",
+        "endX": 0,
+        "endY": 0,
+        "kind": "kenBurns",
+        "name": "Segment 3 Image 1",
+        "startX": 0,
+        "startY": 0,
+        "duration": 5.67,
+        "endScale": 1.2,
+        "startTime": 28.224,
+        "effectName": "portraitZoomIn",
+        "startScale": 1,
+        "imageAssetId": "img-06ce5533-ad9c-4210-8bdc-ae4887286ea8-2-0"
+      },
+      {
+        "id": "visual-2-1",
+        "endX": 0,
+        "endY": 0,
+        "kind": "kenBurns",
+        "name": "Segment 3 Image 2",
+        "startX": 0,
+        "startY": 0,
+        "duration": 5.67,
+        "endScale": 1,
+        "startTime": 33.894,
+        "effectName": "portraitZoomOut",
+        "startScale": 1.2,
+        "imageAssetId": "img-06ce5533-ad9c-4210-8bdc-ae4887286ea8-2-1"
+      }
+    ],
+    "soundEffects": []
+  },
+  "duration": 39.564
+}

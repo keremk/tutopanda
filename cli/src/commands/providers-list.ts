@@ -6,7 +6,7 @@ import { buildProducerOptionsFromBlueprint } from '../lib/producer-options.js';
 import { expandPath } from '../lib/path.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const DEFAULT_BLUEPRINT_PATH = resolve(__dirname, '../../blueprints/audio-only.toml');
+const DEFAULT_BLUEPRINT_PATH = resolve(__dirname, '../../blueprints/yaml/audio-only.yaml');
 
 export interface ProvidersListOptions {
   blueprintPath?: string;

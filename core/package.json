@@ -39,6 +39,8 @@
     "@flystorage/file-storage": "^1.2.0",
     "@flystorage/in-memory": "^1.1.0",
     "@flystorage/local-fs": "^1.2.0",
+    "smol-toml": "^1.4.2",
+    "yaml": "^2.8.1",
     "zod": "^4.1.12"
   },
   "devDependencies": {

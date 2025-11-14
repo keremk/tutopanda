@@ -1,0 +1,139 @@
+[meta]
+name = "Images with Audio Narration"
+description = "A blueprint for generating images segments with audio narration using AI."
+id = "ImageAudio"
+version = "0.1.0"
+author = "Tutopanda"
+license = "MIT"
+
+[[inputs]]
+name = "InquiryPrompt"
+description = "The prompt describing the movie script to be generated."
+type = "string"
+required = true
+
+[[inputs]]
+name = "Duration"
+description = "The desired duration of the movie in seconds"
+type = "int"
+required = true
+
+[[inputs]]
+name = "NumOfSegments"
+description = "The number of segments to divide the movie into."
+type = "int"
+required = true
+
+[[inputs]]
+name = "NumOfImagesPerNarrative"
+description = "Number of images to generate per narrative text."
+type = "int"
+required = false
+default = 1
+
+[[inputs]]
+name = "ImageStyle"
+description = "Text describing the image style to be used."
+type = "string"
+required = true
+
+[[inputs]]
+name = "Size"
+description = "Enumerated values, 1K, 2K, 4K or custom describing the image size to be used. "
+type = "string"
+required = false
+default = "1K"
+
+[[inputs]]
+name = "AspectRatio"
+description = "Enumerated values, 1:1, 4:3, 3:4, 16:9, 9:16, 3:2, 2:3, 21:9 or match_input_image describing the image size to be used. "
+type = "string"
+required = false
+default = "16:9"
+
+[[inputs]]
+name = "Audience"
+description = "The target audience for the movie (e.g., children, adults, experts)."
+type = "string"
+required = false
+default = "Adult"
+
+[[inputs]]
+name = "VoiceId"
+description = "The ID of the voice to be used for narration."
+type = "string"
+required = true
+
+[[inputs]]
+name = "Emotion"
+description = "The emotion description for the audio."
+type = "string"
+required = false
+default = "neutral"
+
+[[artifacts]]
+name = "SegmentImage"
+description = "The narrated image segments for the movie."
+type = "multiDimArray"
+itemType = "image"
+
+[[artifacts]]
+name = "SegmentAudio"
+description = "The narrated audio segments for the movie."
+type = "array"
+itemType = "audio"
+
+[[artifacts]]
+name = "Timeline"
+description = "The composed timeline"
+type = "json" 
+
+[[subBlueprints]]
+name = "ScriptGenerator"
+path = "./script-generate.toml"
+
+[[subBlueprints]]
+name = "ImagePromptGenerator"
+path = "./image-prompt-generate.toml"
+
+[[subBlueprints]]
+name = "ImageGenerator"
+path = "./image-generate.toml"
+
+[[subBlueprints]]
+name = "AudioGenerator"
+path = "./audio-generate.toml"
+
+[[subBlueprints]]
+name = "TimelineComposer"
+path = "./timeline.toml"
+
+
+[graph]
+edges = [
+    { from = "InquiryPrompt", to = "ScriptGenerator.InquiryPrompt" },
+    { from = "Audience", to = "ScriptGenerator.Audience" },
+    { from = "Duration", to = "ScriptGenerator.Duration" },
+    { from = "ImageStyle", to = "ScriptGenerator.ImageStyle" },
+    { from = "NumOfSegments", to = "ScriptGenerator.NumOfSegments" },
+
+    { from = "ScriptGenerator.NarrationScript[i]", to = "ImagePromptGenerator[i].NarrativeText" },
+    { from = "ScriptGenerator.MovieSummary", to = "ImagePromptGenerator[i].OverallSummary" },
+    { from = "ImageStyle", to = "ImagePromptGenerator[i].ImageStyle" },
+    { from = "Audience", to = "ImagePromptGenerator[i].Audience"},
+    { from = "NumOfImagesPerNarrative", to = "ImagePromptGenerator[i].NumOfImagesPerNarrative"},
+    { from = "ImagePromptGenerator[i].ImagePrompt[j]", to = "ImageGenerator[i][j].Prompt" },
+    { from = "Size", to = "ImageGenerator[i][j].Size"},
+    { from = "AspectRatio", to = "ImageGenerator[i][j].AspectRatio"},
+    { from = "ImageGenerator[i][j].SegmentImage", to = "SegmentImage[i][j]"},
+
+    { from = "ScriptGenerator.NarrationScript[i]", to = "AudioGenerator[i].TextInput" },
+    { from = "VoiceId", to = "AudioGenerator[i].VoiceId" },
+    { from = "Emotion", to = "AudioGenerator[i].Emotion" },
+    { from = "AudioGenerator[i].SegmentAudio", to = "SegmentAudio[i]" },
+
+    { from = "SegmentImage[i][j]", to ="TimelineComposer.ImageSegments" },
+    { from = "SegmentAudio[i]", to = "TimelineComposer.AudioSegments" },
+    { from = "Duration", to = "TimelineComposer.Duration" },
+    { from = "TimelineComposer.Timeline", to = "Timeline" }
+]

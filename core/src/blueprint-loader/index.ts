@@ -1,4 +1,3 @@
-// Deprecated legacy exports removed. Canonical blueprint graph utilities now live at src/canonical-graph.ts.
 export { buildBlueprintGraph } from '../canonical-graph.js';
 export type {
   BlueprintGraph,
@@ -6,3 +5,13 @@ export type {
   BlueprintGraphEdgeEndpoint,
   BlueprintGraphNode,
 } from '../canonical-graph.js';
+export {
+  createFlyStorageBlueprintReader,
+  loadYamlBlueprintTree,
+  parseYamlBlueprintFile,
+} from './yaml-parser.js';
+export type {
+  BlueprintLoadOptions,
+  BlueprintParseOptions,
+  BlueprintResourceReader,
+} from './yaml-parser.js';

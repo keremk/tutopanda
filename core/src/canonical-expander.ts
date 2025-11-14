@@ -124,7 +124,11 @@ function resolveDimensionSizes(
   for (const node of nodes) {
     for (const symbol of node.dimensions) {
       if (!sizes.has(symbol)) {
-        throw new Error(`Missing size for dimension "${symbol}".`);
+        const { nodeId, label } = parseDimensionSymbol(symbol);
+        throw new Error(
+          `Missing size for dimension "${label}" on node "${nodeId}". ` +
+          `Ensure the upstream artefact declares countInput or can derive this dimension from a loop.`,
+        );
       }
     }
   }
@@ -195,12 +199,23 @@ function deriveDimensionSize(
   return undefined;
 }
 
-function extractNodeIdFromSymbol(symbol: string): string {
+interface DimensionInfo {
+  nodeId: string;
+  label: string;
+}
+
+function parseDimensionSymbol(symbol: string): DimensionInfo {
   const delimiterIndex = symbol.indexOf('::');
   if (delimiterIndex === -1) {
     throw new Error(`Dimension symbol "${symbol}" is missing a node qualifier.`);
   }
-  return symbol.slice(0, delimiterIndex);
+  const nodeId = symbol.slice(0, delimiterIndex);
+  const label = symbol.slice(delimiterIndex + 2);
+  return { nodeId, label };
+}
+
+function extractNodeIdFromSymbol(symbol: string): string {
+  return parseDimensionSymbol(symbol).nodeId;
 }
 
 function expandNodeInstances(

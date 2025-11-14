@@ -27,7 +27,7 @@ const console = globalThis.console;
 type ProviderListOutputEntry = Awaited<ReturnType<typeof runProvidersList>>['entries'][number];
 
 const cli = meow(
-  `\nUsage\n  $ tutopanda <command> [options]\n\nCommands\n  init                Initialize Tutopanda CLI configuration\n  query               Generate a plan using a blueprint and inputs TOML\n  inspect             Export prompts or timeline data for a movie\n  edit                Regenerate a movie with edited inputs\n  providers:list      Show providers defined in a blueprint\n  blueprints:list     List available blueprint TOML files\n  blueprints:describe <path>  Show details for a blueprint TOML file\n  blueprints:validate <path>  Validate a blueprint TOML file\n\nExamples\n  $ tutopanda init --rootFolder=~/media/tutopanda\n  $ tutopanda query --inputs=cli/inputs-sample.toml --using-blueprint=cli/blueprints/audio-only.toml\n  $ tutopanda providers:list --using-blueprint=cli/blueprints/audio-only.toml\n  $ tutopanda blueprints:list\n  $ tutopanda blueprints:describe cli/blueprints/audio-only.toml\n  $ tutopanda blueprints:validate ./my-blueprint.toml\n  $ tutopanda inspect --movieId=q123456 --prompts\n  $ tutopanda edit --movieId=q123456 --inputs=edited-inputs.toml\n`,
+  `\nUsage\n  $ tutopanda <command> [options]\n\nCommands\n  init                Initialize Tutopanda CLI configuration\n  query               Generate a plan using a blueprint (YAML) and inputs TOML\n  inspect             Export prompts or timeline data for a movie\n  edit                Regenerate a movie with edited inputs\n  providers:list      Show providers defined in a blueprint\n  blueprints:list     List available blueprint YAML files\n  blueprints:describe <path>  Show details for a blueprint YAML file\n  blueprints:validate <path>  Validate a blueprint YAML file\n\nExamples\n  $ tutopanda init --rootFolder=~/media/tutopanda\n  $ tutopanda query --inputs=cli/inputs-sample.toml --using-blueprint=cli/blueprints/yaml/audio-only.yaml\n  $ tutopanda providers:list --using-blueprint=cli/blueprints/yaml/audio-only.yaml\n  $ tutopanda blueprints:list\n  $ tutopanda blueprints:describe cli/blueprints/yaml/audio-only.yaml\n  $ tutopanda blueprints:validate ./my-blueprint.yaml\n  $ tutopanda inspect --movieId=q123456 --prompts\n  $ tutopanda edit --movieId=q123456 --inputs=edited-inputs.toml\n`,
   {
     importMeta: import.meta,
     flags: {
@@ -153,7 +153,7 @@ async function main(): Promise<void> {
       const blueprintPath = rest[0];
       if (!blueprintPath) {
         console.error('Error: blueprint path is required for blueprints:describe.');
-        console.error('Usage: tutopanda blueprints:describe <path-to-blueprint.toml>');
+        console.error('Usage: tutopanda blueprints:describe <path-to-blueprint.yaml>');
         process.exitCode = 1;
         return;
       }
@@ -223,7 +223,7 @@ async function main(): Promise<void> {
       const blueprintPath = rest[0];
       if (!blueprintPath) {
         console.error('Error: blueprint file path is required for blueprints:validate.');
-        console.error('Usage: tutopanda blueprints:validate <path-to-blueprint.toml>');
+        console.error('Usage: tutopanda blueprints:validate <path-to-blueprint.yaml>');
         process.exitCode = 1;
         return;
       }

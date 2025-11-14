@@ -212,6 +212,7 @@ export interface SubBlueprintDefinition {
   name: string;
   path?: string;
   description?: string;
+  loop?: string;
 }
 
 export interface BlueprintDocument {

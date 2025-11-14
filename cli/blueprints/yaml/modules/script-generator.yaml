@@ -1,0 +1,80 @@
+meta:
+  name: Script Generation
+  description: Generate documentary scripts tailored to the user inquiry.
+  id: ScriptGenerator
+  version: 0.1.0
+  author: Tutopanda
+  license: MIT
+
+inputs:
+  - name: InquiryPrompt
+    description: The topic describing the desired movie script.
+    type: string
+    required: true
+  - name: Duration
+    description: Desired narration duration in seconds.
+    type: int
+    required: true
+  - name: NumOfSegments
+    description: Number of narration segments to produce.
+    type: int
+    required: true
+  - name: Audience
+    description: Target audience for tone and vocabulary.
+    type: string
+    required: false
+    default: Adult
+  - name: Language
+    description: Narration language.
+    type: string
+    required: false
+    default: en
+  - name: ImageStyle
+    description: Style hint passed along for downstream generators.
+    type: string
+    required: false
+    default: Documentary
+
+artifacts:
+  - name: MovieTitle
+    description: The generated title for the documentary.
+    type: string
+  - name: MovieSummary
+    description: Narrative summary for supplemental reading.
+    type: string
+  - name: NarrationScript
+    description: Array of narration paragraphs per segment.
+    type: array
+    itemType: string
+    countInput: NumOfSegments
+
+loops:
+  - name: segment
+    description: Iterates over narration segments.
+    countInput: NumOfSegments
+
+connections:
+  - from: InquiryPrompt
+    to: ScriptProducer
+  - from: Audience
+    to: ScriptProducer
+  - from: Duration
+    to: ScriptProducer
+  - from: NumOfSegments
+    to: ScriptProducer
+  - from: Language
+    to: ScriptProducer
+  - from: ImageStyle
+    to: ScriptProducer
+  - from: ScriptProducer
+    to: MovieTitle
+  - from: ScriptProducer
+    to: MovieSummary
+  - from: ScriptProducer
+    to: NarrationScript[segment]
+
+producers:
+  - name: ScriptProducer
+    provider: openai
+    promptFile: ./prompts/script-producer.toml
+    jsonSchema: ./schemas/script-producer.json
