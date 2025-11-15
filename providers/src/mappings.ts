@@ -4,7 +4,7 @@ import { createReplicateTextToImageHandler } from './producers/image/replicate-t
 import { createReplicateAudioHandler } from './producers/audio/replicate-audio.js';
 import { createReplicateVideoHandler } from './producers/video/replicate-video.js';
 import { createReplicateMusicHandler } from './producers/music/replicate-music.js';
-import { createTimelineStubHandler } from './producers/timeline/stub.js';
+import { createTimelineProducerHandler } from './producers/timeline/ordered-timeline.js';
 import type { ProviderImplementationRegistry } from './types.js';
 
 const wildcard = '*' as const;
@@ -12,12 +12,12 @@ const wildcard = '*' as const;
 export const providerImplementations: ProviderImplementationRegistry = [
   {
     match: {
-      provider: wildcard,
-      model: wildcard,
+      provider: 'tutopanda',
+      model: 'OrderedTimeline',
       environment: wildcard,
     },
     mode: 'mock',
-    factory: createMockProducerHandler(),
+    factory: createTimelineProducerHandler(),
   },
   {
     match: {
@@ -147,6 +147,15 @@ export const providerImplementations: ProviderImplementationRegistry = [
       environment: wildcard,
     },
     mode: 'live',
-    factory: createTimelineStubHandler(),
+    factory: createTimelineProducerHandler(),
+  },
+  {
+    match: {
+      provider: wildcard,
+      model: wildcard,
+      environment: wildcard,
+    },
+    mode: 'mock',
+    factory: createMockProducerHandler(),
   },
 ];

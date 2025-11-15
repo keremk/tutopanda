@@ -8,57 +8,8 @@
     - Music - backed by MP3 assets.
     - Captions - backed by text.
 
-## New FanIn Node - TimelineProducer
-TimelineProducer is the first fan-in node in the system, and therefore we need to update our spec on how to handle it.
-
-1. Declaring a fan-in input
-    - Any input node may opt into fan-in in the blueprint TOML. This signals to the graph builder that multiple incoming edges are intentional and that the node expects a collection rather than a single value.
-    - If the flag isn’t present and more than one artefact edge targets the input, expansion fails with a descriptive error (“InputX receives artefacts A and B; declare it as fan-in or disambiguate”). This keeps the current fail-fast behavior for accidental merges.
-```toml
-[[inputs]]
-name = "ImageSegments"
-description = "The images to be used in the timeline"
-nodeType = "FanIn" 
-type = "array"
-dimensions = 2
-itemType = "image"
-countInput = "inferred"
-required = true
-```
-    - nodeType = "FanIn" indicates that it is a fanIn node. Other nodeTypes are FanOut and 
-
-2. Canonical node IDs
-      - Fan-in does not collapse the upstream artefacts into a single ID. Each artefact retains its canonical form
-        (Artifact:SegmentImage[i][j], etc.).
-      - The input itself still has exactly one canonical ID (Input:TimelineComposer.ImageSegments). That ID represents the collection
-        rather than an individual scalar.
-  3. How the planner aggregates values
-      - During execution, every artefact resolved for edges feeding a fan-in input is grouped by the input’s ID.
-      - The planner keeps the canonical artefact IDs inside that collection; e.g.,
-        resolvedInputs["Input:TimelineComposer.ImageSegments"] = [Artifact:SegmentImage[0][0], Artifact:SegmentImage[0][1], …].
-      - If the downstream producer needs per-index semantics (e.g., group by i), it can scan the canonical IDs; indices stay encoded
-        in the IDs, so no alias map is required.
-  4. Order guarantees
-      - The collected list is ordered deterministically by canonical ID (lexicographic comparison). This ensures reproducible runs
-        regardless of when upstream artefacts finish.
-      - A future refinement could allow explicit ordering hints (e.g., fanInOrder = "edge" to preserve edge declaration order), but
-        lexicographic order gives us a stable default today.
-  5. Dimension propagation
-      - When a fan-in input connects to a producer field that expects dimensions (e.g., clips grouping by [i]), the producer can
-        inspect the canonical IDs to reconstruct segments. For example, it can bucket artefacts that share the same segment=i index.
-      - Optionally, we can expose a helper in core (groupFanInByDimension(inputId, symbol)) that parses IDs and returns buckets keyed
-        by any index symbol (i, j, etc.). That keeps producer implementations simple.
-  6. Validation
-      - Fan-in inputs must declare a valueType describing the collection (e.g., array, map). This lets us validate that the downstream        consumer knows it receives multiple values.
-      - When the planner encounters a fan-in node wired to an SDK mapping field that expects a scalar, it should fail fast
-        (“TimelineProducer.ImageSegments is fan-in but sdkMapping.ImageSegments expects a single value”).
-  7. Runtime contract
-      - Providers receive fan-in inputs exactly like regular inputs, except the value is an array of canonical IDs.
-      - Provider code must understand how to dereference each ID to fetch the underlying asset. The runtime does not concatenate blobs
-        or otherwise pre-process them.
-
 ## Configuration
-TimelineProducer is configured using a TOML file just like the others. See `cli/blueprints/timeline.toml`
+TimelineProducer is configured using the YAML blueprint surface defined in `core/docs/yaml-blueprint-spec.md`. See `cli/blueprints/yaml/modules/timeline-composer.yaml` for the canonical module.
 
 ## Composition
 - Timeline uses an *extensible* list of algorithms to automatically compose a timeline from tracks and clips using inputs (artifacts/assets, inputs). Currently the only composition algorithm is OrderedTimeline.
@@ -70,12 +21,12 @@ Simple composition. Essentially starts all clips in time=0 in their configured t
 - One or more clips can specify that they span the full duration of the movie. 
 - One track declares its clips as the master for setting durations for all the other clips and all other clips in other tracks aligned to that duration, unless they explicitly said their duration should span the whole video.
 
-In the configuration section of the TOML, the `model` is set to OrderedTimeline. See example:
-```toml
-[[producers]]
-name = "TimelineProducer"
-provider = "Tutopanda"
-model = "OrderedTimeline"
+In the YAML module configuration, the `model` is set to OrderedTimeline. See example:
+```yaml
+producers:
+  - name: TimelineProducer
+    provider: Tutopanda
+    model: OrderedTimeline
 ```
 
 *Example 1*
@@ -161,7 +112,7 @@ Here is what the shape looks like
 The timeline output starts with section that describes the overall Timeline properties:
 - *id*: uniquely defines the timeline
 - *movieId*: this is the id of the movie that is created, CLI passes this in to the timeline producer. This will later be used to locate the assets in the builds and workspaces folders 
-- *movieTitle*: this is fed
+- *movieTitle*: optional string fed by the upstream script generator when it connects the title artefact into the timeline module.
 
 As seen above, *tracks* is an array of clips and each clip has:
 - *id*: uniquely defines the clip within the movie timeline
@@ -174,37 +125,47 @@ As seen above, *tracks* is an array of clips and each clip has:
 Clips can expect multiple assets. Image Clips accept multiple image assets. 
 In the below example:
 
-```toml
-[[inputs]]
-name = "ImageSegments"
-description = "The images to be used in the timeline"
-type = "array"
-dimensions = 2
-itemType = "image"
-countInput = "inferred"
-required = true
+```yaml
+inputs:
+  - name: ImageSegments
+    description: The images to be used in the timeline
+    type: collection
+    dimensions: segment.image
+    itemType: image
+    fanIn: true
+    required: true
+  - name: AudioSegments
+    description: The audio segments to be used in the timeline
+    type: collection
+    itemType: audio
+    dimensions: segment
+    fanIn: true
+    required: true
+  - name: Duration
+    description: Total duration of the movie in seconds
+    type: int
+    required: true
 
-[[inputs]]
-name = "AudioSegments"
-description = "The audio segments to be used in the timeline"
-type = "array"
-itemType = "audio"
-countInput = "inferred"
-required = true
-
-[[producers.config]]
-rootFolder = "~/tutopanda"
-source = "local"
-numTracks = 2
-masterTrack = { kind = "Audio" }
-clips = [
-    { kind = "Image", inputs="ImageSegments[i]", effect = "KennBurns" },
-    { kind = "Audio", inputs="AudioSegments" }
-]
+producers:
+  - name: TimelineProducer
+    provider: Tutopanda
+    model: OrderedTimeline
+    config:
+      rootFolder: ~/tutopanda
+      source: local
+      numTracks: 2
+      masterTrack:
+        kind: Audio
+      clips:
+        - kind: Image
+          inputs: ImageSegments[segment]
+          effect: KennBurns
+        - kind: Audio
+          inputs: AudioSegments
 ```
 
 - There are 2 tracks, and the track with Audio clips is marked as the master track. 
-- The Image Clips will each contain images identified as ImageSegments[i]. ImageSegmens is a 2-dimensional array. The notation ImageSegments[i] indicates that each clip will contain all images in the second dimension that corresponds to the first index.
+- The Image Clips will each contain images identified as ImageSegments[segment]. ImageSegments is a 2-dimensional collection. The notation ImageSegments[segment] indicates that each clip will contain all images in the second dimension that corresponds to the current segment index.
     - Example: 
         - Given ImageSegment[0][0], ImageSegment[0][1], the Image Clip will get those two images as inputs. 
 
@@ -250,27 +211,35 @@ In the timeline given those inputs, the images will use `KennBurns` as the effec
 ### Audio Clip
 Audio Clips expect volume as a special property, to set a volume. Audio Clips normally have the volume highest.
 
-They are configured in TOML:
-```toml
-[[inputs]]
-name = "AudioSegments"
-description = "The audio segments to be used in the timeline"
-type = "array"
-itemType = "audio"
-countInput = "inferred"
-required = true
+They are configured in YAML:
+```yaml
+inputs:
+  - name: AudioSegments
+    description: The audio segments to be used in the timeline
+    type: collection
+    itemType: audio
+    dimensions: segment
+    fanIn: true
+    required: true
 
-[[producers.config]]
-rootFolder = "~/tutopanda"
-source = "local"
-numTracks = 2
-masterTrack = { kind = "Audio" }
-clips = [
-    { kind = "Image", inputs="ImageSegments[i]", effect = "KennBurns" },
-    { kind = "Audio", inputs="AudioSegments" }
-]
+producers:
+  - name: TimelineProducer
+    provider: Tutopanda
+    model: OrderedTimeline
+    config:
+      rootFolder: ~/tutopanda
+      source: local
+      numTracks: 2
+      masterTrack:
+        kind: Audio
+      clips:
+        - kind: Image
+          inputs: ImageSegments[segment]
+          effect: KennBurns
+        - kind: Audio
+          inputs: AudioSegments
 ```
-- The AudioSegments are a single dimensional array and each clip gets one from the array.
+- The AudioSegments input is grouped by segment via fan-in and each clip gets one audio artefact from its corresponding segment group.
 
 And the algorithm generates these per audio clip calculating their start time and durations (using MediaBunny from the audio asset)
 ```json
@@ -290,24 +259,34 @@ And the algorithm generates these per audio clip calculating their start time an
 ###  Music Clip
 Music Clips expect volume as a special property, to set a volume. 
 
-They are configured in TOML:
-```toml
-[[inputs]]
-name = "MusicSegment"
-description = "The music segments to be used in the timeline"
-type = "audio"
-required = true
+They are configured in YAML:
+```yaml
+inputs:
+  - name: MusicSegment
+    description: The music segments to be used in the timeline
+    type: audio
+    required: true
 
-[[producers.config]]
-rootFolder = "~/tutopanda"
-source = "local"
-numTracks = 3
-masterTrack = { kind = "Audio" }
-clips = [
-    { kind = "Image", inputs="ImageSegments[i]", effect = "KennBurns" },
-    { kind = "Audio", inputs="AudioSegments" }
-    { kind = "Music", inputs="MusicSegment", duration="full", play="loop"}
-]
+producers:
+  - name: TimelineProducer
+    provider: Tutopanda
+    model: OrderedTimeline
+    config:
+      rootFolder: ~/tutopanda
+      source: local
+      numTracks: 3
+      masterTrack:
+        kind: Audio
+      clips:
+        - kind: Image
+          inputs: ImageSegments[segment]
+          effect: KennBurns
+        - kind: Audio
+          inputs: AudioSegments
+        - kind: Music
+          inputs: MusicSegment
+          duration: full
+          play: loop
 ```
 In this case:
 - *duration* `full` indicates that it should try to span the full movie and not be clipped by Audio duration. This is the default. 
@@ -330,23 +309,30 @@ The algorithm generates the following for the music clip.
 ```
 
 ### Video Clip
-They are configured in TOML:
-```toml
-[[inputs]]
-name = "VideoSegment"
-description = "The video segments to be used in the timeline"
-type = "audio"
-required = true
+They are configured in YAML:
+```yaml
+inputs:
+  - name: VideoSegment
+    description: The video segments to be used in the timeline
+    type: audio
+    required: true
 
-[[producers.config]]
-rootFolder = "~/tutopanda"
-source = "local"
-numTracks = 2
-masterTrack = { kind = "Audio" }
-clips = [
-    { kind = "Video", inputs="VideoSegments", fitStrategy = "stretch" },
-    { kind = "Audio", inputs="AudioSegments" }
-]
+producers:
+  - name: TimelineProducer
+    provider: Tutopanda
+    model: OrderedTimeline
+    config:
+      rootFolder: ~/tutopanda
+      source: local
+      numTracks: 2
+      masterTrack:
+        kind: Audio
+      clips:
+        - kind: Video
+          inputs: VideoSegments
+          fitStrategy: stretch
+        - kind: Audio
+          inputs: AudioSegments
 ```
 In this case:
 - *fitStrategy*: `stretch` indicates that the video should be stretched to meet the master track clip. 
@@ -371,27 +357,35 @@ The algorithm generates the following for the video clip:
 ```
 
 - *originalDuration*: The original duration of the video asset. This is read using MediaBunny from the video mp4 file.
-- *fitStrategy*: This is populated either by what is specified in the TOML or if `auto`, set by the algorithm based on the originalDuration
+- *fitStrategy*: This is populated either by what is specified in the YAML or if `auto`, set by the algorithm based on the originalDuration
 
 ### Captions
-They are configured in TOML:
-```toml
-[[inputs]]
-name = "Captions"
-description = "The music segments to be used in the timeline"
-type = "array"
-itemType = "string"
-required = true
+They are configured in YAML:
+```yaml
+inputs:
+  - name: Captions
+    description: The music segments to be used in the timeline
+    type: array
+    itemType: string
+    required: true
 
-[[producers.config]]
-rootFolder = "~/tutopanda"
-source = "local"
-numTracks = 2
-masterTrack = { kind = "Audio" }
-clips = [
-    { kind = "Captions", inputs="Captions", partitionBy = 3, captionAlgorithm = "basic" },
-    { kind = "Audio", inputs="AudioSegments" }
-]
+producers:
+  - name: TimelineProducer
+    provider: Tutopanda
+    model: OrderedTimeline
+    config:
+      rootFolder: ~/tutopanda
+      source: local
+      numTracks: 2
+      masterTrack:
+        kind: Audio
+      clips:
+        - kind: Captions
+          inputs: Captions
+          partitionBy: 3
+          captionAlgorithm: basic
+        - kind: Audio
+          inputs: AudioSegments
 ```
 
 In this case:

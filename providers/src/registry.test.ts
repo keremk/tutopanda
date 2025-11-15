@@ -87,4 +87,29 @@ describe('createProviderRegistry', () => {
     const [first, second] = registry.resolveMany(descriptors);
     expect(first.handler).toBe(second.handler);
   });
+
+  it('uses the real timeline handler in mock mode', async () => {
+    const registry = createProviderRegistry();
+    const handler = registry.resolve({
+      provider: 'tutopanda',
+      model: 'OrderedTimeline',
+      environment: 'local',
+    });
+
+    await expect(
+      handler.invoke({
+        jobId: 'job-timeline',
+        provider: 'tutopanda',
+        model: 'OrderedTimeline',
+        revision: 'rev-0001',
+        layerIndex: 0,
+        attempt: 1,
+        inputs: [],
+        produces: ['Artifact:TimelineComposer.Timeline'],
+        context: {
+          providerConfig: {},
+        },
+      }),
+    ).rejects.toThrow(/TimelineProducer provider configuration must include a config object/);
+  });
 });
