@@ -1,55 +1,113 @@
-export type TimelineTrackKey = "visual" | "voice" | "music" | "soundEffects";
+export type TimelineTrackKind = "Image" | "Audio" | "Music" | "Video" | "Captions";
 
-interface TimelineClipBase {
+export interface TimelineDocument {
   id: string;
-  kind: string;
-  name: string;
+  duration: number;
+  name?: string;
+  movieId?: string;
+  movieTitle?: string;
+  assetFolder?: {
+    source?: string;
+    rootPath?: string;
+  };
+  tracks: TimelineTrack[];
+}
+
+export type TimelineTrack =
+  | ImageTrack
+  | AudioTrack
+  | MusicTrack
+  | VideoTrack
+  | CaptionsTrack
+  | UnknownTrack;
+
+interface TimelineTrackBase<TKind extends string, TClip extends TimelineClip> {
+  id: string;
+  kind: TKind;
+  clips: TClip[];
+}
+
+interface TimelineClipBase<TKind extends string, TProps extends Record<string, unknown>> {
+  id: string;
+  kind: TKind;
   startTime: number;
   duration: number;
+  properties: TProps;
 }
 
-export interface KenBurnsClip extends TimelineClipBase {
-  kind: "kenBurns";
-  imageUrl?: string;
+export interface KenBurnsEffect {
+  name?: string;
+  style?: string;
+  assetId: string;
+  startX?: number;
+  startY?: number;
+  endX?: number;
+  endY?: number;
+  startScale?: number;
+  endScale?: number;
 }
 
-export interface VideoClip extends TimelineClipBase {
-  kind: "video";
-  videoUrl?: string;
-}
+export type ImageClip = TimelineClipBase<
+  "Image",
+  {
+    effect?: string;
+    effects: KenBurnsEffect[];
+  }
+>;
 
-export interface VoiceClip extends TimelineClipBase {
-  kind: "voice";
-  narrationAssetId?: string;
-}
+export type AudioClip = TimelineClipBase<
+  "Audio",
+  {
+    assetId: string;
+    volume?: number;
+    fadeInDuration?: number;
+    fadeOutDuration?: number;
+  }
+>;
 
-export interface MusicClip extends TimelineClipBase {
-  kind: "music";
-  musicAssetId?: string;
-}
+export type MusicClip = TimelineClipBase<
+  "Music",
+  {
+    assetId: string;
+    volume?: number;
+    duration?: "full" | "match";
+    play?: "loop" | "no-loop";
+  }
+>;
 
-export interface SoundEffectClip extends TimelineClipBase {
-  kind: "soundEffect";
-  soundEffectAssetId?: string;
-}
+export type VideoClip = TimelineClipBase<
+  "Video",
+  {
+    assetId: string;
+    originalDuration?: number;
+    fitStrategy?: string;
+    volume?: number;
+  }
+>;
 
-export type AnyTimelineClip =
-  | KenBurnsClip
-  | VideoClip
-  | VoiceClip
+export type CaptionsClip = TimelineClipBase<
+  "Captions",
+  {
+    assetId?: string;
+    captions?: string[];
+    partitionBy?: number;
+    captionAlgorithm?: string;
+  }
+>;
+
+export type UnknownClip = TimelineClipBase<string, Record<string, unknown>>;
+
+export type TimelineClip =
+  | ImageClip
+  | AudioClip
   | MusicClip
-  | SoundEffectClip;
+  | VideoClip
+  | CaptionsClip
+  | UnknownClip;
 
-export interface Timeline {
-  id: string;
-  name: string;
-  duration: number;
-  tracks: Record<TimelineTrackKey, AnyTimelineClip[]>;
-}
-
-export const timelineTrackKeys: TimelineTrackKey[] = [
-  "visual",
-  "voice",
-  "music",
-  "soundEffects",
-];
+export type ImageTrack = TimelineTrackBase<"Image", ImageClip>;
+export type AudioTrack = TimelineTrackBase<"Audio", AudioClip>;
+export type MusicTrack = TimelineTrackBase<"Music", MusicClip>;
+export type VideoTrack = TimelineTrackBase<"Video", VideoClip>;
+export type CaptionsTrack = TimelineTrackBase<"Captions", CaptionsClip>;
+export type UnknownTrack = TimelineTrackBase<string, TimelineClip>;

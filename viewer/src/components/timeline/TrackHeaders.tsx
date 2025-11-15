@@ -1,29 +1,16 @@
-import { Film, Mic, Music, Volume2, Play, Pause } from "lucide-react";
-import { useMemo } from "react";
-
-import type { TimelineTrackKey } from "@/types/timeline";
-
-interface TrackChannel {
-  id: TimelineTrackKey;
-  name: string;
-  icon: React.ComponentType<{ className?: string }>;
-  height: number;
-}
-
-const TIMELINE_CHANNELS: TrackChannel[] = [
-  { id: "visual", name: "Visual Clips", icon: Film, height: 48 },
-  { id: "voice", name: "Voice & Narration", icon: Mic, height: 48 },
-  { id: "music", name: "Background Music", icon: Music, height: 48 },
-  { id: "soundEffects", name: "Sound Effects", icon: Volume2, height: 48 },
-];
+import { Play, Pause, Video } from "lucide-react";
+import type { TimelineTrack } from "@/types/timeline";
+import { getTrackMeta } from "./track-meta";
 
 interface TrackHeadersProps {
+  tracks: TimelineTrack[];
   isPlaying?: boolean;
   onPlay?: () => void;
   onPause?: () => void;
 }
 
 export const TrackHeaders = ({
+  tracks,
   isPlaying = false,
   onPlay,
   onPause,
@@ -37,24 +24,6 @@ export const TrackHeaders = ({
       onPlay?.();
     }
   };
-
-  const renderChannels = useMemo(
-    () =>
-      TIMELINE_CHANNELS.map((channel) => {
-        const IconComponent = channel.icon;
-        return (
-          <div
-            key={channel.id}
-            className="flex items-center justify-center hover:bg-muted/30 transition-colors border-b border-muted/90"
-            style={{ height: `${channelHeight}px` }}
-            title={channel.name}
-          >
-            <IconComponent className="w-4 h-4 text-muted-foreground hover:text-foreground transition-colors" />
-          </div>
-        );
-      }),
-    [],
-  );
 
   return (
     <div className="w-16 shrink-0 bg-background/80 border-r border-border/30">
@@ -75,7 +44,20 @@ export const TrackHeaders = ({
           )}
         </button>
       </div>
-      {renderChannels}
+      {tracks.map((track) => {
+        const meta = getTrackMeta(track);
+        const IconComponent = meta.Icon ?? Video;
+        return (
+          <div
+            key={track.id}
+            className="flex items-center justify-center hover:bg-muted/30 transition-colors border-b border-muted/90"
+            style={{ height: `${channelHeight}px` }}
+            title={meta.label}
+          >
+            <IconComponent className="w-4 h-4 text-muted-foreground hover:text-foreground transition-colors" />
+          </div>
+        );
+      })}
     </div>
   );
 };

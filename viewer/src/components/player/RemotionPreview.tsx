@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef } from "react";
 import { Player, type PlayerRef, type CallbackListener } from "@remotion/player";
-import type { Timeline } from "@/types/timeline";
-import { PlaceholderComposition } from "./PlaceholderComposition";
+import type { TimelineDocument } from "@/types/timeline";
+import { VideoComposition } from "@/remotion/VideoComposition";
 
 interface RemotionPreviewProps {
-  timeline: Timeline;
+  movieId: string;
+  timeline: TimelineDocument;
   currentTime: number;
   isPlaying: boolean;
   onSeek?: (time: number) => void;
@@ -17,6 +18,7 @@ const DEFAULT_ASPECT_RATIO = "16:9";
 const FPS = 30;
 
 export const RemotionPreview = ({
+  movieId,
   timeline,
   currentTime,
   isPlaying,
@@ -126,8 +128,8 @@ export const RemotionPreview = ({
       <Player
         key={timeline.id}
         ref={playerRef}
-        component={PlaceholderComposition as never}
-        inputProps={{ timeline }}
+        component={VideoComposition as never}
+        inputProps={{ timeline, movieId }}
         durationInFrames={durationInFrames}
         fps={FPS}
         compositionWidth={width}

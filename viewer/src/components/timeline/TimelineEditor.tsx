@@ -1,17 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { Timeline, TimelineTrackKey } from "@/types/timeline";
+import type { TimelineDocument } from "@/types/timeline";
 import { calculateTimelineMetrics } from "@/lib/timeline-metrics";
 import { TrackHeaders } from "./TrackHeaders";
 import { TimelineContent } from "./TimelineContent";
 
 interface TimelineEditorProps {
-  timeline: Timeline;
+  timeline: TimelineDocument;
   currentTime: number;
   isPlaying: boolean;
   onPlay: () => void;
   onPause: () => void;
   onSeek: (time: number) => void;
-  onClipSelect?: (track: TimelineTrackKey, clipId: string) => void;
 }
 
 export const TimelineEditor = ({
@@ -21,7 +20,6 @@ export const TimelineEditor = ({
   onPlay,
   onPause,
   onSeek,
-  onClipSelect,
 }: TimelineEditorProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [timelineWidth, setTimelineWidth] = useState(800);
@@ -48,7 +46,12 @@ export const TimelineEditor = ({
   return (
     <div className="h-full flex flex-col pb-4" ref={containerRef}>
       <div className="bg-muted rounded-lg overflow-hidden flex flex-1 min-h-0">
-        <TrackHeaders isPlaying={isPlaying} onPlay={onPlay} onPause={onPause} />
+        <TrackHeaders
+          isPlaying={isPlaying}
+          onPlay={onPlay}
+          onPause={onPause}
+          tracks={timeline.tracks}
+        />
         <TimelineContent
           timeline={timeline}
           currentTime={currentTime}
@@ -57,7 +60,6 @@ export const TimelineEditor = ({
           effectiveWidth={metrics.effectiveWidth}
           pixelsPerSecond={metrics.pixelsPerSecond}
           onSeek={onSeek}
-          onClipSelect={onClipSelect}
         />
       </div>
     </div>

@@ -1,26 +1,79 @@
 import { useMemo, useState } from "react";
 import { RemotionPreview } from "@/components/player/RemotionPreview";
 import { TimelineEditor } from "@/components/timeline/TimelineEditor";
-import { sampleTimeline } from "@/data/sample-timeline";
-import type { Timeline } from "@/types/timeline";
+import { useMovieRoute } from "@/hooks/use-movie-route";
+import { useMovieTimeline } from "@/services/use-movie-timeline";
+import type { TimelineDocument } from "@/types/timeline";
 
-const clampTime = (time: number, timeline: Timeline) => {
-  const maxDuration = Math.max(timeline.duration, 1);
+const clampTime = (time: number, duration: number) => {
+  const maxDuration = Math.max(duration, 1);
   return Math.max(0, Math.min(time, maxDuration));
 };
 
 function App() {
-  const [timeline] = useState<Timeline>(sampleTimeline);
+  const movieId = useMovieRoute();
+  const { timeline, status, error } = useMovieTimeline(movieId);
+
+  if (!movieId) {
+    return (
+      <LandingLayout>
+        <h1 className="text-3xl font-semibold">Select a Movie</h1>
+        <p className="text-muted-foreground">
+          Navigate to <code>/movies/&lt;movie-id&gt;</code> to load a build from your Tutopanda workspace.
+        </p>
+      </LandingLayout>
+    );
+  }
+
+  if (status === "loading" || status === "idle") {
+    return (
+      <LandingLayout>
+        <p className="text-lg text-muted-foreground">Loading timeline for {movieId}…</p>
+      </LandingLayout>
+    );
+  }
+
+  if (error || !timeline) {
+    return (
+      <LandingLayout>
+        <h1 className="text-2xl font-semibold">Unable to load timeline</h1>
+        <p className="text-muted-foreground">{error?.message ?? "Timeline data unavailable."}</p>
+      </LandingLayout>
+    );
+  }
+
+  return <MovieViewer key={movieId} movieId={movieId} timeline={timeline} />;
+}
+
+const LandingLayout = ({ children }: { children: React.ReactNode }) => (
+  <div className="min-h-screen flex items-center justify-center bg-background text-foreground px-6">
+    <div className="max-w-xl w-full rounded-2xl border border-border/50 bg-card/60 p-8 shadow-lg flex flex-col gap-4">
+      {children}
+    </div>
+  </div>
+);
+
+export default App;
+
+const MovieViewer = ({
+  movieId,
+  timeline,
+}: {
+  movieId: string;
+  timeline: TimelineDocument;
+}) => {
   const [currentTime, setCurrentTime] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
 
+  const duration = timeline?.duration ?? 0;
+
   const safeCurrentTime = useMemo(
-    () => clampTime(currentTime, timeline),
-    [currentTime, timeline],
+    () => clampTime(currentTime, duration || 1),
+    [currentTime, duration],
   );
 
   const handleSeek = (time: number) => {
-    setCurrentTime(clampTime(time, timeline));
+    setCurrentTime(clampTime(time, duration || 1));
   };
 
   const handlePlay = () => setIsPlaying(true);
@@ -34,15 +87,16 @@ function App() {
             <p className="text-sm uppercase tracking-[0.3em] text-muted-foreground">
               Remotion Viewer
             </p>
-            <h1 className="text-3xl font-semibold">{timeline.name}</h1>
+            <h1 className="text-3xl font-semibold">{timeline.movieTitle ?? timeline.name ?? movieId}</h1>
             <p className="text-muted-foreground">
-              Inspect a generated timeline, scrub through clips, and preview the
-              Remotion composition locally.
+              Inspect timeline <span className="font-semibold">{timeline.id}</span> for movie{" "}
+              <span className="font-semibold">{movieId}</span>.
             </p>
           </header>
           <div className="flex-1 min-h-0 flex flex-col gap-4">
             <div className="flex-shrink-0 overflow-hidden rounded-xl border border-border/40 bg-black/80 shadow-inner h-[360px]">
               <RemotionPreview
+                movieId={movieId}
                 timeline={timeline}
                 currentTime={safeCurrentTime}
                 isPlaying={isPlaying}
@@ -66,6 +120,4 @@ function App() {
       </div>
     </div>
   );
-}
-
-export default App;
+};

@@ -1,9 +1,4 @@
-import {
-  type AnyTimelineClip,
-  type Timeline,
-  type TimelineTrackKey,
-  timelineTrackKeys,
-} from "@/types/timeline";
+import type { TimelineClip, TimelineDocument, TimelineTrack } from "@/types/timeline";
 
 export interface TimelineMetrics {
   totalContentDuration: number;
@@ -13,7 +8,7 @@ export interface TimelineMetrics {
 }
 
 export const calculateTimelineMetrics = (
-  timeline: Timeline,
+  timeline: TimelineDocument,
   timelineWidth: number,
 ): TimelineMetrics => {
   const clips = flattenTimelineClips(timeline).map((entry) => entry.clip);
@@ -43,13 +38,12 @@ export const calculateTimelineMetrics = (
 };
 
 export const flattenTimelineClips = (
-  timeline: Timeline,
-): Array<{ track: TimelineTrackKey; clip: AnyTimelineClip }> => {
-  const entries: Array<{ track: TimelineTrackKey; clip: AnyTimelineClip }> = [];
+  timeline: TimelineDocument,
+): Array<{ track: TimelineTrack; clip: TimelineClip }> => {
+  const entries: Array<{ track: TimelineTrack; clip: TimelineClip }> = [];
 
-  for (const track of timelineTrackKeys) {
-    const clips = timeline.tracks[track] ?? [];
-    for (const clip of clips) {
+  for (const track of timeline.tracks ?? []) {
+    for (const clip of track.clips ?? []) {
       entries.push({ track, clip });
     }
   }

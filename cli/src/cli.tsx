@@ -18,6 +18,7 @@ import { runEdit, runInteractiveEditSetup, runWorkspaceSubmit } from './commands
 import { runProvidersList } from './commands/providers-list.js';
 import { runBlueprintsList } from './commands/blueprints-list.js';
 import { runBlueprintsDescribe } from './commands/blueprints-describe.js';
+import { runViewer } from './commands/viewer.js';
 import { runBlueprintsValidate } from './commands/blueprints-validate.js';
 import type { DryRunSummary, DryRunJobSummary } from './lib/dry-run.js';
 import type { BuildSummary } from './lib/build.js';
@@ -27,7 +28,7 @@ const console = globalThis.console;
 type ProviderListOutputEntry = Awaited<ReturnType<typeof runProvidersList>>['entries'][number];
 
 const cli = meow(
-  `\nUsage\n  $ tutopanda <command> [options]\n\nCommands\n  init                Initialize Tutopanda CLI configuration\n  query               Generate a plan using a blueprint (YAML) and inputs TOML\n  inspect             Export prompts or timeline data for a movie\n  edit                Regenerate a movie with edited inputs\n  providers:list      Show providers defined in a blueprint\n  blueprints:list     List available blueprint YAML files\n  blueprints:describe <path>  Show details for a blueprint YAML file\n  blueprints:validate <path>  Validate a blueprint YAML file\n\nExamples\n  $ tutopanda init --rootFolder=~/media/tutopanda\n  $ tutopanda query --inputs=cli/inputs-sample.toml --using-blueprint=cli/blueprints/yaml/audio-only.yaml\n  $ tutopanda providers:list --using-blueprint=cli/blueprints/yaml/audio-only.yaml\n  $ tutopanda blueprints:list\n  $ tutopanda blueprints:describe cli/blueprints/yaml/audio-only.yaml\n  $ tutopanda blueprints:validate ./my-blueprint.yaml\n  $ tutopanda inspect --movieId=q123456 --prompts\n  $ tutopanda edit --movieId=q123456 --inputs=edited-inputs.toml\n`,
+  `\nUsage\n  $ tutopanda <command> [options]\n\nCommands\n  init                Initialize Tutopanda CLI configuration\n  query               Generate a plan using a blueprint (YAML) and inputs TOML\n  inspect             Export prompts or timeline data for a movie\n  edit                Regenerate a movie with edited inputs\n  viewer              Launch the local Remotion viewer (reads builds/)\n  providers:list      Show providers defined in a blueprint\n  blueprints:list     List available blueprint YAML files\n  blueprints:describe <path>  Show details for a blueprint YAML file\n  blueprints:validate <path>  Validate a blueprint YAML file\n\nExamples\n  $ tutopanda init --rootFolder=~/media/tutopanda\n  $ tutopanda query --inputs=cli/inputs-sample.toml --using-blueprint=cli/blueprints/yaml/audio-only.yaml\n  $ tutopanda providers:list --using-blueprint=cli/blueprints/yaml/audio-only.yaml\n  $ tutopanda blueprints:list\n  $ tutopanda blueprints:describe cli/blueprints/yaml/audio-only.yaml\n  $ tutopanda blueprints:validate ./my-blueprint.yaml\n  $ tutopanda inspect --movieId=q123456 --prompts\n  $ tutopanda edit --movieId=q123456 --inputs=edited-inputs.toml\n  $ tutopanda viewer --movie=q123456\n`,
   {
     importMeta: import.meta,
     flags: {
@@ -40,6 +41,7 @@ const cli = meow(
       usingBlueprint: { type: 'string' },
       interactiveEdit: { type: 'boolean' },
       submitEdits: { type: 'boolean' },
+      movie: { type: 'string' },
     },
   },
 );
@@ -57,6 +59,7 @@ async function main(): Promise<void> {
     usingBlueprint?: string;
     interactiveEdit?: boolean;
     submitEdits?: boolean;
+    movie?: string;
   };
 
   switch (command) {
@@ -325,6 +328,10 @@ async function main(): Promise<void> {
         printBuildSummary(result.build, result.manifestPath);
         console.log(`Manifests and artefacts stored under: ${result.storagePath}`);
       }
+      return;
+    }
+    case 'viewer': {
+      await runViewer({ movieId: flags.movie ?? undefined });
       return;
     }
     default: {

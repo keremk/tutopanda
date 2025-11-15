@@ -63,7 +63,6 @@ function toLoadedOption(
   producer: ProducerConfig,
 ): LoadedProducerOption {
   const {
-    name: _name,
     provider,
     model,
     ...rest

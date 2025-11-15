@@ -1,50 +1,18 @@
-import { GripVertical, Film, Mic, Music, Volume2 } from "lucide-react";
-import { type AnyTimelineClip, type Timeline, type TimelineTrackKey } from "@/types/timeline";
+import { GripVertical } from "lucide-react";
+import type { TimelineClip, TimelineDocument } from "@/types/timeline";
 import { cn } from "@/lib/utils";
-import { useMemo } from "react";
-
-interface TimelineChannel {
-  id: TimelineTrackKey;
-  name: string;
-  icon: React.ComponentType<{ className?: string }>;
-  height: number;
-}
-
-const TIMELINE_CHANNELS: TimelineChannel[] = [
-  { id: "visual", name: "Visual Clips", icon: Film, height: 48 },
-  { id: "voice", name: "Voice & Narration", icon: Mic, height: 48 },
-  { id: "music", name: "Background Music", icon: Music, height: 48 },
-  { id: "soundEffects", name: "Sound Effects", icon: Volume2, height: 48 },
-];
 
 interface TimelineTracksProps {
-  timeline: Timeline;
+  timeline: TimelineDocument;
   currentTime: number;
   totalContentDuration: number;
   pixelsPerSecond: number;
   onSeek: (time: number) => void;
-  onClipSelect?: (track: TimelineTrackKey, clipId: string) => void;
   className?: string;
 }
 
-const getClipColor = (track: TimelineTrackKey, kind: AnyTimelineClip["kind"]) => {
-  if (track === "visual" && kind === "kenBurns") {
-    return "bg-blue-600 hover:bg-blue-500";
-  }
-  if (track === "visual") {
-    return "bg-indigo-600 hover:bg-indigo-500";
-  }
-  if (track === "voice") {
-    return "bg-purple-600 hover:bg-purple-500";
-  }
-  if (track === "music") {
-    return "bg-emerald-600 hover:bg-emerald-500";
-  }
-  if (track === "soundEffects") {
-    return "bg-amber-600 hover:bg-amber-500";
-  }
-  return "bg-slate-600 hover:bg-slate-500";
-};
+const channelHeight = 48;
+const trackHeight = 40;
 
 export const TimelineTracks = ({
   timeline,
@@ -52,32 +20,9 @@ export const TimelineTracks = ({
   totalContentDuration,
   pixelsPerSecond,
   onSeek,
-  onClipSelect,
   className,
 }: TimelineTracksProps) => {
-  const channelHeight = 48;
-  const trackHeight = 40;
-  const totalTimelineHeight = TIMELINE_CHANNELS.length * channelHeight;
-
-  const clipStyles = useMemo(() => {
-    const styles = new Map<string, ReturnType<typeof getClipStyle>>();
-    TIMELINE_CHANNELS.forEach((channel, index) => {
-      const clips = timeline.tracks[channel.id] ?? [];
-      clips.forEach((clip) => {
-        styles.set(
-          clip.id,
-          getClipStyle({
-            clip,
-            channelIndex: index,
-            channelHeight,
-            trackHeight,
-            totalContentDuration,
-          }),
-        );
-      });
-    });
-    return styles;
-  }, [timeline, channelHeight, trackHeight, totalContentDuration]);
+  const totalTimelineHeight = Math.max(timeline.tracks.length, 1) * channelHeight;
 
   const handleTimelineClick = (event: React.MouseEvent<HTMLDivElement>) => {
     const rect = event.currentTarget.getBoundingClientRect();
@@ -103,51 +48,34 @@ export const TimelineTracks = ({
             style={{ height: `${totalTimelineHeight}px` }}
             onClick={handleTimelineClick}
           >
-            {TIMELINE_CHANNELS.map((channel, index) => (
+            {timeline.tracks.map((track, index) => (
               <div
-                key={`bg-${channel.id}`}
+                key={`bg-${track.id}-${index}`}
                 className="absolute inset-x-0 border-b border-border/30"
                 style={{ top: `${index * channelHeight}px`, height: `${channelHeight}px` }}
               />
             ))}
 
-            {TIMELINE_CHANNELS.map((channel) => {
-              const clips = timeline.tracks[channel.id] ?? [];
-              return clips
+            {timeline.tracks.map((track, index) =>
+              track.clips
                 .slice()
                 .sort((a, b) => a.startTime - b.startTime)
                 .map((clip) => (
                   <div
                     key={clip.id}
                     className={cn(
-                      "absolute rounded transition-all group border border-white/20 text-white text-xs overflow-hidden",
-                      getClipColor(channel.id, clip.kind),
-                      onClipSelect &&
-                        (channel.id === "visual" ||
-                          channel.id === "voice" ||
-                          channel.id === "music") &&
-                        "cursor-pointer",
+                      "absolute rounded transition-all border border-white/20 text-white text-xs overflow-hidden",
+                      getClipColor(track.kind),
                     )}
-                    style={clipStyles.get(clip.id)}
-                    onClick={(event) => {
-                      if (
-                        onClipSelect &&
-                        (channel.id === "visual" ||
-                          channel.id === "voice" ||
-                          channel.id === "music")
-                      ) {
-                        event.stopPropagation();
-                        onClipSelect(channel.id, clip.id);
-                      }
-                    }}
+                    style={getClipStyle(clip, index, totalContentDuration)}
                   >
                     <div className="flex items-center gap-1 px-2 h-full text-white text-xs overflow-hidden">
                       <GripVertical className="w-3 h-3 opacity-70" />
-                      <span className="truncate">{clip.name}</span>
+                      <span className="truncate">{clip.id}</span>
                     </div>
                   </div>
-                ));
-            })}
+                )),
+            )}
 
             <div
               className="absolute top-0 w-0.5 bg-red-500 z-20 pointer-events-none inset-y-0"
@@ -160,27 +88,34 @@ export const TimelineTracks = ({
   );
 };
 
-interface ClipStyleArgs {
-  clip: AnyTimelineClip;
-  channelIndex: number;
-  channelHeight: number;
-  trackHeight: number;
-  totalContentDuration: number;
-}
+const getClipColor = (kind: string) => {
+  switch (kind) {
+    case "Image":
+      return "bg-indigo-600/80 hover:bg-indigo-500";
+    case "Audio":
+      return "bg-purple-600/80 hover:bg-purple-500";
+    case "Music":
+      return "bg-emerald-600/80 hover:bg-emerald-500";
+    case "Video":
+      return "bg-blue-600/80 hover:bg-blue-500";
+    case "Captions":
+      return "bg-amber-600/80 hover:bg-amber-500";
+    default:
+      return "bg-slate-600/80 hover:bg-slate-500";
+  }
+};
 
-const getClipStyle = ({
-  clip,
-  channelIndex,
-  channelHeight,
-  trackHeight,
-  totalContentDuration,
-}: ClipStyleArgs) => {
+const getClipStyle = (
+  clip: TimelineClip,
+  trackIndex: number,
+  totalContentDuration: number,
+) => {
   const leftPercent =
     totalContentDuration > 0 ? (clip.startTime / totalContentDuration) * 100 : 0;
   const widthPercent =
     totalContentDuration > 0 ? (clip.duration / totalContentDuration) * 100 : 0;
   const verticalPadding = (channelHeight - trackHeight) / 2;
-  const top = channelIndex * channelHeight + verticalPadding;
+  const top = trackIndex * channelHeight + verticalPadding;
 
   return {
     left: `${leftPercent}%`,

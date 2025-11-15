@@ -1,16 +1,15 @@
 import { TimelineSlider } from "./TimelineSlider";
 import { TimelineTracks } from "./TimelineTracks";
-import type { Timeline, TimelineTrackKey } from "@/types/timeline";
+import type { TimelineDocument } from "@/types/timeline";
 
 interface TimelineContentProps {
-  timeline: Timeline;
+  timeline: TimelineDocument;
   currentTime: number;
   totalContentDuration: number;
   needsHorizontalScroll: boolean;
   effectiveWidth: number;
   pixelsPerSecond: number;
   onSeek: (time: number) => void;
-  onClipSelect?: (track: TimelineTrackKey, clipId: string) => void;
 }
 
 export const TimelineContent = ({
@@ -21,7 +20,6 @@ export const TimelineContent = ({
   effectiveWidth,
   pixelsPerSecond,
   onSeek,
-  onClipSelect,
 }: TimelineContentProps) => {
   return (
     <div
@@ -51,7 +49,6 @@ export const TimelineContent = ({
           totalContentDuration={totalContentDuration}
           pixelsPerSecond={pixelsPerSecond}
           onSeek={onSeek}
-          onClipSelect={onClipSelect}
         />
       </div>
     </div>

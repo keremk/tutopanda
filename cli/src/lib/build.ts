@@ -26,6 +26,7 @@ import type { CliConfig } from './cli-config.js';
 import type { ProducerOptionsMap, LoadedProducerOption } from './producer-options.js';
 
 const console = globalThis.console;
+type LoggerFn = (message?: string) => void; // eslint-disable-line no-unused-vars
 
 export interface ExecuteBuildOptions {
   cliConfig: CliConfig;
@@ -36,7 +37,7 @@ export interface ExecuteBuildOptions {
   providerOptions: ProducerOptionsMap;
   resolvedInputs: Record<string, unknown>;
   logger?: {
-    info?(message?: string): void;
+    info?: LoggerFn;
   };
 }
 
@@ -147,7 +148,7 @@ export function createProviderProduce(
   providerOptions: ProducerOptionsMap,
   resolvedInputs: Record<string, unknown>,
   preResolved: ResolvedProviderHandler[] = [],
-  logger: { info?(message?: string): void } = {},
+  logger: { info?: LoggerFn } = {},
 ): ProduceFn {
   const handlerCache = new Map<string, ProducerHandler>();
 
