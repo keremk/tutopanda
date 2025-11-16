@@ -31,7 +31,9 @@
     "lint:all": "pnpm lint && pnpm format:check",
     "type-check": "pnpm --filter tutopanda-client type-check && pnpm --filter tutopanda-server type-check && pnpm --filter tutopanda-core type-check && pnpm --filter tutopanda-cli type-check",
     "check": "pnpm type-check",
-    "test": "pnpm --filter tutopanda-client test && pnpm --filter tutopanda-server test && pnpm --filter tutopanda-core test && pnpm --filter tutopanda-cli test"
+    "test": "pnpm --filter tutopanda-client test && pnpm --filter tutopanda-server test && pnpm --filter tutopanda-core test && pnpm --filter tutopanda-cli test",
+    "bundle:viewer": "pnpm --filter viewer build && node scripts/prepare-viewer-bundle.mjs",
+    "package:cli": "node scripts/package-cli.mjs"
   },
   "devDependencies": {
     "@typescript-eslint/eslint-plugin": "^8.46.2",

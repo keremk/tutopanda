@@ -1,5 +1,6 @@
 import { createReadStream, existsSync } from "node:fs";
 import { promises as fs } from "node:fs";
+import type { IncomingMessage, ServerResponse } from "node:http";
 import path from "node:path";
 import type { Connect } from "vite";
 
@@ -24,24 +25,37 @@ interface ManifestFile {
 
 const TIMELINE_ARTEFACT_ID = "Artifact:TimelineComposer.Timeline";
 
-export function createViewerApiMiddleware(rootFolder: string): Connect.NextHandleFunction {
+export type ViewerApiHandler = (req: IncomingMessage, res: ServerResponse) => Promise<boolean>;
+
+export function createViewerApiHandler(rootFolder: string): ViewerApiHandler {
   const buildsRoot = path.resolve(rootFolder, "builds");
 
   return async (req, res) => {
-    try {
-      if (!req.url) {
-        res.statusCode = 400;
-        res.end("Missing URL");
-        return;
-      }
+    if (!req.url) {
+      return false;
+    }
 
+    try {
       const url = new URL(req.url, "http://viewer.local");
       const segments = url.pathname.replace(/^\/viewer-api\/?/, "").split("/").filter(Boolean);
 
+      if (segments.length === 0) {
+        return respondNotFound(res);
+      }
+
+      if (segments[0] === "health") {
+        if (req.method !== "GET") {
+          res.statusCode = 405;
+          res.end("Method Not Allowed");
+          return true;
+        }
+        res.setHeader("Content-Type", "application/json");
+        res.end(JSON.stringify({ ok: true }));
+        return true;
+      }
+
       if (segments[0] !== "movies" || segments.length < 3) {
-        res.statusCode = 404;
-        res.end("Not Found");
-        return;
+        return respondNotFound(res);
       }
 
       const movieId = decodeURIComponent(segments[1] ?? "");
@@ -52,39 +66,37 @@ export function createViewerApiMiddleware(rootFolder: string): Connect.NextHandl
           const manifest = await loadManifest(buildsRoot, movieId);
           res.setHeader("Content-Type", "application/json");
           res.end(JSON.stringify(manifest));
-          return;
+          return true;
         }
         case "timeline": {
           const manifest = await loadManifest(buildsRoot, movieId);
           const timeline = await readTimeline(manifest, buildsRoot, movieId);
           res.setHeader("Content-Type", "application/json");
           res.end(JSON.stringify(timeline));
-          return;
+          return true;
         }
         case "assets": {
           const assetId = decodeURIComponent(segments.slice(3).join("/"));
           if (!assetId) {
             res.statusCode = 400;
             res.end("Missing assetId");
-            return;
+            return true;
           }
           await streamAsset(res, buildsRoot, movieId, assetId);
-          return;
+          return true;
         }
         case "files": {
           const hash = segments[3];
           if (!hash) {
             res.statusCode = 400;
             res.end("Missing hash");
-            return;
+            return true;
           }
           await streamBlobFile(res, buildsRoot, movieId, hash);
-          return;
+          return true;
         }
         default: {
-          res.statusCode = 404;
-          res.end("Not Found");
-          return;
+          return respondNotFound(res);
         }
       }
     } catch (error) {
@@ -95,6 +107,21 @@ export function createViewerApiMiddleware(rootFolder: string): Connect.NextHandl
       } else {
         res.end();
       }
+      return true;
+    }
+  };
+}
+
+export function createViewerApiMiddleware(rootFolder: string): Connect.NextHandleFunction {
+  const handler = createViewerApiHandler(rootFolder);
+  return async (req, res, next) => {
+    if (!req || !req.url || !req.url.startsWith("/viewer-api")) {
+      next();
+      return;
+    }
+    const handled = await handler(req, res);
+    if (!handled) {
+      next();
     }
   };
 }
@@ -132,7 +159,7 @@ async function readTimeline(manifest: ManifestFile, buildsRoot: string, movieId:
 }
 
 async function streamAsset(
-  res: Connect.ServerResponse,
+  res: ServerResponse,
   buildsRoot: string,
   movieId: string,
   canonicalId: string,
@@ -165,7 +192,7 @@ async function streamAsset(
 }
 
 async function streamBlobFile(
-  res: Connect.ServerResponse,
+  res: ServerResponse,
   buildsRoot: string,
   movieId: string,
   hash: string,
@@ -200,11 +227,12 @@ function resolveBlobPath(
 }
 
 function formatBlobFileName(hash: string, mimeType?: string): string {
+  const safeHash = hash.replace(/[^a-f0-9]/gi, "");
   const extension = inferExtension(mimeType);
   if (!extension) {
-    return hash;
+    return safeHash;
   }
-  return hash.endsWith(`.${extension}`) ? hash : `${hash}.${extension}`;
+  return safeHash.endsWith(`.${extension}`) ? safeHash : `${safeHash}.${extension}`;
 }
 
 function inferExtension(mimeType?: string): string | null {
@@ -229,6 +257,8 @@ function inferExtension(mimeType?: string): string | null {
     "image/jpeg": "jpg",
     "image/jpg": "jpg",
     "image/webp": "webp",
+    "application/json": "json",
+    "text/plain": "txt",
   };
   if (known[normalized]) {
     return known[normalized];
@@ -242,5 +272,14 @@ function inferExtension(mimeType?: string): string | null {
   if (normalized.startsWith("image/")) {
     return normalized.slice("image/".length);
   }
+  if (normalized === "application/octet-stream") {
+    return null;
+  }
   return null;
+}
+
+function respondNotFound(res: ServerResponse): true {
+  res.statusCode = 404;
+  res.end("Not Found");
+  return true;
 }

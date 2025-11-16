@@ -9,6 +9,10 @@ export interface CliConfig {
     root: string;
     basePath: string;
   };
+  viewer?: {
+    port?: number;
+    host?: string;
+  };
 }
 
 const DEFAULT_ROOT = resolve(os.homedir(), '.tutopanda');
@@ -30,6 +34,7 @@ export async function readCliConfig(configPath?: string): Promise<CliConfig | nu
     }
     return {
       storage: parsed.storage,
+      viewer: parsed.viewer,
     };
   } catch {
     return null;

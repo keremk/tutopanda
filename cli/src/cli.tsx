@@ -18,7 +18,7 @@ import { runEdit, runInteractiveEditSetup, runWorkspaceSubmit } from './commands
 import { runProvidersList } from './commands/providers-list.js';
 import { runBlueprintsList } from './commands/blueprints-list.js';
 import { runBlueprintsDescribe } from './commands/blueprints-describe.js';
-import { runViewer } from './commands/viewer.js';
+import { runViewerStart, runViewerStop, runViewerView } from './commands/viewer.js';
 import { runBlueprintsValidate } from './commands/blueprints-validate.js';
 import type { DryRunSummary, DryRunJobSummary } from './lib/dry-run.js';
 import type { BuildSummary } from './lib/build.js';
@@ -34,7 +34,7 @@ const console = globalThis.console;
 type ProviderListOutputEntry = Awaited<ReturnType<typeof runProvidersList>>['entries'][number];
 
 const cli = meow(
-  `\nUsage\n  $ tutopanda <command> [options]\n\nCommands\n  init                Initialize Tutopanda CLI configuration\n  query               Generate a plan using a blueprint (YAML) and inputs YAML\n  inspect             Export prompts or timeline data for a movie\n  edit                Regenerate a movie with edited inputs\n  viewer              Launch the local Remotion viewer (reads builds/)\n  providers:list      Show providers defined in a blueprint\n  blueprints:list     List available blueprint YAML files\n  blueprints:describe <path>  Show details for a blueprint YAML file\n  blueprints:validate <path>  Validate a blueprint YAML file\n\nExamples\n  $ tutopanda init --rootFolder=~/media/tutopanda\n  $ tutopanda query --inputs=~/movies/my-inputs.yaml --using-blueprint=audio-only.yaml\n  $ tutopanda providers:list --using-blueprint=image-audio.yaml\n  $ tutopanda blueprints:list\n  $ tutopanda blueprints:describe audio-only.yaml\n  $ tutopanda blueprints:validate image-audio.yaml\n  $ tutopanda inspect --movieId=q123456 --prompts\n  $ tutopanda edit --movieId=q123456 --inputs=edited-inputs.yaml\n  $ tutopanda viewer --movie=q123456\n`,
+  `\nUsage\n  $ tutopanda <command> [options]\n\nCommands\n  install             Guided setup (alias for init)\n  init                Initialize Tutopanda CLI configuration\n  query               Generate a plan using a blueprint (YAML) and inputs YAML\n  inspect             Export prompts or timeline data for a movie\n  edit                Regenerate a movie with edited inputs\n  viewer:start        Start the bundled viewer server in the foreground\n  viewer:view         Open the viewer for a movie id (starts server if needed)\n  viewer:stop         Stop the background viewer server\n  providers:list      Show providers defined in a blueprint\n  blueprints:list     List available blueprint YAML files\n  blueprints:describe <path>  Show details for a blueprint YAML file\n  blueprints:validate <path>  Validate a blueprint YAML file\n\nExamples\n  $ tutopanda install --rootFolder=~/media/tutopanda\n  $ tutopanda query --inputs=~/movies/my-inputs.yaml --using-blueprint=audio-only.yaml\n  $ tutopanda providers:list --using-blueprint=image-audio.yaml\n  $ tutopanda blueprints:list\n  $ tutopanda blueprints:describe audio-only.yaml\n  $ tutopanda blueprints:validate image-audio.yaml\n  $ tutopanda inspect --movieId=q123456 --prompts\n  $ tutopanda edit --movieId=q123456 --inputs=edited-inputs.yaml\n  $ tutopanda viewer:start\n  $ tutopanda viewer:view --movieId=q123456\n`,
   {
     importMeta: import.meta,
     flags: {
@@ -48,6 +48,8 @@ const cli = meow(
       interactiveEdit: { type: 'boolean' },
       submitEdits: { type: 'boolean' },
       movie: { type: 'string' },
+      viewerHost: { type: 'string' },
+      viewerPort: { type: 'number' },
     },
   },
 );
@@ -68,9 +70,12 @@ async function main(): Promise<void> {
     interactiveEdit?: boolean;
     submitEdits?: boolean;
     movie?: string;
+    viewerHost?: string;
+    viewerPort?: number;
   };
 
   switch (command) {
+    case 'install':
     case 'init': {
       const result = await runInit({
         rootFolder: flags.rootFolder,
@@ -369,8 +374,23 @@ async function main(): Promise<void> {
       }
       return;
     }
-    case 'viewer': {
-      await runViewer({ movieId: flags.movie ?? undefined });
+    case 'viewer:start': {
+      await runViewerStart({
+        host: flags.viewerHost,
+        port: flags.viewerPort,
+      });
+      return;
+    }
+    case 'viewer:view': {
+      await runViewerView({
+        movieId: flags.movieId ?? flags.movie,
+        host: flags.viewerHost,
+        port: flags.viewerPort,
+      });
+      return;
+    }
+    case 'viewer:stop': {
+      await runViewerStop();
       return;
     }
     default: {

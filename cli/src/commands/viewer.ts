@@ -1,78 +1,308 @@
 import { spawn } from 'node:child_process';
-import os from 'node:os';
 import process from 'node:process';
-import { readCliConfig } from '../lib/cli-config.js';
+import { findAvailablePort } from '../lib/ports.js';
+import { openBrowser } from '../lib/open-browser.js';
+import { simpleGet } from '../lib/http-utils.js';
+import type { CliConfig } from '../lib/cli-config.js';
+import { readCliConfig, writeCliConfig } from '../lib/cli-config.js';
+import { resolveViewerBundlePaths } from '../lib/viewer-bundle.js';
+import {
+  getViewerStatePath,
+  readViewerState,
+  removeViewerState,
+  writeViewerState,
+} from '../lib/viewer-state.js';
 
 const console = globalThis.console;
 
-export interface ViewerOptions {
+export interface ViewerStartOptions {
+  host?: string;
+  port?: number;
+}
+
+export interface ViewerViewOptions extends ViewerStartOptions {
   movieId?: string;
 }
 
-export async function runViewer(options: ViewerOptions = {}): Promise<void> {
+export async function runViewerStart(options: ViewerStartOptions = {}): Promise<void> {
+  const cliConfig = await ensureInitializedConfig();
+  if (!cliConfig) {
+    return;
+  }
+  const bundle = resolveViewerBundleOrExit();
+  if (!bundle) {
+    return;
+  }
+  const network = await ensureViewerNetworkConfig(cliConfig, options);
+  const statePath = getViewerStatePath(cliConfig);
+
+  const existingState = await readViewerState(statePath);
+  if (existingState) {
+    const alive = await isViewerServerRunning(existingState.host, existingState.port);
+    if (alive) {
+      console.error(
+        `A background viewer server is already running on http://${existingState.host}:${existingState.port}. Stop it first with "tutopanda viewer:stop".`,
+      );
+      process.exitCode = 1;
+      return;
+    }
+    await removeViewerState(statePath);
+  }
+
+  if (await isViewerServerRunning(network.host, network.port)) {
+    console.log(`Viewer server already running on http://${network.host}:${network.port}`);
+    return;
+  }
+
+  console.log(`Starting viewer server at http://${network.host}:${network.port} (Ctrl+C to stop)`);
+  await launchViewerServer({
+    bundle,
+    rootFolder: cliConfig.storage.root,
+    host: network.host,
+    port: network.port,
+    mode: 'foreground',
+  });
+}
+
+export async function runViewerView(options: ViewerViewOptions = {}): Promise<void> {
+  if (!options.movieId) {
+    console.error('Error: --movieId is required for viewer:view.');
+    process.exitCode = 1;
+    return;
+  }
+
+  const cliConfig = await ensureInitializedConfig();
+  if (!cliConfig) {
+    return;
+  }
+  const bundle = resolveViewerBundleOrExit();
+  if (!bundle) {
+    return;
+  }
+  const network = await ensureViewerNetworkConfig(cliConfig, options);
+  const statePath = getViewerStatePath(cliConfig);
+  let activeHost = network.host;
+  let activePort = network.port;
+
+  const recordedState = await readViewerState(statePath);
+  if (recordedState) {
+    const alive = await isViewerServerRunning(recordedState.host, recordedState.port);
+    if (alive) {
+      activeHost = recordedState.host;
+      activePort = recordedState.port;
+    } else {
+      await removeViewerState(statePath);
+    }
+  }
+
+  if (!(await isViewerServerRunning(activeHost, activePort))) {
+    console.log('Viewer server is not running. Launching background instance...');
+    await launchViewerServer({
+      bundle,
+      rootFolder: cliConfig.storage.root,
+      host: network.host,
+      port: network.port,
+      mode: 'background',
+      statePath,
+    });
+    activeHost = network.host;
+    activePort = network.port;
+    const ready = await waitForViewerServer(activeHost, activePort);
+    if (!ready) {
+      await removeViewerState(statePath);
+      console.error('Viewer server failed to start in time. Check logs with "tutopanda viewer:start".');
+      process.exitCode = 1;
+      return;
+    }
+  }
+
+  const targetUrl = `http://${activeHost}:${activePort}/movies/${encodeURIComponent(options.movieId)}`;
+  console.log(`Opening viewer at ${targetUrl}`);
+  openBrowser(targetUrl);
+}
+
+export async function runViewerStop(): Promise<void> {
   const cliConfig = await readCliConfig();
   if (!cliConfig?.storage?.root) {
     console.error('Tutopanda viewer requires a configured root. Run "tutopanda init" first.');
     process.exitCode = 1;
     return;
   }
+  const statePath = getViewerStatePath(cliConfig);
+  const state = await readViewerState(statePath);
+  if (!state) {
+    console.log('No background viewer server found.');
+    return;
+  }
 
-  const rootFolder = cliConfig.storage.root;
-  const env = {
-    ...process.env,
-    TUTOPANDA_VIEWER_ROOT: rootFolder,
-  };
+  const alive = await isViewerServerRunning(state.host, state.port);
+  if (!alive) {
+    await removeViewerState(statePath);
+    console.log('Viewer server was not running. Cleaned up stale state.');
+    return;
+  }
 
-  const viewerProcess = spawn('pnpm', ['--filter', 'viewer', 'dev'], {
-    stdio: 'inherit',
-    env,
-  });
+  try {
+    process.kill(state.pid, 'SIGTERM');
+  } catch (error) {
+    console.error(
+      `Unable to stop viewer server (pid ${state.pid}): ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+    process.exitCode = 1;
+    return;
+  }
 
-  viewerProcess.on('exit', (code) => {
-    process.exitCode = code ?? 0;
-  });
-
-  if (options.movieId) {
-    const targetUrl = `http://localhost:5173/movies/${encodeURIComponent(options.movieId)}`;
-    openBrowser(targetUrl);
+  const stopped = await waitForProcessExit(state.pid);
+  await removeViewerState(statePath);
+  if (stopped) {
+    console.log('Viewer server stopped.');
   } else {
-    console.log('Viewer running at http://localhost:5173');
+    console.warn('Viewer server did not exit cleanly. It may still be running.');
   }
 }
 
-function openBrowser(url: string) {
-  const command = getOpenCommand(url);
+async function ensureInitializedConfig(): Promise<CliConfig | null> {
+  const cliConfig = await readCliConfig();
+  if (!cliConfig?.storage?.root) {
+    console.error('Tutopanda viewer requires a configured root. Run "tutopanda init" first.');
+    process.exitCode = 1;
+    return null;
+  }
+  return cliConfig;
+}
 
-  const child = spawn(command.bin, command.args, { detached: true, stdio: 'ignore' });
-  child.on('error', (error) => {
-    console.warn(`Failed to open the browser automatically: ${error.message}`);
-    console.warn(`Open the viewer manually: ${url}`);
+async function ensureViewerNetworkConfig(
+  config: CliConfig,
+  overrides: ViewerStartOptions,
+): Promise<{ host: string; port: number }> {
+  const host = overrides.host ?? config.viewer?.host ?? '127.0.0.1';
+  const desiredPort = overrides.port ?? config.viewer?.port;
+  const port = await findAvailablePort(desiredPort);
+
+  if (!config.viewer || config.viewer.host !== host || config.viewer.port !== port) {
+    config.viewer = { host, port };
+    await writeCliConfig(config);
+  }
+
+  return { host, port };
+}
+
+async function launchViewerServer({
+  bundle,
+  rootFolder,
+  host,
+  port,
+  mode,
+  statePath,
+}: {
+  bundle: ReturnType<typeof resolveViewerBundlePaths>;
+  rootFolder: string;
+  host: string;
+  port: number;
+  mode: 'foreground' | 'background';
+  statePath?: string;
+}): Promise<void> {
+  const args = [
+    bundle.serverEntry,
+    `--root=${rootFolder}`,
+    `--dist=${bundle.assetsDir}`,
+    `--host=${host}`,
+    `--port=${port}`,
+  ];
+
+  const child = spawn(process.execPath, args, {
+    stdio: mode === 'foreground' ? 'inherit' : 'ignore',
+    env: {
+      ...process.env,
+      TUTOPANDA_VIEWER_ROOT: rootFolder,
+    },
+    detached: mode === 'background',
   });
+
+  if (mode === 'foreground') {
+    await new Promise<void>((resolve) => {
+      child.on('exit', (code) => {
+        process.exitCode = code ?? 0;
+        resolve();
+      });
+    });
+    return;
+  }
+
+  if (!child.pid) {
+    throw new Error('Failed to start viewer server in background (missing pid).');
+  }
+
+  if (!statePath) {
+    throw new Error('Missing statePath for background viewer launch.');
+  }
+
   child.unref();
+  await writeViewerState(statePath, {
+    pid: child.pid,
+    port,
+    host,
+    startedAt: new Date().toISOString(),
+  });
 }
 
-function getOpenCommand(url: string) {
-  const platform = process.platform;
-  if (platform === 'darwin') {
-    return { bin: 'open', args: [url] };
-  }
-  if (platform === 'win32') {
-    return { bin: 'cmd', args: ['/c', 'start', '', url] };
-  }
-  if (isWSL()) {
-    // Use Windows default browser even when running inside WSL.
-    return { bin: 'cmd.exe', args: ['/c', 'start', '', url] };
-  }
-  return { bin: 'xdg-open', args: [url] };
-}
-
-function isWSL(): boolean {
-  if (process.platform !== 'linux') {
+async function isViewerServerRunning(host: string, port: number): Promise<boolean> {
+  try {
+    const response = await simpleGet(`http://${host}:${port}/viewer-api/health`, 1500);
+    return response.statusCode === 200;
+  } catch {
     return false;
   }
-  if (process.env.WSL_DISTRO_NAME) {
-    return true;
+}
+
+async function waitForViewerServer(host: string, port: number): Promise<boolean> {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    if (await isViewerServerRunning(host, port)) {
+      return true;
+    }
+    await delay(250);
   }
-  const release = os.release().toLowerCase();
-  return release.includes('microsoft') || release.includes('wsl');
+  return false;
+}
+
+async function waitForProcessExit(pid: number, timeoutMs = 5000): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (!isProcessAlive(pid)) {
+      return true;
+    }
+    await delay(200);
+  }
+  return !isProcessAlive(pid);
+}
+
+function isProcessAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function resolveViewerBundleOrExit(): ReturnType<typeof resolveViewerBundlePaths> | null {
+  try {
+    return resolveViewerBundlePaths();
+  } catch (error) {
+    console.error(
+      `Unable to locate the bundled viewer. Build the viewer project or set TUTOPANDA_VIEWER_BUNDLE_ROOT. ${
+        error instanceof Error ? error.message : error
+      }`,
+    );
+    process.exitCode = 1;
+    return null;
+  }
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
 }

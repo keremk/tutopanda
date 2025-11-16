@@ -1,5 +1,10 @@
 import { AbsoluteFill, Audio, Sequence, useVideoConfig } from "remotion";
-import type { AudioTrack, ImageTrack, TimelineDocument, TimelineTrack } from "@/types/timeline";
+import type {
+  AudioTrack,
+  ImageTrack,
+  TimelineDocument,
+  TimelineTrack,
+} from "@/types/timeline";
 import { buildAssetUrl } from "@/data/client";
 import { KenBurnsClip } from "./KenBurnsClip";
 
@@ -22,14 +27,21 @@ export const VideoComposition = ({ timeline, movieId }: VideoCompositionProps) =
 };
 
 function renderTrack(track: TimelineTrack, movieId: string, fps: number) {
-  switch (track.kind) {
-    case "Image":
-      return renderImageTrack(track, movieId, fps);
-    case "Audio":
-      return renderAudioTrack(track, movieId, fps);
-    default:
-      return null;
+  if (isImageTrack(track)) {
+    return renderImageTrack(track, movieId, fps);
   }
+  if (isAudioTrack(track)) {
+    return renderAudioTrack(track, movieId, fps);
+  }
+  return null;
+}
+
+function isImageTrack(track: TimelineTrack): track is ImageTrack {
+  return track.kind === "Image";
+}
+
+function isAudioTrack(track: TimelineTrack): track is AudioTrack {
+  return track.kind === "Audio";
 }
 
 function renderImageTrack(track: ImageTrack, movieId: string, fps: number) {
