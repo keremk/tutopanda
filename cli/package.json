@@ -20,7 +20,7 @@
 	},
 	"files": [
 		"dist",
-		"blueprints"
+		"config"
 	],
 	"packageManager": "pnpm@10.15.0",
 	"dependencies": {

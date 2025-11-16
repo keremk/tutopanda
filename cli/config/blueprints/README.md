@@ -1,6 +1,6 @@
 # Bundled Blueprint Reference
 
-This folder contains the YAML blueprints that ship with the Tutopanda CLI. When you run `tutopanda init`, these files (and the `modules/` subtree) are copied into your CLI root at `<root>/blueprints/` (defaults to `~/.tutopanda/blueprints`). The files under `cli/blueprints/` remain the source of truth for development or when you want to inspect the latest examples directly from the repo.
+This folder contains the YAML blueprints that ship with the Tutopanda CLI. When you run `tutopanda init`, the entire `cli/config/` directory (including `blueprints/` and `inputs-default.yaml`) is copied into your CLI root at `<root>/config/` (defaults to `~/.tutopanda/config/`). The files under `cli/config/blueprints/` remain the source of truth for development or when you want to inspect the latest examples directly from the repo.
 
 Use the CLI commands to explore what’s available:
 
@@ -39,7 +39,7 @@ tutopanda query "Tell me about Waterloo" \
 ```
 
 - `--inputs`: path to your YAML inputs file (`inputs: { InquiryPrompt: ..., Duration: ... }`)
-- `--using-blueprint`: either a path or a file name. When you pass only the file name, the CLI resolves it relative to `<root>/blueprints/` first, then falls back to the bundled copy.
+- `--using-blueprint`: either a path or a file name. When you pass only the file name, the CLI resolves it relative to `<root>/config/blueprints/` first, then falls back to the bundled copy.
 
 You can list providers for a blueprint:
 
@@ -57,7 +57,7 @@ tutopanda blueprints:validate ~/.tutopanda/blueprints/image-audio.yaml
 ## Creating / Editing Blueprints
 
 1. Copy one of the existing YAMLs into your CLI root (e.g., `~/.tutopanda/blueprints/custom.yaml`).
-2. Modify `inputs`, `artifacts`, `modules`, and `connections` as needed. Keep modules under `<root>/blueprints/modules/`.
+2. Modify `inputs`, `artifacts`, `modules`, and `connections` as needed. Keep modules under `<root>/config/blueprints/modules/`.
 3. Validate changes before running:
 
    ```bash
@@ -76,4 +76,4 @@ tutopanda blueprints:validate ~/.tutopanda/blueprints/image-audio.yaml
 - Keep modules self-contained under `modules/` so they can be reused by other blueprints.
 - `promptFile` references (e.g., `modules/prompts/*.toml`) and JSON schemas live alongside the module files.
 - Always include `InquiryPrompt` in your inputs and optionally override it via the positional argument to `tutopanda query`.
-- Track your blueprint files in version control; only the copies under `<root>/blueprints/` are used at runtime.
+- Track your blueprint files in version control; only the copies under `<root>/config/blueprints/` are used at runtime.

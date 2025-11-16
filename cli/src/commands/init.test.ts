@@ -4,6 +4,7 @@ import { join, resolve } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { runInit } from './init.js';
 import { readCliConfig } from '../lib/cli-config.js';
+import { getCliBlueprintsRoot, getCliDefaultInputsPath } from '../lib/config-assets.js';
 
 const tmpRoots: string[] = [];
 
@@ -31,8 +32,13 @@ describe('runInit', () => {
     const buildsStats = await stat(result.buildsFolder);
     expect(buildsStats.isDirectory()).toBe(true);
 
-    const blueprintStats = await stat(join(result.rootFolder, 'blueprints', 'audio-only.yaml'));
+    const blueprintStats = await stat(join(getCliBlueprintsRoot(result.rootFolder), 'audio-only.yaml'));
     expect(blueprintStats.isFile()).toBe(true);
+    const defaultInputsStats = await stat(getCliDefaultInputsPath(result.rootFolder));
+    expect(defaultInputsStats.isFile()).toBe(true);
+    await expect(async () => {
+      await stat(join(result.rootFolder, 'blueprints'));
+    }).rejects.toThrow();
 
     const cliConfig = await readCliConfig(result.cliConfigPath);
     expect(cliConfig?.storage.root).toBe(result.rootFolder);

@@ -23,7 +23,11 @@ import { runBlueprintsValidate } from './commands/blueprints-validate.js';
 import type { DryRunSummary, DryRunJobSummary } from './lib/dry-run.js';
 import type { BuildSummary } from './lib/build.js';
 import { readCliConfig } from './lib/cli-config.js';
-import { getBundledBlueprintsRoot, resolveBlueprintSpecifier } from './lib/blueprints-path.js';
+import {
+  getBundledBlueprintsRoot,
+  getCliBlueprintsRoot,
+  resolveBlueprintSpecifier,
+} from './lib/config-assets.js';
 
 const console = globalThis.console;
 
@@ -154,11 +158,13 @@ async function main(): Promise<void> {
     }
     case 'blueprints:list': {
       const cliConfig = await readCliConfig();
-      const directory = cliConfig ? resolve(cliConfig.storage.root, 'blueprints') : getBundledBlueprintsRoot();
+      const directory = cliConfig
+        ? getCliBlueprintsRoot(cliConfig.storage.root)
+        : getBundledBlueprintsRoot();
       const result = await runBlueprintsList(directory);
 
       if (result.blueprints.length === 0) {
-        console.log('No blueprint TOML files found.');
+        console.log('No blueprint YAML files found.');
         return;
       }
 

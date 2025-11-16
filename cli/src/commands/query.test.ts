@@ -3,17 +3,17 @@ import process from 'node:process';
 import './__testutils__/mock-providers.js';
 import { mkdtemp, readFile, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join, resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { runInit } from './init.js';
 import { runQuery, formatMovieId } from './query.js';
 import { readCliConfig } from '../lib/cli-config.js';
 import { createInputsFile } from './__testutils__/inputs.js';
+import { getBundledBlueprintsRoot } from '../lib/config-assets.js';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const SCRIPT_BLUEPRINT_PATH = resolve(__dirname, '../../blueprints/modules/script-generator.yaml');
-const IMAGE_AUDIO_BLUEPRINT_PATH = resolve(__dirname, '../../blueprints/image-audio.yaml');
+const BUNDLED_BLUEPRINT_ROOT = getBundledBlueprintsRoot();
+const SCRIPT_BLUEPRINT_PATH = resolve(BUNDLED_BLUEPRINT_ROOT, 'modules/script-generator.yaml');
+const IMAGE_AUDIO_BLUEPRINT_PATH = resolve(BUNDLED_BLUEPRINT_ROOT, 'image-audio.yaml');
 
 const tmpRoots: string[] = [];
 const originalEnvConfig = process.env.TUTOPANDA_CLI_CONFIG;

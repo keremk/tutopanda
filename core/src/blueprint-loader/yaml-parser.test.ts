@@ -11,7 +11,7 @@ import {
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(__dirname, '../../..');
-const yamlRoot = resolve(repoRoot, 'cli/blueprints');
+const yamlRoot = resolve(repoRoot, 'cli/config/blueprints');
 
 describe('parseYamlBlueprintFile', () => {
   it('parses module producers and loads prompt/schema files', async () => {

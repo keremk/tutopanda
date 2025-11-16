@@ -27,7 +27,7 @@ import {
   type WorkspaceState,
 } from '../lib/workspace.js';
 import { readMovieMetadata } from '../lib/movie-metadata.js';
-import { resolveBlueprintSpecifier } from '../lib/blueprints-path.js';
+import { resolveBlueprintSpecifier } from '../lib/config-assets.js';
 import { WORKSPACE_INPUTS_RELATIVE_PATH } from '../lib/input-files.js';
 
 const console = globalThis.console;

@@ -7,7 +7,7 @@ import {
   type CliConfig,
 } from '../lib/cli-config.js';
 import { expandPath } from '../lib/path.js';
-import { copyBundledBlueprints } from '../lib/blueprints-path.js';
+import { copyBundledConfigAssets, getCliConfigRoot } from '../lib/config-assets.js';
 
 export interface InitOptions {
   rootFolder?: string;
@@ -27,7 +27,7 @@ export async function runInit(options: InitOptions = {}): Promise<InitResult> {
 
   await mkdir(rootFolder, { recursive: true });
   await mkdir(buildsFolder, { recursive: true });
-  await copyBundledBlueprints(resolve(rootFolder, 'blueprints'));
+  await copyBundledConfigAssets(getCliConfigRoot(rootFolder));
 
   const cliConfig: CliConfig = {
     storage: {

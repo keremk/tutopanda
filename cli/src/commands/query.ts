@@ -14,7 +14,7 @@ import {
 import { expandPath } from '../lib/path.js';
 import { confirmPlanExecution } from '../lib/interactive-confirm.js';
 import { cleanupPlanFiles } from '../lib/plan-cleanup.js';
-import { resolveBlueprintSpecifier } from '../lib/blueprints-path.js';
+import { resolveBlueprintSpecifier } from '../lib/config-assets.js';
 
 const console = globalThis.console;
 

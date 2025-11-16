@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { runInit } from './init.js';
 import { runProvidersList } from './providers-list.js';
 import { readCliConfig } from '../lib/cli-config.js';
+import { getCliBlueprintsRoot } from '../lib/config-assets.js';
 
 const tmpRoots: string[] = [];
 const originalEnv = { ...process.env };
@@ -49,7 +50,7 @@ describe('runProvidersList', () => {
     const cliConfig = await readCliConfig(cliConfigPath);
     expect(cliConfig).not.toBeNull();
 
-    const blueprintPath = join(root, 'blueprints', 'audio-only.yaml');
+    const blueprintPath = join(getCliBlueprintsRoot(root), 'audio-only.yaml');
     const result = await runProvidersList({ blueprintPath });
     expect(result.entries.length).toBeGreaterThan(0);
 

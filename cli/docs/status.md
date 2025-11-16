@@ -31,7 +31,7 @@
   🚀 How to Use
 
   # Use a custom blueprint
-  tutopanda query "Tell me about TypeScript" --using-blueprint=./cli/blueprints/audio-only.json
+  tutopanda query "Tell me about TypeScript" --using-blueprint=./cli/config/blueprints/audio-only.json
 
   # List available sections
   tutopanda blueprints:list
@@ -50,7 +50,7 @@
   - core/src/schema/blueprint-config.ts - JSON parser
   - cli/src/lib/custom-blueprint.ts - Blueprint loader
   - cli/src/commands/blueprints-*.ts - CLI commands (3 files)
-  - cli/blueprints/*.json - Example blueprints (3 files)
+  - cli/config/blueprints/*.json - Example blueprints (3 files)
 
   ✨ Key Features
 

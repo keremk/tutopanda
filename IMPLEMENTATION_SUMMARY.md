@@ -131,7 +131,7 @@ All tests passing:
 ## Phase 3: CLI Integration ✅
 
 ### Example Blueprints
-**Directory**: `cli/blueprints/`
+**Directory**: `cli/config/blueprints/`
 
 Three example configurations provided:
 
@@ -266,10 +266,10 @@ cli/
 ### Using a Custom Blueprint
 ```bash
 # Use audio-only blueprint
-tutopanda query "Tell me about TypeScript" --using-blueprint=./cli/blueprints/audio-only.json
+tutopanda query "Tell me about TypeScript" --using-blueprint=./cli/config/blueprints/audio-only.json
 
 # Use full video pipeline
-tutopanda query "The history of space exploration" --using-blueprint=./cli/blueprints/full-video.json
+tutopanda query "The history of space exploration" --using-blueprint=./cli/config/blueprints/full-video.json
 ```
 
 ### Managing Blueprints

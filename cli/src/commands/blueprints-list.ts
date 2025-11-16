@@ -1,7 +1,7 @@
 import { readdir } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { parseBlueprintDocument } from '../lib/blueprint-loader/index.js';
-import { getBundledBlueprintsRoot } from '../lib/blueprints-path.js';
+import { getBundledBlueprintsRoot } from '../lib/config-assets.js';
 
 const DEFAULT_BLUEPRINT_DIR = getBundledBlueprintsRoot();
 

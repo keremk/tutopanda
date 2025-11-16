@@ -11,7 +11,7 @@
 ## Step 1 – Canonical Blueprint Schema & Expansion Foundations
 - **Goal**: Teach the CLI/core blueprint loader to emit deterministic universal node IDs that match the TOML proposal, including index notation, `countInput`, artefact/input collapsing, and `sdkMapping` metadata. This is the prerequisite for removing ad-hoc ID guessing everywhere else.
 - **Scope**:
-  1. Update `cli/src/lib/blueprint-loader/toml-parser.ts` and related types to parse the new `[[inputs]]`, `[[artefacts]]`, `[[producers.sdkMapping]]`, and `[[subBlueprints]]` structures (as seen in `cli/blueprints/image-only.toml`).
+  1. Update `cli/src/lib/blueprint-loader/toml-parser.ts` and related types to parse the new `[[inputs]]`, `[[artefacts]]`, `[[producers.sdkMapping]]`, and `[[subBlueprints]]` structures (as seen in `cli/config/blueprints/image-only.toml`).
   2. Rework `core/src/blueprint-loader` + `core/src/blueprints.ts` expansion so that nodes are instantiated using the `NodeType:Namespace.Name[indices]` format, fan-out is driven by `countInput`, and edges collapse Input⇄Artefact pairs per `cli/docs/TOML-based-config.md`.
   3. Emit a stable mapping object describing each producer’s inputs/outputs (including sdk mapping + canonical node IDs) so later phases can consume it.
 - **Verification**:

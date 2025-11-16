@@ -74,7 +74,7 @@ tutopanda init --rootFolder=/path/to/storage
 This creates:
 - `~/.tutopanda/cli-config.json` with storage settings
 - `~/.tutopanda/builds/` directory for movie outputs
-- `~/.tutopanda/blueprints/` populated with bundled YAML blueprints
+- `~/.tutopanda/config/blueprints/` populated with bundled YAML blueprints
 
 Optional flags:
 - `--configPath`: Custom path for `cli-config.json` (default: `~/.tutopanda/`)
@@ -98,7 +98,7 @@ inputs:
 ```bash
 tutopanda query \
   --inputs=my-inputs.yaml \
-  --using-blueprint=~/.tutopanda/blueprints/image-audio.yaml
+  --using-blueprint=~/.tutopanda/config/blueprints/image-audio.yaml
 ```
 
 3. **View the result**:
@@ -123,7 +123,7 @@ Blueprints are YAML files that define complete generation workflows. They specif
 - **Producers**: Provider configurations (OpenAI, Replicate, Tutopanda)
 - **Collectors**: Optional fan-in operations for aggregating array outputs
 
-Blueprints are installed to `<root>/blueprints/` (default `~/.tutopanda/blueprints/`). When running from source, they also live under `cli/blueprints/`.
+Blueprints are installed to `<root>/config/blueprints/` (default `~/.tutopanda/config/blueprints/`). When running from source, they also live under `cli/config/blueprints/`.
 
 #### Available Blueprints
 
@@ -133,7 +133,7 @@ Blueprints are installed to `<root>/blueprints/` (default `~/.tutopanda/blueprin
 
 ### Modules
 
-Modules are reusable blueprint components located in `<root>/blueprints/modules/` (the repo copy lives under `cli/blueprints/modules/`):
+Modules are reusable blueprint components located in `<root>/config/blueprints/modules/` (the repo copy lives under `cli/config/blueprints/modules/`):
 
 1. **script-generator.yaml**: Uses OpenAI to generate movie title, summary, and narration segments
 2. **image-prompt-generator.yaml**: Creates detailed image prompts from narrative text
@@ -284,8 +284,8 @@ tutopanda query --inputs=<path> --using-blueprint=<path> [--dryrun] [--nonIntera
 **Example:**
 ```bash
 tutopanda query \
-  --inputs=~/.tutopanda/blueprints/inputs-default.yaml \
-  --using-blueprint=~/.tutopanda/blueprints/image-audio.yaml
+  --inputs=~/.tutopanda/config/inputs-default.yaml \
+  --using-blueprint=~/.tutopanda/config/blueprints/image-audio.yaml
 ```
 
 **Output:**
@@ -400,7 +400,7 @@ tutopanda providers:list --using-blueprint=<path>
 
 **Example:**
 ```bash
-tutopanda providers:list --using-blueprint=~/.tutopanda/blueprints/image-audio.yaml
+tutopanda providers:list --using-blueprint=~/.tutopanda/config/blueprints/image-audio.yaml
 ```
 
 **Output:**
@@ -424,7 +424,7 @@ tutopanda blueprints:list
 ```
 
 **Behavior:**
-Scans `<root>/blueprints/` (default `~/.tutopanda/blueprints/`) and displays all `.yaml` files with their metadata.
+Scans `<root>/config/blueprints/` (default `~/.tutopanda/config/blueprints/`) and displays all `.yaml` files with their metadata.
 
 **Example Output:**
 ```
@@ -468,7 +468,7 @@ Displays:
 
 **Example:**
 ```bash
-tutopanda blueprints:describe ~/.tutopanda/blueprints/image-audio.yaml
+tutopanda blueprints:describe ~/.tutopanda/config/blueprints/image-audio.yaml
 ```
 
 ---
@@ -493,7 +493,7 @@ tutopanda blueprints:validate <path-to-blueprint.yaml>
 
 **Example:**
 ```bash
-tutopanda blueprints:validate ~/.tutopanda/blueprints/image-audio.yaml
+tutopanda blueprints:validate ~/.tutopanda/config/blueprints/image-audio.yaml
 ```
 
 ---
@@ -1152,7 +1152,7 @@ tutopanda query --inputs=my-inputs.yaml --nonInteractive
 
 ### Example 1: Audio-Only Narration
 
-**Blueprint:** `~/.tutopanda/blueprints/audio-only.yaml`
+**Blueprint:** `~/.tutopanda/config/blueprints/audio-only.yaml`
 
 **Inputs (`audio-inputs.yaml`):**
 ```yaml
@@ -1168,7 +1168,7 @@ inputs:
 ```bash
 tutopanda query \
   --inputs=audio-inputs.yaml \
-  --using-blueprint=~/.tutopanda/blueprints/audio-only.yaml
+  --using-blueprint=~/.tutopanda/config/blueprints/audio-only.yaml
 ```
 
 **Outputs:**
@@ -1181,7 +1181,7 @@ tutopanda query \
 
 ### Example 2: Images with Audio
 
-**Blueprint:** `~/.tutopanda/blueprints/image-audio.yaml`
+**Blueprint:** `~/.tutopanda/config/blueprints/image-audio.yaml`
 
 **Inputs (`image-audio-inputs.yaml`):**
 ```yaml
@@ -1201,7 +1201,7 @@ inputs:
 ```bash
 tutopanda query \
   --inputs=image-audio-inputs.yaml \
-  --using-blueprint=~/.tutopanda/blueprints/image-audio.yaml
+  --using-blueprint=~/.tutopanda/config/blueprints/image-audio.yaml
 ```
 
 **Outputs:**
@@ -1260,7 +1260,7 @@ tutopanda edit --movieId=movie-a1b2c3d4 --submitEdits
 
 **Create a custom sentiment analyzer module.**
 
-**File:** `<root>/blueprints/modules/sentiment-analyzer.yaml`
+**File:** `<root>/config/blueprints/modules/sentiment-analyzer.yaml`
 ```yaml
 meta:
   name: Sentiment Analyzer
@@ -1382,8 +1382,8 @@ tutopanda query --inputs=my-inputs.yaml --dryrun
 
 - **CLI Config:** `~/.tutopanda/cli-config.json` (or custom via `--configPath`)
 - **Environment:** `.env` in CLI directory or current working directory
-- **Blueprints:** `~/.tutopanda/blueprints/*.yaml` (copied during `tutopanda init`)
-- **Modules:** `~/.tutopanda/blueprints/modules/*.yaml`
+- **Blueprints:** `~/.tutopanda/config/blueprints/*.yaml` (copied during `tutopanda init`)
+- **Modules:** `~/.tutopanda/config/blueprints/modules/*.yaml`
 - **Prompts:** `cli/prompts/*.md`
 - **Settings:** `cli/tutosettings.json`
 
@@ -1412,8 +1412,8 @@ Movie IDs are 8-character prefixes of UUIDs:
 ## Additional Resources
 
 - **Source Code:** `/home/keremk/developer/tutopanda/cli`
-- **Example Blueprints:** `~/.tutopanda/blueprints/`
-- **Example Inputs:** `<root>/blueprints/inputs-default.yaml`
+- **Example Blueprints:** `~/.tutopanda/config/blueprints/`
+- **Example Inputs:** `<root>/config/inputs-default.yaml`
 - **Default Settings:** `cli/tutosettings.json`
 
 For feature requests and bug reports, please open an issue in the Tutopanda repository.
