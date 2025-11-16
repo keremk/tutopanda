@@ -7,7 +7,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 
 describe('loadBlueprintBundle', () => {
   it('loads root and nested sub-blueprints', async () => {
-    const bundlePath = resolve(__dirname, '../../../blueprints/yaml/image-only.yaml');
+    const bundlePath = resolve(__dirname, '../../../blueprints/image-only.yaml');
     const bundle = await loadBlueprintBundle(bundlePath);
     expect(bundle.root.id).toBe('ImageOnly');
     expect(bundle.root.children.size).toBe(3);

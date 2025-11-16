@@ -1,92 +1,79 @@
-# Custom Blueprint Examples
+# Bundled Blueprint Reference
 
-This directory contains example custom blueprint configurations for Tutopanda.
+This folder contains the YAML blueprints that ship with the Tutopanda CLI. When you run `tutopanda init`, these files (and the `modules/` subtree) are copied into your CLI root at `<root>/blueprints/` (defaults to `~/.tutopanda/blueprints`). The files under `cli/blueprints/` remain the source of truth for development or when you want to inspect the latest examples directly from the repo.
 
-## Available Blueprints
-
-### audio-only.json
-Generate audio narration without video. Perfect for podcasts or audio-only content.
-
-**Sections**: script, music, audio
-
-**Usage**:
-```bash
-tutopanda query "Tell me about TypeScript" --using-blueprint=cli/blueprints/audio-only.json
-```
-
-### full-video.json
-Complete video generation pipeline with generated images. This creates videos with AI-generated visuals.
-
-**Sections**: script, music, audio, images, videoFromImage, assembly
-
-**Usage**:
-```bash
-tutopanda query "The history of space exploration" --using-blueprint=cli/blueprints/full-video.json
-```
-
-### text-to-video.json
-Generate video directly from text prompts without generating images first.
-
-**Sections**: script, music, audio, videoFromText, assembly
-
-**Usage**:
-```bash
-tutopanda query "Explain quantum computing" --using-blueprint=cli/blueprints/text-to-video.json
-```
-
-## Creating Custom Blueprints
-
-You can create your own custom blueprint by creating a JSON file with the following structure:
-
-```json
-{
-  "name": "my-custom-blueprint",
-  "description": "Description of what this blueprint does",
-  "version": "1.0",
-  "sections": [
-    "script",
-    "audio",
-    "assembly"
-  ],
-  "connections": [
-    {
-      "from": { "section": "script", "port": "narrationScript" },
-      "to": { "section": "audio", "port": "narrationScript" }
-    },
-    {
-      "from": { "section": "audio", "port": "segmentAudio" },
-      "to": { "section": "assembly", "port": "segmentAudio" }
-    }
-  ],
-  "autoConnect": false,
-  "blueprintConfig": {
-    "useVideo": false
-  }
-}
-```
-
-### Available Sections
-
-- `script` - Generate narration script from user prompt
-- `music` - Generate background music
-- `audio` - Generate narration audio from script
-- `images` - Generate images from script
-- `videoFromText` - Generate video from text prompts
-- `videoFromImage` - Generate video from images
-- `assembly` - Assemble final video/audio
-
-### Port Connections
-
-Each section has input and output ports that can be connected. Use the Tutopanda CLI to list available ports:
+Use the CLI commands to explore what’s available:
 
 ```bash
-tutopanda blueprints describe <section-name>
+tutopanda blueprints:list
+tutopanda blueprints:describe audio-only.yaml
+tutopanda blueprints:validate image-audio.yaml
 ```
 
-### Validation
+## Blueprint Overview
 
-You can validate your custom blueprint before using it:
+| File              | Summary                                                                  |
+| ----------------- | ------------------------------------------------------------------------ |
+| `audio-only.yaml` | Generates narration scripts and audio segments only                      |
+| `image-only.yaml` | Creates narration plus prompt-driven images (no audio)                   |
+| `image-audio.yaml`| Full workflow: narration, images, audio, and timeline composition        |
+| `modules/*.yaml`  | Reusable building blocks (script generation, image prompts, timeline, …) |
+
+Each YAML blueprint follows the format documented in `core/docs/yaml-blueprint-spec.md`. At a high level, you declare:
+
+- `meta`: id, name, version, author info
+- `inputs`: required/optional inputs users must provide
+- `artifacts`: outputs the workflow produces
+- `loops`: optional iteration dimensions (e.g., segment, image)
+- `modules`: imported sub-blueprints (from `modules/`)
+- `connections`: wiring between inputs, modules, and artefacts
+
+## Running a Blueprint
+
+After `tutopanda init`, you can invoke the CLI with a positional inquiry prompt:
 
 ```bash
-tutopanda blueprints validate ./my-blueprint.json
+tutopanda query "Tell me about Waterloo" \
+  --inputs=~/movies/waterloo-inputs.yaml \
+  --using-blueprint=audio-only.yaml
 ```
+
+- `--inputs`: path to your YAML inputs file (`inputs: { InquiryPrompt: ..., Duration: ... }`)
+- `--using-blueprint`: either a path or a file name. When you pass only the file name, the CLI resolves it relative to `<root>/blueprints/` first, then falls back to the bundled copy.
+
+You can list providers for a blueprint:
+
+```bash
+tutopanda providers:list --using-blueprint=image-audio.yaml
+```
+
+Or inspect/validate:
+
+```bash
+tutopanda blueprints:describe image-only.yaml
+tutopanda blueprints:validate ~/.tutopanda/blueprints/image-audio.yaml
+```
+
+## Creating / Editing Blueprints
+
+1. Copy one of the existing YAMLs into your CLI root (e.g., `~/.tutopanda/blueprints/custom.yaml`).
+2. Modify `inputs`, `artifacts`, `modules`, and `connections` as needed. Keep modules under `<root>/blueprints/modules/`.
+3. Validate changes before running:
+
+   ```bash
+   tutopanda blueprints:validate ~/.tutopanda/blueprints/custom.yaml
+   ```
+
+4. Run the workflow:
+
+   ```bash
+   tutopanda query "My custom prompt" \
+     --inputs=~/movies/custom-inputs.yaml \
+     --using-blueprint=custom.yaml
+   ```
+
+### Tips
+- Keep modules self-contained under `modules/` so they can be reused by other blueprints.
+- `promptFile` references (e.g., `modules/prompts/*.toml`) and JSON schemas live alongside the module files.
+- Always include `InquiryPrompt` in your inputs and optionally override it via the positional argument to `tutopanda query`.
+- Track your blueprint files in version control; only the copies under `<root>/blueprints/` are used at runtime.

@@ -19,10 +19,12 @@
 		"test:run": "vitest run"
 	},
 	"files": [
-		"dist"
+		"dist",
+		"blueprints"
 	],
 	"packageManager": "pnpm@10.15.0",
 	"dependencies": {
+		"@modelcontextprotocol/sdk": "^1.22.0",
 		"dotenv": "^17.2.3",
 		"ink": "^4.1.0",
 		"meow": "^11.0.0",
@@ -30,6 +32,7 @@
 		"smol-toml": "^1.4.2",
 		"tutopanda-core": "workspace:*",
 		"tutopanda-providers": "workspace:*",
+		"yaml": "^2.8.1",
 		"zod": "^3.25.76"
 	},
 	"devDependencies": {

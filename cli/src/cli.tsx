@@ -22,13 +22,15 @@ import { runViewer } from './commands/viewer.js';
 import { runBlueprintsValidate } from './commands/blueprints-validate.js';
 import type { DryRunSummary, DryRunJobSummary } from './lib/dry-run.js';
 import type { BuildSummary } from './lib/build.js';
+import { readCliConfig } from './lib/cli-config.js';
+import { getBundledBlueprintsRoot, resolveBlueprintSpecifier } from './lib/blueprints-path.js';
 
 const console = globalThis.console;
 
 type ProviderListOutputEntry = Awaited<ReturnType<typeof runProvidersList>>['entries'][number];
 
 const cli = meow(
-  `\nUsage\n  $ tutopanda <command> [options]\n\nCommands\n  init                Initialize Tutopanda CLI configuration\n  query               Generate a plan using a blueprint (YAML) and inputs TOML\n  inspect             Export prompts or timeline data for a movie\n  edit                Regenerate a movie with edited inputs\n  viewer              Launch the local Remotion viewer (reads builds/)\n  providers:list      Show providers defined in a blueprint\n  blueprints:list     List available blueprint YAML files\n  blueprints:describe <path>  Show details for a blueprint YAML file\n  blueprints:validate <path>  Validate a blueprint YAML file\n\nExamples\n  $ tutopanda init --rootFolder=~/media/tutopanda\n  $ tutopanda query --inputs=cli/inputs-sample.toml --using-blueprint=cli/blueprints/yaml/audio-only.yaml\n  $ tutopanda providers:list --using-blueprint=cli/blueprints/yaml/audio-only.yaml\n  $ tutopanda blueprints:list\n  $ tutopanda blueprints:describe cli/blueprints/yaml/audio-only.yaml\n  $ tutopanda blueprints:validate ./my-blueprint.yaml\n  $ tutopanda inspect --movieId=q123456 --prompts\n  $ tutopanda edit --movieId=q123456 --inputs=edited-inputs.toml\n  $ tutopanda viewer --movie=q123456\n`,
+  `\nUsage\n  $ tutopanda <command> [options]\n\nCommands\n  init                Initialize Tutopanda CLI configuration\n  query               Generate a plan using a blueprint (YAML) and inputs YAML\n  inspect             Export prompts or timeline data for a movie\n  edit                Regenerate a movie with edited inputs\n  viewer              Launch the local Remotion viewer (reads builds/)\n  providers:list      Show providers defined in a blueprint\n  blueprints:list     List available blueprint YAML files\n  blueprints:describe <path>  Show details for a blueprint YAML file\n  blueprints:validate <path>  Validate a blueprint YAML file\n\nExamples\n  $ tutopanda init --rootFolder=~/media/tutopanda\n  $ tutopanda query --inputs=~/movies/my-inputs.yaml --using-blueprint=audio-only.yaml\n  $ tutopanda providers:list --using-blueprint=image-audio.yaml\n  $ tutopanda blueprints:list\n  $ tutopanda blueprints:describe audio-only.yaml\n  $ tutopanda blueprints:validate image-audio.yaml\n  $ tutopanda inspect --movieId=q123456 --prompts\n  $ tutopanda edit --movieId=q123456 --inputs=edited-inputs.yaml\n  $ tutopanda viewer --movie=q123456\n`,
   {
     importMeta: import.meta,
     flags: {
@@ -48,6 +50,8 @@ const cli = meow(
 
 async function main(): Promise<void> {
   const [command, ...rest] = cli.input;
+  const positionalInquiry = command === 'query' ? rest[0] : undefined;
+  const remaining = positionalInquiry !== undefined ? rest.slice(1) : rest;
   const flags = cli.flags as {
     rootFolder?: string;
     configPath?: string;
@@ -73,8 +77,8 @@ async function main(): Promise<void> {
       return;
     }
     case 'query': {
-      if (rest.length > 0) {
-        console.error('Error: query does not accept positional arguments. Provide --inputs instead.');
+      if (remaining.length > 0) {
+        console.error('Error: query accepts at most one positional argument for the inquiry prompt.');
         process.exitCode = 1;
         return;
       }
@@ -83,8 +87,14 @@ async function main(): Promise<void> {
         process.exitCode = 1;
         return;
       }
+      if (!flags.usingBlueprint) {
+        console.error('Error: --usingBlueprint is required for query.');
+        process.exitCode = 1;
+        return;
+      }
       const result = await runQuery({
         inputsPath: flags.inputs,
+        inquiryPrompt: positionalInquiry,
         dryRun: Boolean(flags.dryrun),
         nonInteractive: Boolean(flags.nonInteractive),
         usingBlueprint: flags.usingBlueprint,
@@ -100,7 +110,20 @@ async function main(): Promise<void> {
       return;
     }
     case 'providers:list': {
-      const blueprintPath = flags.usingBlueprint;
+      if (!flags.usingBlueprint) {
+        console.error('Error: --usingBlueprint is required for providers:list.');
+        process.exitCode = 1;
+        return;
+      }
+      const cliConfig = await readCliConfig();
+      if (!cliConfig) {
+        console.error('Tutopanda CLI is not initialized. Run "tutopanda init" first.');
+        process.exitCode = 1;
+        return;
+      }
+      const blueprintPath = await resolveBlueprintSpecifier(flags.usingBlueprint, {
+        cliRoot: cliConfig.storage.root,
+      });
       const result = await runProvidersList({
         blueprintPath,
       });
@@ -130,7 +153,9 @@ async function main(): Promise<void> {
       return;
     }
     case 'blueprints:list': {
-      const result = await runBlueprintsList();
+      const cliConfig = await readCliConfig();
+      const directory = cliConfig ? resolve(cliConfig.storage.root, 'blueprints') : getBundledBlueprintsRoot();
+      const result = await runBlueprintsList(directory);
 
       if (result.blueprints.length === 0) {
         console.log('No blueprint TOML files found.');
@@ -162,7 +187,11 @@ async function main(): Promise<void> {
       }
 
       try {
-        const result = await runBlueprintsDescribe({ blueprintPath });
+        const cliConfig = await readCliConfig();
+        const resolvedPath = await resolveBlueprintSpecifier(blueprintPath, {
+          cliRoot: cliConfig?.storage.root,
+        });
+        const result = await runBlueprintsDescribe({ blueprintPath: resolvedPath });
 
         console.log(`Blueprint: ${result.name}`);
         if (result.description) {
@@ -231,7 +260,11 @@ async function main(): Promise<void> {
         return;
       }
 
-      const result = await runBlueprintsValidate({ blueprintPath });
+      const cliConfig = await readCliConfig();
+      const resolvedPath = await resolveBlueprintSpecifier(blueprintPath, {
+        cliRoot: cliConfig?.storage.root,
+      });
+      const result = await runBlueprintsValidate({ blueprintPath: resolvedPath });
 
       if (result.valid) {
         console.log(`✓ Blueprint "${result.name ?? result.path}" is valid`);

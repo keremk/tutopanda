@@ -49,7 +49,8 @@ describe('runProvidersList', () => {
     const cliConfig = await readCliConfig(cliConfigPath);
     expect(cliConfig).not.toBeNull();
 
-    const result = await runProvidersList();
+    const blueprintPath = join(root, 'blueprints', 'audio-only.yaml');
+    const result = await runProvidersList({ blueprintPath });
     expect(result.entries.length).toBeGreaterThan(0);
 
     const openAiEntry = result.entries.find((entry) => entry.provider === 'openai');

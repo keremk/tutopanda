@@ -1,5 +1,6 @@
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { INPUT_FILE_NAME } from '../../lib/input-files.js';
 
 export interface CreateInputsFileOptions {
   root: string;
@@ -19,7 +20,7 @@ const DEFAULT_INPUT_VALUES: Record<string, string | number> = {
 };
 
 export async function createInputsFile(options: CreateInputsFileOptions): Promise<string> {
-  const { root, prompt, fileName = 'inputs.toml', overrides } = options;
+  const { root, prompt, fileName = INPUT_FILE_NAME, overrides } = options;
   const values: Record<string, string | number> = {
     InquiryPrompt: prompt,
     ...DEFAULT_INPUT_VALUES,
@@ -27,8 +28,8 @@ export async function createInputsFile(options: CreateInputsFileOptions): Promis
   };
 
   const contents = [
-    '[inputs]',
-    ...Object.entries(values).map(([key, value]) => `${key} = ${formatTomlValue(value)}`),
+    'inputs:',
+    ...Object.entries(values).map(([key, value]) => `  ${key}: ${formatYamlValue(value)}`),
   ].join('\n');
 
   const filePath = join(root, fileName);
@@ -36,7 +37,7 @@ export async function createInputsFile(options: CreateInputsFileOptions): Promis
   return filePath;
 }
 
-function formatTomlValue(value: string | number): string {
+function formatYamlValue(value: string | number): string {
   if (typeof value === 'string') {
     return `"${value.replace(/"/g, '\\"')}"`;
   }

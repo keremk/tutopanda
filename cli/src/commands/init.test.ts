@@ -31,6 +31,9 @@ describe('runInit', () => {
     const buildsStats = await stat(result.buildsFolder);
     expect(buildsStats.isDirectory()).toBe(true);
 
+    const blueprintStats = await stat(join(result.rootFolder, 'blueprints', 'audio-only.yaml'));
+    expect(blueprintStats.isFile()).toBe(true);
+
     const cliConfig = await readCliConfig(result.cliConfigPath);
     expect(cliConfig?.storage.root).toBe(result.rootFolder);
     expect(cliConfig?.storage.basePath).toBe('builds');

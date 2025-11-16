@@ -26,6 +26,9 @@ import {
   type WorkspaceDiffResult,
   type WorkspaceState,
 } from '../lib/workspace.js';
+import { readMovieMetadata } from '../lib/movie-metadata.js';
+import { resolveBlueprintSpecifier } from '../lib/blueprints-path.js';
+import { WORKSPACE_INPUTS_RELATIVE_PATH } from '../lib/input-files.js';
 
 const console = globalThis.console;
 
@@ -64,15 +67,26 @@ export async function runEdit(options: EditOptions): Promise<EditResult> {
 
   const inputsPath = options.inputsPath ? expandPath(options.inputsPath) : undefined;
   if (!inputsPath) {
-    throw new Error('Input TOML path is required. Provide --inputs=/path/to/inputs.toml');
+    throw new Error('Input YAML path is required. Provide --inputs=/path/to/inputs.yaml');
   }
+
+  const metadata = await readMovieMetadata(movieDir);
+  const blueprintInput = options.usingBlueprint ?? metadata?.blueprintPath;
+  if (!blueprintInput) {
+    throw new Error(
+      'Blueprint path is required for edit. Provide --usingBlueprint=/path/to/blueprint.yaml or re-run the initial query to capture blueprint metadata.',
+    );
+  }
+  const blueprintPath = await resolveBlueprintSpecifier(blueprintInput, {
+    cliRoot: cliConfig.storage.root,
+  });
 
   const planResult = await generatePlan({
     cliConfig,
     movieId: storageMovieId,
     isNew: false,
     inputsPath,
-    usingBlueprint: options.usingBlueprint,
+    usingBlueprint: blueprintPath,
     pendingArtefacts: options.pendingArtefacts,
   });
 
@@ -151,7 +165,9 @@ export async function runInteractiveEditSetup(options: InteractiveEditOptions): 
   }
 
   const storageMovieId = formatMovieId(options.movieId);
-  const blueprintOverride = options.usingBlueprint ? expandPath(options.usingBlueprint) : undefined;
+  const blueprintOverride = options.usingBlueprint
+    ? await resolveBlueprintSpecifier(options.usingBlueprint, { cliRoot: cliConfig.storage.root })
+    : undefined;
   const result = await exportWorkspace({
     cliConfig,
     movieId: storageMovieId,
@@ -206,7 +222,15 @@ export async function runWorkspaceSubmit(options: WorkspaceSubmitOptions): Promi
     changes: diff.artefacts,
   });
 
-  const blueprintPath = options.usingBlueprint ?? state.blueprintPath;
+  const blueprintSource = options.usingBlueprint ?? state.blueprintPath;
+  if (!blueprintSource) {
+    throw new Error(
+      'No blueprint recorded in workspace. Provide --usingBlueprint=/path/to/blueprint.yaml when submitting.',
+    );
+  }
+  const blueprintPath = await resolveBlueprintSpecifier(blueprintSource, {
+    cliRoot: cliConfig.storage.root,
+  });
   const editResult = await runEdit({
     movieId: storageMovieId,
     inputsPath,
@@ -235,7 +259,7 @@ export async function runWorkspaceSubmit(options: WorkspaceSubmitOptions): Promi
 function printWorkspaceSummary(diff: WorkspaceDiffResult, workspaceDir: string): void {
   console.log('Detected workspace edits:');
   if (diff.inputsChanged) {
-    console.log(`- Inputs updated (${workspaceDir}/inputs/inputs.toml)`);
+    console.log(`- Inputs updated (${workspaceDir}/${WORKSPACE_INPUTS_RELATIVE_PATH})`);
   }
   for (const change of diff.artefacts) {
     console.log(`- Artefact ${change.entry.id} (${resolve(workspaceDir, change.entry.file)})`);

@@ -10,7 +10,7 @@
   1. Entry Point (cli/src/commands/query.ts)
 
   - Loads blueprint: image-only.toml
-  - Loads inputs: inputs-sample.toml
+  - Loads inputs: inputs-default.yaml
   - Calls generatePlan() then executeBuild()
 
   2. Blueprint Loading (cli/src/lib/blueprint-loader/)
@@ -30,7 +30,7 @@
 
   3. Input Loading (cli/src/lib/input-loader.ts)
 
-  - Parses inputs-sample.toml
+  - Parses inputs-default.yaml
   - Returns flat map: {InquiryPrompt: "Tell me about...", Duration: 30, ...}
   - Extracts expansion config: {segmentCount: 3, imagesPerSegment: 1}
 

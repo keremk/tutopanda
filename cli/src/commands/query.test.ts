@@ -12,8 +12,8 @@ import { readCliConfig } from '../lib/cli-config.js';
 import { createInputsFile } from './__testutils__/inputs.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const SCRIPT_BLUEPRINT_PATH = resolve(__dirname, '../../blueprints/yaml/modules/script-generator.yaml');
-const IMAGE_AUDIO_BLUEPRINT_PATH = resolve(__dirname, '../../blueprints/yaml/image-audio.yaml');
+const SCRIPT_BLUEPRINT_PATH = resolve(__dirname, '../../blueprints/modules/script-generator.yaml');
+const IMAGE_AUDIO_BLUEPRINT_PATH = resolve(__dirname, '../../blueprints/image-audio.yaml');
 
 const tmpRoots: string[] = [];
 const originalEnvConfig = process.env.TUTOPANDA_CLI_CONFIG;
@@ -132,6 +132,32 @@ describe('runQuery', () => {
 
     expect(result.build?.status).toBe('succeeded');
     expect(result.manifestPath).toBeDefined();
+  });
+
+  it('overrides InquiryPrompt when provided inline', async () => {
+    const root = await createTempRoot();
+    const cliConfigPath = join(root, 'cli-config.json');
+    process.env.TUTOPANDA_CLI_CONFIG = cliConfigPath;
+
+    await runInit({ rootFolder: root, configPath: cliConfigPath });
+
+    const inputsPath = await createInputsFile({ root, prompt: 'Original prompt' });
+    const overridePrompt = 'Tell me about inline overrides';
+    const result = await runQuery({
+      inputsPath,
+      nonInteractive: true,
+      usingBlueprint: SCRIPT_BLUEPRINT_PATH,
+      inquiryPrompt: overridePrompt,
+    });
+
+    expect(result.build?.status).toBe('succeeded');
+
+    const cliConfig = await readCliConfig(cliConfigPath);
+    expect(cliConfig).not.toBeNull();
+    const storageMovieId = formatMovieId(result.movieId);
+    const movieDir = resolve(cliConfig!.storage.root, cliConfig!.storage.basePath, storageMovieId);
+    const storedPrompt = await readFile(join(movieDir, 'prompts', 'inquiry.txt'), 'utf8');
+    expect(storedPrompt.trim()).toBe(overridePrompt);
   });
 
   it('schedules TimelineProducer after upstream image/audio jobs', async () => {

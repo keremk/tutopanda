@@ -13,7 +13,7 @@ tutopanda/
 │   │   ├── lib/                  # Shared CLI utilities
 │   │   ├── app.tsx               # Main Ink app component
 │   │   └── cli.tsx               # CLI entry point
-│   ├── inputs-sample.toml        # Sample input configuration
+│   ├── inputs-default.yaml       # Sample input configuration
 │   ├── tutosettings.json         # CLI settings
 │   ├── package.json
 │   ├── tsconfig.json

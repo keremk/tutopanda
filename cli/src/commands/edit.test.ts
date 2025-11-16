@@ -12,7 +12,7 @@ import { runEdit } from './edit.js';
 import { createInputsFile } from './__testutils__/inputs.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const SCRIPT_BLUEPRINT_PATH = resolve(__dirname, '../../blueprints/yaml/modules/script-generator.yaml');
+const SCRIPT_BLUEPRINT_PATH = resolve(__dirname, '../../blueprints/modules/script-generator.yaml');
 
 const tmpRoots: string[] = [];
 const originalEnvConfig = process.env.TUTOPANDA_CLI_CONFIG;
@@ -48,14 +48,14 @@ describe('runEdit', () => {
     process.env.TUTOPANDA_CLI_CONFIG = cliConfigPath;
 
     await runInit({ rootFolder: root, configPath: cliConfigPath });
-    const queryInputsPath = await createInputsFixture(root, 'Describe the planets', 'query-inputs.toml');
+    const queryInputsPath = await createInputsFixture(root, 'Describe the planets', 'query-inputs.yaml');
     const queryResult = await runQuery({
       inputsPath: queryInputsPath,
       nonInteractive: true,
       usingBlueprint: SCRIPT_BLUEPRINT_PATH,
     });
 
-    const editInputsPath = await createInputsFixture(root, 'Tell me about stars', 'edit-inputs.toml');
+    const editInputsPath = await createInputsFixture(root, 'Tell me about stars', 'edit-inputs.yaml');
 
     const editResult = await runEdit({
       movieId: queryResult.movieId,
@@ -87,14 +87,14 @@ describe('runEdit', () => {
     process.env.TUTOPANDA_CLI_CONFIG = cliConfigPath;
 
     await runInit({ rootFolder: root, configPath: cliConfigPath });
-    const queryInputsPath = await createInputsFixture(root, 'Describe oceans', 'query-inputs.toml');
+    const queryInputsPath = await createInputsFixture(root, 'Describe oceans', 'query-inputs.yaml');
     const queryResult = await runQuery({
       inputsPath: queryInputsPath,
       nonInteractive: true,
       usingBlueprint: SCRIPT_BLUEPRINT_PATH,
     });
 
-    const editInputsPath = await createInputsFixture(root, 'Describe oceans with drama', 'edit-inputs.toml', {
+    const editInputsPath = await createInputsFixture(root, 'Describe oceans with drama', 'edit-inputs.yaml', {
       ImageStyle: 'storybook',
     });
 

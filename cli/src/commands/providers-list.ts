@@ -1,15 +1,10 @@
-import { dirname, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { createProviderRegistry, type ProviderDescriptor } from 'tutopanda-providers';
 import { loadBlueprintBundle } from '../lib/blueprint-loader/index.js';
 import { buildProducerOptionsFromBlueprint } from '../lib/producer-options.js';
 import { expandPath } from '../lib/path.js';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const DEFAULT_BLUEPRINT_PATH = resolve(__dirname, '../../blueprints/yaml/audio-only.yaml');
-
 export interface ProvidersListOptions {
-  blueprintPath?: string;
+  blueprintPath: string;
 }
 
 export interface ProviderListEntry {
@@ -25,10 +20,12 @@ export interface ProvidersListResult {
   entries: ProviderListEntry[];
 }
 
-export async function runProvidersList(options: ProvidersListOptions = {}): Promise<ProvidersListResult> {
-  const blueprintPath = options.blueprintPath
-    ? expandPath(options.blueprintPath)
-    : DEFAULT_BLUEPRINT_PATH;
+export async function runProvidersList(options: ProvidersListOptions): Promise<ProvidersListResult> {
+  const normalizedBlueprint = options.blueprintPath?.trim();
+  if (!normalizedBlueprint) {
+    throw new Error('Blueprint path is required for providers:list. Provide --usingBlueprint=/path/to/blueprint.yaml.');
+  }
+  const blueprintPath = expandPath(normalizedBlueprint);
   const { root } = await loadBlueprintBundle(blueprintPath);
   const providerOptions = buildProducerOptionsFromBlueprint(root);
 

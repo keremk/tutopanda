@@ -12,6 +12,8 @@ Consult `design_guidelines.md` before adjusting visuals in the client, and keep 
 ## Build, Test, and Development Commands
 Run `pnpm install` once to hydrate the workspaces. Use `pnpm dev` for the combined web client and API loop, or `pnpm dev:client` / `pnpm dev:server` for focused development (CLI and core expose `pnpm --filter tutopanda-<pkg> dev` watchers when needed). Build artifacts either via `pnpm build` or per-package scripts such as `pnpm --filter tutopanda-core build`. Linting and type checks run through the package names: e.g. `pnpm --filter tutopanda-client lint`, `pnpm --filter tutopanda-core type-check`, `pnpm --filter tutopanda-cli lint`. Vitest is wired the same way (`pnpm --filter tutopanda-server test`, etc.). Use the actual package names with `--filter` when invoking commands from the repo root.
 
+> **EXTREMELY IMPORTANT** DO NOT JUST ADD default fallbacks just to make sure that you have something, especially for inputs that are expected. Than you are silently failing and making some random assumptions. Always throw, fail fast and so those can be fixed.
+
 > **Important**: Do not write overly defensive code. Do production quality checking but do not write it in an overly defensive way. Clear and readable code is the key. Don’t add speculative guards, elaborate null checks, or fallback branches that handle scenarios we don’t actually expect today. Stick to the known contract, keep control flow straightforward, and only handle concrete failure modes we already understand (e.g., validation errors that truly happen).
 
 > **Important**: Do **not** run `pnpm install` as a build step or during routine development tasks—only run it when specifically instructed to hydrate dependencies.

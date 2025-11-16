@@ -1,7 +1,6 @@
 /* eslint-disable no-console */
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { dirname, resolve, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { resolve, join } from 'node:path';
 import {
   createStorageContext,
   initializeMovieStorage,
@@ -17,7 +16,7 @@ export type { PendingArtefactDraft } from 'tutopanda-core';
 import type { CliConfig } from './cli-config.js';
 import { writePromptFile } from './prompts.js';
 import { loadBlueprintBundle } from './blueprint-loader/index.js';
-import { loadInputsFromToml, type InputMap } from './input-loader.js';
+import { loadInputsFromYaml, type InputMap } from './input-loader.js';
 import {
   buildProducerOptionsFromBlueprint,
   buildProducerCatalog,
@@ -25,18 +24,18 @@ import {
 } from './producer-options.js';
 import { expandPath } from './path.js';
 import { mergeMovieMetadata } from './movie-metadata.js';
+import { INPUT_FILE_NAME } from './input-files.js';
 
 const console = globalThis.console;
 const planningService = createPlanningService();
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const DEFAULT_BLUEPRINT_PATH = resolve(__dirname, '../../blueprints/yaml/audio-only.yaml');
 
 export interface GeneratePlanOptions {
   cliConfig: CliConfig;
   movieId: string; // storage movie id (e.g., movie-q123)
   isNew: boolean;
   inputsPath: string;
-  usingBlueprint?: string; // Path to blueprint TOML file
+  usingBlueprint: string; // Path to blueprint YAML file
+  inquiryPromptOverride?: string;
   pendingArtefacts?: PendingArtefactDraft[];
 }
 
@@ -71,15 +70,16 @@ export async function generatePlan(options: GeneratePlanOptions): Promise<Genera
   const manifestService = createManifestService(storageContext);
   const eventLog = createEventLog(storageContext);
 
-  const blueprintPath = options.usingBlueprint
-    ? expandPath(options.usingBlueprint)
-    : DEFAULT_BLUEPRINT_PATH;
+  const blueprintPath = expandPath(options.usingBlueprint);
   const { root: blueprintRoot } = await loadBlueprintBundle(blueprintPath);
   await mergeMovieMetadata(movieDir, { blueprintPath });
 
-  const inputValues = await loadInputsFromToml(options.inputsPath, blueprintRoot);
+  const inputValues = await loadInputsFromYaml(options.inputsPath, blueprintRoot);
+  if (options.inquiryPromptOverride) {
+    inputValues.InquiryPrompt = options.inquiryPromptOverride;
+  }
   if (typeof inputValues.InquiryPrompt !== 'string' || inputValues.InquiryPrompt.trim().length === 0) {
-    throw new Error('Input TOML must specify inputs.InquiryPrompt as a non-empty string.');
+    throw new Error('Input YAML must specify inputs.InquiryPrompt as a non-empty string.');
   }
   await persistInputs(movieDir, options.inputsPath, inputValues);
 
@@ -114,7 +114,7 @@ export async function generatePlan(options: GeneratePlanOptions): Promise<Genera
 
 async function persistInputs(movieDir: string, inputsPath: string, values: InputMap): Promise<void> {
   const contents = await readFile(inputsPath, 'utf8');
-  await writeFile(join(movieDir, 'inputs.toml'), contents, 'utf8');
+  await writeFile(join(movieDir, INPUT_FILE_NAME), contents, 'utf8');
   const promptValue = values.InquiryPrompt;
   if (typeof promptValue === 'string' && promptValue.trim().length > 0) {
     await writePromptFile(movieDir, join('prompts', 'inquiry.txt'), promptValue);

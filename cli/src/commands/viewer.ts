@@ -22,10 +22,6 @@ export async function runViewer(options: ViewerOptions = {}): Promise<void> {
     TUTOPANDA_VIEWER_ROOT: rootFolder,
   };
 
-  if (options.movieId) {
-    env.TUTOPANDA_DEFAULT_MOVIE = options.movieId;
-  }
-
   const viewerProcess = spawn('pnpm', ['--filter', 'viewer', 'dev'], {
     stdio: 'inherit',
     env,

@@ -12,6 +12,7 @@ import {
 import { hashArtefactOutput } from 'tutopanda-core';
 import type { CliConfig } from './cli-config.js';
 import { mergeMovieMetadata, readMovieMetadata } from './movie-metadata.js';
+import { INPUT_FILE_NAME, WORKSPACE_INPUTS_RELATIVE_PATH } from './input-files.js';
 
 const console = globalThis.console;
 
@@ -59,7 +60,6 @@ export interface WorkspaceArtefactChange {
 
 const WORKSPACES_DIR = 'workspaces';
 const WORKSPACE_STATE_FILE = 'workspace-state.json';
-const INPUTS_RELATIVE_PATH = 'inputs/inputs.toml';
 const BLUEPRINT_COPY_RELATIVE_PATH = 'config/blueprint.toml';
 
 export async function exportWorkspace(args: {
@@ -103,8 +103,8 @@ export async function exportWorkspace(args: {
     await copyBlueprintFile(blueprintPath, workspaceDir);
   }
 
-  const inputsSrc = resolve(movieDir, 'inputs.toml');
-  const inputsDest = resolve(workspaceDir, INPUTS_RELATIVE_PATH);
+  const inputsSrc = resolve(movieDir, INPUT_FILE_NAME);
+  const inputsDest = resolve(workspaceDir, WORKSPACE_INPUTS_RELATIVE_PATH);
   await mkdir(dirname(inputsDest), { recursive: true });
   await copyFile(inputsSrc, inputsDest);
   const inputsHash = await hashFile(inputsDest);
@@ -124,7 +124,7 @@ export async function exportWorkspace(args: {
     manifestHash,
     blueprintPath,
     inputs: {
-      file: INPUTS_RELATIVE_PATH,
+      file: WORKSPACE_INPUTS_RELATIVE_PATH,
       hash: inputsHash,
     },
     artefacts: artefactEntries,

@@ -86,7 +86,7 @@ Guardrails:
    - Navigate to `/movies/<movieId>`.
 2. **CLI “launch” command**
    - CLI reads its config (`cli-config.json`), determines root, and spawns the viewer (either via `pnpm dev` or Node server serving `dist`).
-   - Passes `VITE_TUTOPANDA_ROOT` (and optionally `TUTOPANDA_DEFAULT_MOVIE`) via env.
+   - Passes `VITE_TUTOPANDA_ROOT` via env.
    - Optionally opens the browser automatically.
 
 ### Incremental implementation plan

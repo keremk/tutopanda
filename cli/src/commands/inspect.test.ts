@@ -12,7 +12,7 @@ import { runInspect } from './inspect.js';
 import { createInputsFile } from './__testutils__/inputs.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const SCRIPT_BLUEPRINT_PATH = resolve(__dirname, '../../blueprints/yaml/modules/script-generator.yaml');
+const SCRIPT_BLUEPRINT_PATH = resolve(__dirname, '../../blueprints/modules/script-generator.yaml');
 
 const tmpRoots: string[] = [];
 const originalEnvConfig = process.env.TUTOPANDA_CLI_CONFIG;
@@ -47,7 +47,7 @@ describe('runInspect', () => {
     const inputsPath = await createInputsFile({
       root,
       prompt: 'Describe the solar system',
-      fileName: 'query-inputs.toml',
+      fileName: 'query-inputs.yaml',
     });
     const queryResult = await runQuery({
       inputsPath,

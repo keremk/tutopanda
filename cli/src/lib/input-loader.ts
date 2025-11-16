@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises';
-import { parse as parseToml } from 'smol-toml';
+import { extname } from 'node:path';
+import { parse as parseYaml } from 'yaml';
 import type { BlueprintTreeNode } from 'tutopanda-core';
 
 export type InputMap = Record<string, unknown>;
@@ -8,17 +9,14 @@ interface RawInputsFile {
   inputs?: unknown;
 }
 
-export async function loadInputsFromToml(
+export async function loadInputsFromYaml(
   filePath: string,
   blueprint: BlueprintTreeNode,
 ): Promise<InputMap> {
+  validateYamlExtension(filePath);
   const contents = await readFile(filePath, 'utf8');
-  const parsed = parseToml(contents) as RawInputsFile;
-  if (!parsed.inputs || typeof parsed.inputs !== 'object') {
-    throw new Error(`Input TOML must contain an [inputs] table: ${filePath}`);
-  }
-
-  const values = { ...(parsed.inputs as Record<string, unknown>) };
+  const parsed = parseYaml(contents) as RawInputsFile;
+  const values = resolveInputSection(parsed);
 
   const missingRequired = blueprint.document.inputs
     .filter((input) => input.required)
@@ -36,4 +34,22 @@ export async function loadInputsFromToml(
   }
 
   return values;
+}
+
+function validateYamlExtension(filePath: string): void {
+  const extension = extname(filePath).toLowerCase();
+  if (extension === '.yaml' || extension === '.yml') {
+    return;
+  }
+  throw new Error(`Input files must be YAML (*.yaml or *.yml). Received: ${filePath}`);
+}
+
+function resolveInputSection(raw: RawInputsFile): Record<string, unknown> {
+  if (raw && typeof raw === 'object' && raw.inputs && typeof raw.inputs === 'object') {
+    return { ...(raw.inputs as Record<string, unknown>) };
+  }
+  if (raw && typeof raw === 'object') {
+    return { ...(raw as Record<string, unknown>) };
+  }
+  throw new Error('Input file must define an inputs mapping with key/value pairs.');
 }

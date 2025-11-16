@@ -14,14 +14,16 @@ import {
 import { expandPath } from '../lib/path.js';
 import { confirmPlanExecution } from '../lib/interactive-confirm.js';
 import { cleanupPlanFiles } from '../lib/plan-cleanup.js';
+import { resolveBlueprintSpecifier } from '../lib/blueprints-path.js';
 
 const console = globalThis.console;
 
 export interface QueryOptions {
   inputsPath?: string;
+  inquiryPrompt?: string;
   dryRun?: boolean;
   nonInteractive?: boolean;
-  usingBlueprint?: string;
+  usingBlueprint: string;
 }
 
 export interface QueryResult {
@@ -38,7 +40,11 @@ export interface QueryResult {
 export async function runQuery(options: QueryOptions): Promise<QueryResult> {
   const inputsPath = options.inputsPath ? expandPath(options.inputsPath) : undefined;
   if (!inputsPath) {
-    throw new Error('Input TOML path is required. Provide --inputs=/path/to/inputs.toml');
+    throw new Error('Input YAML path is required. Provide --inputs=/path/to/inputs.yaml');
+  }
+
+  if (!options.usingBlueprint || options.usingBlueprint.trim().length === 0) {
+    throw new Error('Blueprint path is required. Provide --usingBlueprint=/path/to/blueprint.yaml');
   }
 
   const cliConfig = await readCliConfig();
@@ -51,12 +57,17 @@ export async function runQuery(options: QueryOptions): Promise<QueryResult> {
   const storageRoot = cliConfig.storage.root;
   const storageBasePath = cliConfig.storage.basePath;
 
+  const blueprintPath = await resolveBlueprintSpecifier(options.usingBlueprint, {
+    cliRoot: cliConfig.storage.root,
+  });
+
   const planResult = await generatePlan({
     cliConfig,
     movieId: storageMovieId,
     isNew: true,
     inputsPath,
-    usingBlueprint: options.usingBlueprint,
+    usingBlueprint: blueprintPath,
+    inquiryPromptOverride: options.inquiryPrompt,
   });
 
   const movieDir = resolve(storageRoot, storageBasePath, storageMovieId);
