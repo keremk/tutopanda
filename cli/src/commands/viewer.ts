@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import os from 'node:os';
 import process from 'node:process';
 import { readCliConfig } from '../lib/cli-config.js';
 
@@ -40,14 +41,38 @@ export async function runViewer(options: ViewerOptions = {}): Promise<void> {
 }
 
 function openBrowser(url: string) {
+  const command = getOpenCommand(url);
+
+  const child = spawn(command.bin, command.args, { detached: true, stdio: 'ignore' });
+  child.on('error', (error) => {
+    console.warn(`Failed to open the browser automatically: ${error.message}`);
+    console.warn(`Open the viewer manually: ${url}`);
+  });
+  child.unref();
+}
+
+function getOpenCommand(url: string) {
   const platform = process.platform;
   if (platform === 'darwin') {
-    spawn('open', [url], { detached: true, stdio: 'ignore' }).unref();
-    return;
+    return { bin: 'open', args: [url] };
   }
   if (platform === 'win32') {
-    spawn('cmd', ['/c', 'start', '', url], { detached: true, stdio: 'ignore' }).unref();
-    return;
+    return { bin: 'cmd', args: ['/c', 'start', '', url] };
   }
-  spawn('xdg-open', [url], { detached: true, stdio: 'ignore' }).unref();
+  if (isWSL()) {
+    // Use Windows default browser even when running inside WSL.
+    return { bin: 'cmd.exe', args: ['/c', 'start', '', url] };
+  }
+  return { bin: 'xdg-open', args: [url] };
+}
+
+function isWSL(): boolean {
+  if (process.platform !== 'linux') {
+    return false;
+  }
+  if (process.env.WSL_DISTRO_NAME) {
+    return true;
+  }
+  const release = os.release().toLowerCase();
+  return release.includes('microsoft') || release.includes('wsl');
 }
