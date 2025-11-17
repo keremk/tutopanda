@@ -163,12 +163,12 @@ Before you start the generation, always provide a summary for what you are gener
 
       const summaryLines = [
         `Movie ${result.movieId} created.`,
-        `Timeline: ${timelineUri}`,
-        `Inputs: ${inputsUri}`,
+        viewerUrl
+          ? `Open viewer: ${viewerUrl}`
+          : `Viewer not launched automatically. Run "tutopanda viewer:view --movieId=${result.storageMovieId}" or start the viewer and open /movies/${result.storageMovieId}.`,
+        `Timeline resource: ${timelineUri}`,
+        `Inputs resource: ${inputsUri}`,
       ];
-      if (viewerUrl) {
-        summaryLines.push(`Viewer: ${viewerUrl}`);
-      }
 
       return {
         content: [
