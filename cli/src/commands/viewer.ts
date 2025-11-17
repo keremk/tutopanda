@@ -303,6 +303,6 @@ function resolveViewerBundleOrExit(): ReturnType<typeof resolveViewerBundlePaths
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => {
-    setTimeout(resolve, ms);
+    globalThis.setTimeout(resolve, ms);
   });
 }

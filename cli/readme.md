@@ -19,6 +19,52 @@ npx tutopanda viewer:view --movieId movie-123
 
 All other commands (`query`, `inspect`, `edit`, `providers:list`, etc.) behave exactly like before.
 
+## MCP install (Claude Desktop & Claude Code)
+
+The MCP server lets an LLM client call `generate_story`, inspect blueprints, and open the viewer without running manual CLI commands. To set it up:
+
+1. **Initialize** the CLI (once per machine/project):
+   ```bash
+   tutopanda init --rootFolder=~/media/tutopanda
+   ```
+   This seeds `~/media/tutopanda/config/blueprints` while still writing the config to the default path `~/.tutopanda/cli-config.json`. If you pass `--configPath`, remember to set `TUTOPANDA_CLI_CONFIG` in your shell profile so new terminals inherit it; otherwise every CLI command automatically reads the default config, so `init` is a one-time step.
+   > We recommend not specifying --configPath and using the default path, unless you think you have a good reason not to and also ready to modify your .zshrc etc. with the exported TUTOPANDA_CLI_CONFIG/
+
+2. **Register the MCP server with your client:**
+
+   - **Claude Desktop**  
+     Open *Settings → Model Context Protocol → Add Server* and supply:
+     ```
+     Name: Tutopanda
+     Command: tutopanda
+     Arguments: mcp --defaultBlueprint=image-audio.yaml
+     Working directory: (leave blank or point at your repo)
+     Environment:
+       TUTOPANDA_CLI_CONFIG=/home/me/media/tutopanda/cli-config.json
+     ```
+     The blueprint value may be an absolute path or a filename relative to `config/blueprints`. Add `--openViewer=false` if you don’t want the viewer to launch automatically. Claude Desktop launches this command via stdio whenever the assistant needs Tutopanda context.
+
+   - **Claude Code (VS Code extension)**  
+     Add an entry to your VS Code settings (`settings.json` or UI):
+     ```json
+     "claudeCode.mcpServers": [
+       {
+         "name": "Tutopanda",
+         "command": "tutopanda",
+         "args": ["mcp", "--defaultBlueprint=image-audio.yaml"],
+         "env": {
+           "TUTOPANDA_CLI_CONFIG": "/home/me/media/tutopanda/cli-config.json"
+         }
+       }
+     ]
+     ```
+     Include `--openViewer=false` in the `args` array if you prefer headless runs. Restart the extension so it picks up the new provider.
+
+3. **Usage** – In either client you can now ask:  
+   > “Use Tutopanda to generate a 30-second story about the Roman Empire.”  
+   The MCP tool handles input validation, runs `tutopanda query`, exposes artefacts/timeline as resources, and opens the viewer (unless you pass `--openViewer=false` in the MCP command).
+
+
 ## Packaging for release (maintainers)
 
 From the repo root:

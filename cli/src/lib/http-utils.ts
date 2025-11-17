@@ -1,3 +1,4 @@
+import { Buffer } from 'node:buffer';
 import http from 'node:http';
 import https from 'node:https';
 import { URL } from 'node:url';

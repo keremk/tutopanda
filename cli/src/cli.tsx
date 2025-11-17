@@ -1,16 +1,48 @@
 #!/usr/bin/env node
 /* eslint-env node */
 /* eslint-disable no-console */
-import { config as dotenvConfig } from 'dotenv';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import process from 'node:process';
 import meow from 'meow';
 
-// Load .env from multiple locations (CLI folder and current working directory)
+sanitizeDebugEnvVar('DEBUG');
+sanitizeDebugEnvVar('NODE_DEBUG');
+delete process.env.DOTENV_CONFIG_DEBUG;
+
 const __dirname = dirname(fileURLToPath(import.meta.url));
-dotenvConfig({ path: resolve(__dirname, '..', '.env') }); // CLI folder
-dotenvConfig({ path: resolve(process.cwd(), '.env'), override: false }); // Current working directory (if exists)
+const restoreStdout = silenceStdout();
+try {
+  const { config: dotenvConfig } = await import('dotenv');
+  dotenvConfig({ path: resolve(__dirname, '..', '.env') });
+  dotenvConfig({ path: resolve(process.cwd(), '.env'), override: false });
+} finally {
+  restoreStdout();
+}
+function sanitizeDebugEnvVar(name: 'DEBUG' | 'NODE_DEBUG'): void {
+  const value = process.env[name];
+  if (!value) {
+    return;
+  }
+  const sanitized = value
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0 && !entry.toLowerCase().includes('dotenv'));
+  if (sanitized.length > 0) {
+    process.env[name] = sanitized.join(',');
+  } else {
+    delete process.env[name];
+  }
+}
+
+function silenceStdout(): () => void {
+  const stream = process.stdout;
+  const originalWrite = stream.write;
+  stream.write = (() => true) as typeof stream.write;
+  return () => {
+    stream.write = originalWrite;
+  };
+}
 import { runInit } from './commands/init.js';
 import { runQuery } from './commands/query.js';
 import { runInspect } from './commands/inspect.js';
@@ -20,6 +52,7 @@ import { runBlueprintsList } from './commands/blueprints-list.js';
 import { runBlueprintsDescribe } from './commands/blueprints-describe.js';
 import { runViewerStart, runViewerStop, runViewerView } from './commands/viewer.js';
 import { runBlueprintsValidate } from './commands/blueprints-validate.js';
+import { runMcpServer } from './commands/mcp.js';
 import type { DryRunSummary, DryRunJobSummary } from './lib/dry-run.js';
 import type { BuildSummary } from './lib/build.js';
 import { readCliConfig } from './lib/cli-config.js';
@@ -34,10 +67,11 @@ const console = globalThis.console;
 type ProviderListOutputEntry = Awaited<ReturnType<typeof runProvidersList>>['entries'][number];
 
 const cli = meow(
-  `\nUsage\n  $ tutopanda <command> [options]\n\nCommands\n  install             Guided setup (alias for init)\n  init                Initialize Tutopanda CLI configuration\n  query               Generate a plan using a blueprint (YAML) and inputs YAML\n  inspect             Export prompts or timeline data for a movie\n  edit                Regenerate a movie with edited inputs\n  viewer:start        Start the bundled viewer server in the foreground\n  viewer:view         Open the viewer for a movie id (starts server if needed)\n  viewer:stop         Stop the background viewer server\n  providers:list      Show providers defined in a blueprint\n  blueprints:list     List available blueprint YAML files\n  blueprints:describe <path>  Show details for a blueprint YAML file\n  blueprints:validate <path>  Validate a blueprint YAML file\n\nExamples\n  $ tutopanda install --rootFolder=~/media/tutopanda\n  $ tutopanda query --inputs=~/movies/my-inputs.yaml --using-blueprint=audio-only.yaml\n  $ tutopanda providers:list --using-blueprint=image-audio.yaml\n  $ tutopanda blueprints:list\n  $ tutopanda blueprints:describe audio-only.yaml\n  $ tutopanda blueprints:validate image-audio.yaml\n  $ tutopanda inspect --movieId=q123456 --prompts\n  $ tutopanda edit --movieId=q123456 --inputs=edited-inputs.yaml\n  $ tutopanda viewer:start\n  $ tutopanda viewer:view --movieId=q123456\n`,
+  `\nUsage\n  $ tutopanda <command> [options]\n\nCommands\n  install             Guided setup (alias for init)\n  init                Initialize Tutopanda CLI configuration\n  query               Generate a plan using a blueprint (YAML) and inputs YAML\n  inspect             Export prompts or timeline data for a movie\n  edit                Regenerate a movie with edited inputs\n  viewer:start        Start the bundled viewer server in the foreground\n  viewer:view         Open the viewer for a movie id (starts server if needed)\n  viewer:stop         Stop the background viewer server\n  providers:list      Show providers defined in a blueprint\n  blueprints:list     List available blueprint YAML files\n  blueprints:describe <path>  Show details for a blueprint YAML file\n  blueprints:validate <path>  Validate a blueprint YAML file\n  mcp                 Run the Tutopanda MCP server over stdio\n\nExamples\n  $ tutopanda install --rootFolder=~/media/tutopanda\n  $ tutopanda query --inputs=~/movies/my-inputs.yaml --using-blueprint=audio-only.yaml\n  $ tutopanda providers:list --using-blueprint=image-audio.yaml\n  $ tutopanda blueprints:list\n  $ tutopanda blueprints:describe audio-only.yaml\n  $ tutopanda blueprints:validate image-audio.yaml\n  $ tutopanda inspect --movieId=q123456 --prompts\n  $ tutopanda edit --movieId=q123456 --inputs=edited-inputs.yaml\n  $ tutopanda viewer:start\n  $ tutopanda viewer:view --movieId=q123456\n  $ tutopanda mcp --defaultBlueprint=image-audio.yaml\n`,
   {
     importMeta: import.meta,
     flags: {
+      config: { type: 'string' },
       rootFolder: { type: 'string' },
       movieId: { type: 'string' },
       prompts: { type: 'boolean', default: true },
@@ -50,6 +84,9 @@ const cli = meow(
       movie: { type: 'string' },
       viewerHost: { type: 'string' },
       viewerPort: { type: 'number' },
+      blueprintsDir: { type: 'string' },
+      defaultBlueprint: { type: 'string' },
+      openViewer: { type: 'boolean' },
     },
   },
 );
@@ -59,6 +96,7 @@ async function main(): Promise<void> {
   const positionalInquiry = command === 'query' ? rest[0] : undefined;
   const remaining = positionalInquiry !== undefined ? rest.slice(1) : rest;
   const flags = cli.flags as {
+    config?: string;
     rootFolder?: string;
     configPath?: string;
     movieId?: string;
@@ -72,6 +110,9 @@ async function main(): Promise<void> {
     movie?: string;
     viewerHost?: string;
     viewerPort?: number;
+    blueprintsDir?: string;
+    defaultBlueprint?: string;
+    openViewer?: boolean;
   };
 
   switch (command) {
@@ -391,6 +432,15 @@ async function main(): Promise<void> {
     }
     case 'viewer:stop': {
       await runViewerStop();
+      return;
+    }
+    case 'mcp': {
+      await runMcpServer({
+        configPath: flags.config,
+        blueprintsDir: flags.blueprintsDir,
+        defaultBlueprint: flags.defaultBlueprint,
+        openViewer: flags.openViewer,
+      });
       return;
     }
     default: {

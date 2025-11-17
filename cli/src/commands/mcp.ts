@@ -1,0 +1,242 @@
+import { readFile, stat } from 'node:fs/promises';
+import { isAbsolute, resolve } from 'node:path';
+import { fileURLToPath, URL } from 'node:url';
+import process from 'node:process';
+import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import { createTutopandaMcpServer } from '../mcp/server.js';
+import {
+  getBundledBlueprintsRoot,
+  getCliBlueprintsRoot,
+} from '../lib/config-assets.js';
+import {
+  getDefaultCliConfigPath,
+  readCliConfig,
+  type CliConfig,
+} from '../lib/cli-config.js';
+import { expandPath } from '../lib/path.js';
+
+const console = globalThis.console;
+type ShutdownSignal = 'SIGINT' | 'SIGTERM';
+
+export interface RunMcpServerOptions {
+  configPath?: string;
+  blueprintsDir?: string;
+  defaultBlueprint?: string;
+  openViewer?: boolean;
+}
+
+export async function runMcpServer(options: RunMcpServerOptions = {}): Promise<void> {
+  const resolvedConfigPath = options.configPath ? expandPath(options.configPath) : getDefaultCliConfigPath();
+  const cliConfig = await readCliConfig(resolvedConfigPath);
+  if (!cliConfig) {
+    throw new Error('Tutopanda CLI is not initialized. Run "tutopanda init" before starting the MCP server.');
+  }
+
+  // Ensure downstream helpers (runQuery, viewer commands) use the same config file.
+  process.env.TUTOPANDA_CLI_CONFIG = resolvedConfigPath;
+
+  const blueprintDirectory = await resolveBlueprintDirectory({
+    cliConfig,
+    override: options.blueprintsDir,
+  });
+  const packageInfo = await readPackageMetadata();
+  const defaultBlueprintPath = await resolveDefaultBlueprint({
+    blueprintDir: blueprintDirectory,
+    specifier: options.defaultBlueprint,
+  });
+  const openViewerDefault = options.openViewer ?? true;
+
+  const restoreConsole = redirectConsoleOutput();
+  const server = createTutopandaMcpServer({
+    storageRoot: cliConfig.storage.root,
+    storageBasePath: cliConfig.storage.basePath,
+    blueprintDir: blueprintDirectory,
+    defaultBlueprintPath,
+    openViewerDefault,
+    packageInfo,
+    cliConfigPath: resolvedConfigPath,
+  });
+
+  const transport = new StdioServerTransport();
+  await server.connect(transport);
+  console.log(`Tutopanda MCP server ready. Default blueprint: ${shortBlueprintLabel(defaultBlueprintPath, blueprintDirectory)}`);
+
+  await new Promise<void>((resolvePromise, rejectPromise) => {
+    let closed = false;
+
+    async function shutdown(signal?: ShutdownSignal): Promise<void> {
+      if (closed) {
+        return;
+      }
+      closed = true;
+      if (signal) {
+        console.log(`Received ${signal}. Shutting down Tutopanda MCP server...`);
+      }
+      try {
+        await transport.close();
+      } catch (error) {
+        console.error('Error closing MCP transport:', error);
+      }
+      try {
+        await server.close();
+      } catch (error) {
+        console.error('Error closing MCP server:', error);
+      }
+      resolvePromise();
+    }
+
+    const handleTransportError = (error: Error): void => {
+      if (closed) {
+        return;
+      }
+      console.error('MCP server transport error:', error);
+      rejectPromise(error);
+    };
+
+    const handleTransportClose = (): void => {
+      void shutdown();
+    };
+
+    transport.onclose = handleTransportClose;
+    transport.onerror = handleTransportError;
+
+    const signals: ShutdownSignal[] = ['SIGINT', 'SIGTERM'];
+    for (const signal of signals) {
+      process.once(signal, () => {
+        void shutdown(signal);
+      });
+    }
+  }).finally(() => {
+    restoreConsole();
+  });
+}
+
+async function resolveBlueprintDirectory({
+  cliConfig,
+  override,
+}: {
+  cliConfig: CliConfig;
+  override?: string;
+}): Promise<string> {
+  const attemptPaths: string[] = [];
+  const checkPath = async (candidate: string | null | undefined): Promise<string | null> => {
+    if (!candidate) {
+      return null;
+    }
+    const expanded = expandPath(candidate);
+    attemptPaths.push(expanded);
+    try {
+      const stats = await statSafe(expanded);
+      if (stats?.isDirectory()) {
+        return expanded;
+      }
+    } catch {
+      // fallthrough
+    }
+    return null;
+  };
+
+  const viaOverride = await checkPath(override);
+  if (viaOverride) {
+    return viaOverride;
+  }
+  const cliRootDir = getCliBlueprintsRoot(cliConfig!.storage.root);
+  const viaCliRoot = await checkPath(cliRootDir);
+  if (viaCliRoot) {
+    return viaCliRoot;
+  }
+  const bundled = await checkPath(getBundledBlueprintsRoot());
+  if (bundled) {
+    return bundled;
+  }
+  throw new Error(
+    `No blueprint directory found. Tried: ${attemptPaths.join(', ')}. Initialize the CLI or provide --blueprintsDir.`,
+  );
+}
+
+async function resolveDefaultBlueprint({
+  blueprintDir,
+  specifier,
+}: {
+  blueprintDir: string;
+  specifier?: string;
+}): Promise<string> {
+  if (!specifier || specifier.trim().length === 0) {
+    throw new Error('Default blueprint not configured. Pass --defaultBlueprint=/path/to/blueprint.yaml when launching the MCP server.');
+  }
+
+  if (specifier.startsWith('~/') || isAbsolute(specifier)) {
+    const absolute = expandPath(specifier);
+    if (await fileExists(absolute)) {
+      return absolute;
+    }
+  }
+
+  const joined = resolve(blueprintDir, specifier);
+  if (await fileExists(joined)) {
+    return joined;
+  }
+
+  throw new Error(
+    `Default blueprint "${specifier}" not found. Checked ${joined}${
+      specifier.startsWith('/') ? '' : ` and ${specifier}`
+    }.`,
+  );
+}
+
+function shortBlueprintLabel(absolutePath: string, blueprintDir: string): string {
+  if (absolutePath.startsWith(blueprintDir)) {
+    const relativePath = absolutePath.slice(blueprintDir.length).replace(/^\/+/, '');
+    return relativePath.length > 0 ? relativePath : absolutePath;
+  }
+  return absolutePath;
+}
+
+async function fileExists(path: string): Promise<boolean> {
+  try {
+    const stats = await statSafe(path);
+    return stats ? stats.isFile() : false;
+  } catch {
+    return false;
+  }
+}
+
+async function statSafe(target: string) {
+  try {
+    return await stat(target);
+  } catch {
+    return null;
+  }
+}
+
+async function readPackageMetadata(): Promise<{ name: string; version: string }> {
+  const __dirname = fileURLToPath(new URL('.', import.meta.url));
+  const pkgPath = resolve(__dirname, '../../package.json');
+  const raw = await readFile(pkgPath, 'utf8');
+  const parsed = JSON.parse(raw) as { name?: string; version?: string };
+  return {
+    name: parsed.name ?? 'tutopanda-cli',
+    version: parsed.version ?? '0.0.0',
+  };
+}
+
+function redirectConsoleOutput(): () => void {
+  const originalLog = console.log;
+  const originalInfo = console.info;
+  const originalDebug = console.debug;
+  const originalError = console.error;
+
+  const toStderr = (...args: unknown[]): void => {
+    originalError(...args);
+  };
+
+  console.log = toStderr;
+  console.info = toStderr;
+  console.debug = toStderr;
+
+  return () => {
+    console.log = originalLog;
+    console.info = originalInfo;
+    console.debug = originalDebug;
+  };
+}

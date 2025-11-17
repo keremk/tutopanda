@@ -2,6 +2,8 @@ import { spawn } from 'node:child_process';
 import os from 'node:os';
 import process from 'node:process';
 
+const console = globalThis.console;
+
 export function openBrowser(url: string): void {
   const command = getOpenCommand(url);
   const child = spawn(command.bin, command.args, { detached: true, stdio: 'ignore' });
