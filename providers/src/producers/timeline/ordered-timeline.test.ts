@@ -1,6 +1,49 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { createTimelineProducerHandler } from './ordered-timeline.js';
 import type { ProviderJobContext } from '../../types.js';
+
+vi.mock('mediabunny', () => {
+  class MockBufferSource {
+    buffer: Uint8Array;
+
+    constructor(data: ArrayBuffer | ArrayBufferView) {
+      if (data instanceof ArrayBuffer) {
+        this.buffer = new Uint8Array(data);
+        return;
+      }
+      if (ArrayBuffer.isView(data)) {
+        const view = data as ArrayBufferView;
+        this.buffer = new Uint8Array(view.buffer.slice(view.byteOffset, view.byteOffset + view.byteLength));
+        return;
+      }
+      throw new Error('Unsupported buffer payload.');
+    }
+  }
+
+  class MockInput {
+    private readonly source: MockBufferSource;
+
+    constructor(options: { source: MockBufferSource }) {
+      this.source = options.source;
+    }
+
+    async computeDuration() {
+      const value = this.source.buffer[0];
+      if (!Number.isFinite(value)) {
+        throw new Error('Missing duration byte.');
+      }
+      return value;
+    }
+
+    dispose() {}
+  }
+
+  return {
+    Input: MockInput,
+    BufferSource: MockBufferSource,
+    ALL_FORMATS: [],
+  } satisfies Record<string, unknown>;
+});
 
 function createHandler() {
   return createTimelineProducerHandler()({
@@ -10,7 +53,7 @@ function createHandler() {
   });
 }
 
-function makeRequest(options: { omitAudio?: boolean } = {}): ProviderJobContext {
+function makeRequest(options: { omitAudio?: boolean; audioDurations?: number[] } = {}): ProviderJobContext {
   const imageGroups = [
     ['Artifact:Image[0][0]', 'Artifact:Image[0][1]'],
     ['Artifact:Image[1][0]'],
@@ -19,8 +62,9 @@ function makeRequest(options: { omitAudio?: boolean } = {}): ProviderJobContext 
     ? []
     : [
         ['Artifact:Audio[0]'],
-        ['Artifact:Audio[1]'],
-      ];
+      ['Artifact:Audio[1]'],
+    ];
+  const audioDurations = options.audioDurations ?? [12, 8];
 
   const resolvedInputs: Record<string, unknown> = {
     'Input:TimelineComposer.ImageSegments': { groupBy: 'segment', orderBy: 'image', groups: imageGroups },
@@ -39,6 +83,17 @@ function makeRequest(options: { omitAudio?: boolean } = {}): ProviderJobContext 
     delete resolvedInputs['Input:TimelineComposer.AudioSegments'];
     delete resolvedInputs['TimelineComposer.AudioSegments'];
     delete resolvedInputs.AudioSegments;
+  } else {
+    audioGroups.forEach((group, index) => {
+      const assetId = group[0];
+      if (!assetId) {
+        return;
+      }
+      const payload = createAudioPayload(audioDurations[index] ?? audioDurations[0] ?? 1);
+      resolvedInputs[assetId] = payload;
+      const trimmed = assetId.replace(/^Artifact:/, '');
+      resolvedInputs[trimmed] = payload;
+    });
   }
 
   return {
@@ -74,6 +129,11 @@ function makeRequest(options: { omitAudio?: boolean } = {}): ProviderJobContext 
   };
 }
 
+function createAudioPayload(duration: number): Uint8Array {
+  const rounded = Math.max(1, Math.round(duration));
+  return new Uint8Array([rounded]);
+}
+
 describe('TimelineProducer', () => {
   it('builds a timeline document with aligned tracks', async () => {
     const handler = createHandler();
@@ -98,9 +158,10 @@ describe('TimelineProducer', () => {
     expect(audioTrack).toBeDefined();
     expect(audioTrack?.clips).toHaveLength(2);
     expect(audioTrack?.clips[0]?.startTime).toBe(0);
-    expect(audioTrack?.clips[0]?.duration).toBeCloseTo(10);
+    expect(audioTrack?.clips[0]?.duration).toBeCloseTo(12);
     expect(audioTrack?.clips[0]?.properties.assetId).toBe('Artifact:Audio[0]');
-    expect(audioTrack?.clips[1]?.startTime).toBeCloseTo(10);
+    expect(audioTrack?.clips[1]?.startTime).toBeCloseTo(12);
+    expect(audioTrack?.clips[1]?.duration).toBeCloseTo(8);
 
     const imageTrack = timeline.tracks.find((track) => track.kind === 'Image');
     expect(imageTrack).toBeDefined();

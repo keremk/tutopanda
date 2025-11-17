@@ -1,3 +1,4 @@
+import { Input, ALL_FORMATS, BufferSource as MediaBufferSource } from 'mediabunny';
 import { createProducerHandlerFactory } from '../../sdk/handler-factory.js';
 import { createProviderError } from '../../sdk/errors.js';
 import type { HandlerFactory } from '../../types.js';
@@ -128,6 +129,8 @@ const KEN_BURNS_PRESETS: KenBurnsPreset[] = [
   },
 ];
 
+const TRACK_KINDS_WITH_NATIVE_DURATION = new Set<ClipKind>(['Audio', 'Music', 'Video']);
+
 export function createTimelineProducerHandler(): HandlerFactory {
   return createProducerHandlerFactory({
     domain: 'media',
@@ -144,7 +147,6 @@ export function createTimelineProducerHandler(): HandlerFactory {
 
       const inputIdMap = buildInputIdMap(request.inputs);
       const resolvedInputs = runtime.inputs.all();
-      const totalDuration = readTimelineDuration(resolvedInputs);
       const masterKind = config.masterTrack?.kind ?? config.clips[0]!.kind;
       const fanInByInput = new Map<string, FanInValue>();
 
@@ -184,7 +186,14 @@ export function createTimelineProducerHandler(): HandlerFactory {
         });
       }
 
-      const segmentDurations = allocateSegmentDurations(totalDuration, segmentCount);
+      const masterSegmentDurations = await determineMasterSegmentDurations({
+        clip: masterClip,
+        fanIn: masterFanIn,
+        segmentCount,
+        inputs: runtime.inputs,
+      });
+      const segmentDurations = masterSegmentDurations
+        ?? allocateSegmentDurations(readTimelineDuration(resolvedInputs), segmentCount);
       const segmentOffsets = buildSegmentOffsets(segmentDurations);
 
       const tracks: TimelineTrack[] = config.clips.map((clip, index) => {
@@ -516,6 +525,116 @@ function allocateSegmentDurations(total: number, count: number): number[] {
   const delta = roundSeconds(total - sum);
   durations[count - 1] = roundSeconds(durations[count - 1] + delta);
   return durations;
+}
+
+async function determineMasterSegmentDurations(args: {
+  clip: TimelineClipConfig;
+  fanIn: FanInValue;
+  segmentCount: number;
+  inputs: ResolvedInputsAccessor;
+}): Promise<number[] | undefined> {
+  if (!TRACK_KINDS_WITH_NATIVE_DURATION.has(args.clip.kind)) {
+    return undefined;
+  }
+  return readSegmentDurationsFromAssets({
+    fanIn: args.fanIn,
+    segmentCount: args.segmentCount,
+    inputs: args.inputs,
+  });
+}
+
+async function readSegmentDurationsFromAssets(args: {
+  fanIn: FanInValue;
+  segmentCount: number;
+  inputs: ResolvedInputsAccessor;
+}): Promise<number[]> {
+  const groups = normalizeGroups(args.fanIn.groups, args.segmentCount);
+  const durations: number[] = [];
+  const cache = new Map<string, number>();
+
+  for (let index = 0; index < args.segmentCount; index += 1) {
+    const assetId = groups[index]?.[0];
+    if (!assetId) {
+      throw createProviderError(`Master track is missing an asset for segment index ${index}.`, {
+        code: 'missing_asset',
+        kind: 'user_input',
+        causedByUser: true,
+      });
+    }
+    const duration = await loadAssetDuration({
+      assetId,
+      inputs: args.inputs,
+      cache,
+    });
+    durations.push(duration);
+  }
+
+  return durations;
+}
+
+async function loadAssetDuration(args: {
+  assetId: string;
+  inputs: ResolvedInputsAccessor;
+  cache: Map<string, number>;
+}): Promise<number> {
+  const cached = args.cache.get(args.assetId);
+  if (cached !== undefined) {
+    return cached;
+  }
+
+  const payload = resolveAssetBinary(args.inputs, args.assetId);
+  let input: Input<MediaBufferSource> | undefined;
+
+  try {
+    const source = new MediaBufferSource(payload);
+    input = new Input({
+      formats: ALL_FORMATS,
+      source,
+    });
+    const duration = await input.computeDuration();
+    if (!Number.isFinite(duration) || duration <= 0) {
+      throw new Error('Asset reported a non-positive duration.');
+    }
+    const rounded = roundSeconds(duration);
+    args.cache.set(args.assetId, rounded);
+    return rounded;
+  } catch (error) {
+    throw createProviderError(`TimelineProducer failed to read duration for asset "${args.assetId}".`, {
+      code: 'asset_duration_failed',
+      kind: 'unknown',
+      causedByUser: false,
+      metadata: { assetId: args.assetId },
+      raw: error,
+    });
+  } finally {
+    input?.dispose();
+  }
+}
+
+function resolveAssetBinary(inputs: ResolvedInputsAccessor, assetId: string): ArrayBuffer | ArrayBufferView {
+  const value = inputs.getByNodeId(assetId);
+  if (isBinaryPayload(value)) {
+    return value;
+  }
+  if (value !== undefined) {
+    throw createProviderError(`TimelineProducer expected binary data for asset "${assetId}".`, {
+      code: 'invalid_asset_payload',
+      kind: 'unknown',
+      causedByUser: false,
+      metadata: { assetId, valueType: typeof value },
+    });
+  }
+
+  throw createProviderError(`TimelineProducer could not locate binary data for asset "${assetId}".`, {
+    code: 'missing_asset_payload',
+    kind: 'unknown',
+    causedByUser: false,
+    metadata: { assetId },
+  });
+}
+
+function isBinaryPayload(value: unknown): value is ArrayBuffer | ArrayBufferView {
+  return value instanceof ArrayBuffer || ArrayBuffer.isView(value);
 }
 
 function buildSegmentOffsets(durations: number[]): number[] {

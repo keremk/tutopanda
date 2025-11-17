@@ -346,4 +346,98 @@ describe('createRunner', () => {
       ['Artifact:AudioGenerator.SegmentAudio[1]'],
     ]);
   });
+
+  it('provides fan-in artefact blobs to downstream jobs', async () => {
+    const storage = createStorageContext({ kind: 'memory' });
+    await initializeMovieStorage(storage, 'movie-fanin-assets');
+    const eventLog = createEventLog(storage);
+    const manifestService = createManifestService(storage);
+
+    const audioPayload = new TextEncoder().encode('fan-in audio');
+    let observedResolvedInputs: Record<string, unknown> | undefined;
+
+    const fanInPlan: ExecutionPlan = {
+      revision: 'rev-0003',
+      manifestBaseHash: 'hash-0002',
+      layers: [
+        [
+          {
+            jobId: 'job-audio',
+            producer: 'AudioProducer',
+            inputs: [],
+            produces: ['Artifact:AudioGenerator.SegmentAudio[0]'],
+            provider: 'replicate',
+            providerModel: 'audio/model',
+            rateKey: 'audio:model',
+          },
+        ],
+        [
+          {
+            jobId: 'job-timeline',
+            producer: 'TimelineProducer',
+            inputs: ['Input:TimelineComposer.AudioSegments'],
+            produces: ['Artifact:TimelineComposer.Timeline'],
+            provider: 'tutopanda',
+            providerModel: 'OrderedTimeline',
+            rateKey: 'timeline:ordered',
+            context: {
+              namespacePath: ['TimelineComposer'],
+              indices: {},
+              qualifiedName: 'TimelineComposer.TimelineProducer',
+              inputs: ['Input:TimelineComposer.AudioSegments'],
+              produces: ['Artifact:TimelineComposer.Timeline'],
+              fanIn: {
+                'Input:TimelineComposer.AudioSegments': {
+                  groupBy: 'segment',
+                  members: [
+                    { id: 'Artifact:AudioGenerator.SegmentAudio[0]', group: 0 },
+                  ],
+                },
+              },
+            },
+          },
+        ],
+      ],
+      createdAt: new Date().toISOString(),
+    };
+
+    const runner = createRunner({
+      produce: async (request) => {
+        if (request.job.jobId === 'job-audio') {
+          return {
+            jobId: request.job.jobId,
+            status: 'succeeded',
+            artefacts: [
+              {
+                artefactId: 'Artifact:AudioGenerator.SegmentAudio[0]',
+                blob: {
+                  data: audioPayload,
+                  mimeType: 'audio/mpeg',
+                },
+              },
+            ],
+          } satisfies ProduceResult;
+        }
+
+        observedResolvedInputs = request.job.context?.extras?.resolvedInputs as Record<string, unknown> | undefined;
+        return {
+          jobId: request.job.jobId,
+          status: 'succeeded',
+          artefacts: [],
+        } satisfies ProduceResult;
+      },
+    });
+
+    await runner.execute(fanInPlan, {
+      movieId: 'movie-fanin-assets',
+      manifest: baseManifest,
+      storage,
+      eventLog,
+      manifestService,
+    });
+
+    const payload = observedResolvedInputs?.['Artifact:AudioGenerator.SegmentAudio[0]'];
+    expect(payload).toBeInstanceOf(Uint8Array);
+    expect(Array.from(payload as Uint8Array)).toEqual(Array.from(audioPayload));
+  });
 });

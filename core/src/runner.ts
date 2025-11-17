@@ -194,7 +194,7 @@ async function executeJob(
   try {
     // Resolve artifacts from event log
     const resolvedArtifacts = await resolveArtifactsFromEventLog({
-      artifactIds: job.inputs,
+      artifactIds: collectResolvedArtifactIds(job),
       eventLog,
       storage,
       movieId,
@@ -533,4 +533,24 @@ function mergeResolvedArtifacts(
       },
     },
   };
+}
+
+function collectResolvedArtifactIds(job: JobDescriptor): string[] {
+  const ids = new Set<string>();
+  for (const inputId of job.inputs) {
+    if (typeof inputId === 'string' && inputId.startsWith('Artifact:')) {
+      ids.add(inputId);
+    }
+  }
+  const fanIn = job.context?.fanIn;
+  if (fanIn) {
+    for (const descriptor of Object.values(fanIn)) {
+      for (const member of descriptor.members) {
+        if (member.id.startsWith('Artifact:')) {
+          ids.add(member.id);
+        }
+      }
+    }
+  }
+  return Array.from(ids);
 }
