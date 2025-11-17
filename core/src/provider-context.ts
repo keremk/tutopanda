@@ -32,9 +32,7 @@ export function prepareJobContext(
       continue;
     }
     const canonicalId = `Input:${key}`;
-    if (resolvedInputs[canonicalId] === undefined) {
-      resolvedInputs[canonicalId] = value;
-    }
+    resolvedInputs[canonicalId] = value;
   }
   const jobResolved = extractResolvedInputs(job.context);
   Object.assign(resolvedInputs, jobResolved);
@@ -42,8 +40,9 @@ export function prepareJobContext(
   if (bindings) {
     for (const [alias, canonicalId] of Object.entries(bindings)) {
       const aliasValue = resolvedInputs[alias];
-      if (aliasValue !== undefined && resolvedInputs[canonicalId] === undefined) {
+      if (aliasValue !== undefined) {
         resolvedInputs[canonicalId] = aliasValue;
+        continue;
       }
       const canonicalValue = resolvedInputs[canonicalId];
       if (canonicalValue !== undefined && resolvedInputs[alias] === undefined) {

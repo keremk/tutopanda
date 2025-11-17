@@ -1,9 +1,40 @@
 /* eslint-disable no-console */
 import process from 'node:process';
 import * as readline from 'node:readline';
-import type { ExecutionPlan } from 'tutopanda-core';
+import type { ExecutionPlan, InputEvent } from 'tutopanda-core';
 
 const console = globalThis.console;
+
+interface PlanConfirmationOptions {
+  inputs?: InputEvent[];
+}
+
+function displayInputSummary(events: InputEvent[] | undefined): void {
+  if (!events || events.length === 0) {
+    return;
+  }
+  const sorted = [...events].sort((a, b) => a.id.localeCompare(b.id));
+  console.log('\n=== Input Summary ===');
+  for (const event of sorted) {
+    console.log(`  • ${event.id}: ${formatInputValue(event.payload)}`);
+  }
+  console.log('');
+}
+
+function formatInputValue(value: unknown): string {
+  if (typeof value === 'string') {
+    const compact = value.replace(/\s+/g, ' ').trim();
+    return compact.length > 0 ? compact : '(empty string)';
+  }
+  if (value === null || value === undefined) {
+    return String(value);
+  }
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return '[unserializable]';
+  }
+}
 
 /**
  * Display a summary of the execution plan grouped by producer.
@@ -36,7 +67,11 @@ function displayPlanSummary(plan: ExecutionPlan): void {
  * Prompt user to confirm plan execution.
  * Returns true if user confirms, false otherwise.
  */
-export async function confirmPlanExecution(plan: ExecutionPlan): Promise<boolean> {
+export async function confirmPlanExecution(
+  plan: ExecutionPlan,
+  options: PlanConfirmationOptions = {},
+): Promise<boolean> {
+  displayInputSummary(options.inputs);
   displayPlanSummary(plan);
 
   const rl = readline.createInterface({

@@ -74,7 +74,9 @@ export async function runQuery(options: QueryOptions): Promise<QueryResult> {
 
   // Interactive confirmation (skip if dry-run or non-interactive)
   if (!options.dryRun && !options.nonInteractive) {
-    const confirmed = await confirmPlanExecution(planResult.plan);
+    const confirmed = await confirmPlanExecution(planResult.plan, {
+      inputs: planResult.inputEvents,
+    });
     if (!confirmed) {
       await cleanupPlanFiles(movieDir);
       console.log('\nExecution cancelled.');

@@ -29,6 +29,7 @@
   "dependencies": {
     "@ai-sdk/openai": "^2.0.39",
     "ai": "^5.0.44",
+    "mediabunny": "^1.24.5",
     "replicate": "^1.2.0",
     "tutopanda-core": "workspace:*"
   },

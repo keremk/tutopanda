@@ -375,6 +375,56 @@ describe('createOpenAiLlmHandler', () => {
     expect(args.system).toBe('Summarise the ocean');
   });
 
+  it('substitutes prompt variables via input bindings when only canonical inputs exist', async () => {
+    mocks.generateText.mockResolvedValueOnce({
+      text: 'Prompt count acknowledged',
+      usage: {
+        inputTokens: 5,
+        outputTokens: 6,
+        totalTokens: 11,
+      },
+      warnings: [],
+      response: {
+        id: 'resp-bindings',
+        model: 'openai/gpt5',
+        createdAt: '2025-01-01T00:00:00.000Z',
+      },
+    });
+
+    const handler = buildHandler();
+    await handler.warmStart?.({ logger: undefined });
+
+    const request = createJobContext({
+      produces: ['Artifact:ImagePromptGenerator.ImagePrompt[segment=0][image=0]'],
+      context: {
+        providerConfig: {
+          systemPrompt: 'System prompt',
+          userPrompt: 'Generate {{NumOfImagesPerNarrative}} prompts.',
+          variables: ['NumOfImagesPerNarrative'],
+          responseFormat: { type: 'text' },
+        },
+        extras: {
+          resolvedInputs: {
+            'Input:ImagePromptGenerator.NumOfImagesPerNarrative': 2,
+          },
+          jobContext: {
+            inputBindings: {
+              NumOfImagesPerNarrative: 'Input:ImagePromptGenerator.NumOfImagesPerNarrative',
+            },
+          },
+        },
+      },
+    });
+
+    const result = await handler.invoke(request);
+    expect(result.status).toBe('succeeded');
+    expect(result.artefacts).toHaveLength(1);
+
+    const args = mocks.generateText.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(args.prompt).toContain('Generate 2 prompts.');
+    expect(args.system).toBe('System prompt');
+  });
+
   it('normalizes TOML config from [prompt_settings] section', async () => {
     mocks.generateObject.mockResolvedValueOnce({
       object: {

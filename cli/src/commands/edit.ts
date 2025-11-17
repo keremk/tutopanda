@@ -94,7 +94,9 @@ export async function runEdit(options: EditOptions): Promise<EditResult> {
 
   // Interactive confirmation (skip if dry-run, non-interactive, or no work to perform)
   if (hasJobs && !options.dryRun && !options.nonInteractive) {
-    const confirmed = await confirmPlanExecution(planResult.plan);
+    const confirmed = await confirmPlanExecution(planResult.plan, {
+      inputs: planResult.inputEvents,
+    });
     if (!confirmed) {
       await cleanupPlanFiles(movieDir);
       console.log('\nExecution cancelled.');
