@@ -13,8 +13,9 @@ vi.mock('replicate', () => ({
 global.fetch = vi.fn();
 
 function attachJobContext(request: ProviderJobContext): ProviderJobContext {
-  const extras = request.context.extras ?? (request.context.extras = {});
-  const resolved = (extras.resolvedInputs = extras.resolvedInputs ?? {});
+  const extras = request.context.extras
+    ?? (request.context.extras = {} as Record<string, unknown>);
+  const resolved = (extras.resolvedInputs = (extras.resolvedInputs ?? {}) as Record<string, unknown>);
   const planner = extras.plannerContext && typeof extras.plannerContext === 'object'
     ? (extras.plannerContext as { index?: { segment?: number } })
     : { index: { segment: 0 } };
@@ -38,7 +39,7 @@ function attachJobContext(request: ProviderJobContext): ProviderJobContext {
       ...(voiceValue !== undefined ? { VoiceId: 'Input:VoiceId' } : {}),
     },
     sdkMapping: {
-      TextInput: { field: request.context.providerConfig?.textKey ?? 'text', required: true },
+      TextInput: { field: readTextField(request.context.providerConfig), required: true },
       ...(voiceValue !== undefined ? { VoiceId: { field: 'voice_id', required: false } } : {}),
     },
   };
@@ -47,6 +48,16 @@ function attachJobContext(request: ProviderJobContext): ProviderJobContext {
     ...jobContext,
   };
   return request;
+}
+
+function readTextField(config: ProviderJobContext['context']['providerConfig']): string {
+  if (config && typeof config === 'object' && 'textKey' in config) {
+    const value = (config as Record<string, unknown>).textKey;
+    if (typeof value === 'string' && value.trim().length > 0) {
+      return value;
+    }
+  }
+  return 'text';
 }
 
 function extractNarration(resolvedInputs: Record<string, unknown>, segmentIndex: number): string | undefined {
@@ -96,7 +107,7 @@ describe('createReplicateAudioHandler', () => {
         jobId: 'test-job',
         provider: 'replicate',
         model: 'minimax/speech-02-hd',
-        revision: 'test-rev',
+        revision: 'rev-test',
         layerIndex: 0,
         attempt: 1,
         inputs: ['Input:SegmentNarration[segment=0]'],
@@ -167,7 +178,7 @@ describe('createReplicateAudioHandler', () => {
         jobId: 'test-job',
         provider: 'replicate',
         model: 'elevenlabs/v3',
-        revision: 'test-rev',
+        revision: 'rev-test',
         layerIndex: 0,
         attempt: 1,
         inputs: ['Input:SegmentNarration[segment=0]'],
@@ -240,7 +251,7 @@ describe('createReplicateAudioHandler', () => {
         jobId: 'test-job',
         provider: 'replicate',
         model: 'minimax/speech-02-hd',
-        revision: 'test-rev',
+        revision: 'rev-test',
         layerIndex: 0,
         attempt: 1,
         inputs: ['Input:SegmentNarration[segment=0]'],
@@ -326,7 +337,7 @@ describe('createReplicateAudioHandler', () => {
         jobId: 'test-job',
         provider: 'replicate',
         model: 'minimax/speech-02-hd',
-        revision: 'test-rev',
+        revision: 'rev-test',
         layerIndex: 0,
         attempt: 1,
         inputs: ['Input:SegmentNarration[segment=0]'],
@@ -386,7 +397,7 @@ describe('createReplicateAudioHandler', () => {
         jobId: 'test-job',
         provider: 'replicate',
         model: 'minimax/speech-02-hd',
-        revision: 'test-rev',
+        revision: 'rev-test',
         layerIndex: 0,
         attempt: 1,
         inputs: ['Input:SegmentNarration[segment=1]'],
@@ -448,7 +459,7 @@ describe('createReplicateAudioHandler', () => {
         jobId: 'test-job',
         provider: 'replicate',
         model: 'minimax/speech-02-hd',
-        revision: 'test-rev',
+        revision: 'rev-test',
         layerIndex: 0,
         attempt: 1,
         inputs: ['Input:SegmentNarration[segment=10]'],
@@ -510,7 +521,7 @@ describe('createReplicateAudioHandler', () => {
         jobId: 'test-job',
         provider: 'replicate',
         model: 'minimax/speech-02-hd',
-        revision: 'test-rev',
+        revision: 'rev-test',
         layerIndex: 0,
         attempt: 1,
         inputs: ['Input:SegmentNarration[segment=0]'],
@@ -572,7 +583,7 @@ describe('createReplicateAudioHandler', () => {
         jobId: 'test-job',
         provider: 'replicate',
         model: 'minimax/speech-02-hd',
-        revision: 'test-rev',
+        revision: 'rev-test',
         layerIndex: 0,
         attempt: 1,
         inputs: ['Input:SegmentNarration[segment=0]'],
@@ -613,7 +624,7 @@ describe('createReplicateAudioHandler', () => {
         jobId: 'test-job',
         provider: 'replicate',
         model: 'minimax/speech-02-hd',
-        revision: 'test-rev',
+        revision: 'rev-test',
         layerIndex: 0,
         attempt: 1,
         inputs: ['Input:SegmentNarration[segment=0]'],
@@ -658,7 +669,7 @@ describe('createReplicateAudioHandler', () => {
         jobId: 'test-job',
         provider: 'replicate',
         model: 'minimax/speech-02-hd',
-        revision: 'test-rev',
+        revision: 'rev-test',
         layerIndex: 0,
         attempt: 1,
         inputs: ['Input:SegmentNarration[segment=0]', 'Input:VoiceId'],
@@ -722,7 +733,7 @@ describe('createReplicateAudioHandler', () => {
         jobId: 'test-job',
         provider: 'replicate',
         model: 'elevenlabs/v3',
-        revision: 'test-rev',
+        revision: 'rev-test',
         layerIndex: 0,
         attempt: 1,
         inputs: ['Input:SegmentNarration[segment=0]', 'Input:VoiceId'],
@@ -788,7 +799,7 @@ describe('createReplicateAudioHandler', () => {
         jobId: 'test-job',
         provider: 'replicate',
         model: 'minimax/speech-02-hd',
-        revision: 'test-rev',
+        revision: 'rev-test',
         layerIndex: 0,
         attempt: 1,
         inputs: ['Input:SegmentNarration[segment=0]', 'Input:VoiceId'],
@@ -856,7 +867,7 @@ describe('createReplicateAudioHandler', () => {
         jobId: 'test-job',
         provider: 'replicate',
         model: 'minimax/speech-02-hd',
-        revision: 'test-rev',
+        revision: 'rev-test',
         layerIndex: 0,
         attempt: 1,
         inputs: ['Input:SegmentNarration[segment=0]'],
@@ -918,7 +929,7 @@ describe('createReplicateAudioHandler', () => {
         jobId: 'test-job',
         provider: 'replicate',
         model: 'minimax/speech-02-hd',
-        revision: 'test-rev',
+        revision: 'rev-test',
         layerIndex: 0,
         attempt: 1,
         inputs: ['Input:SegmentNarration[segment=0]'],
@@ -967,7 +978,7 @@ describe('createReplicateAudioHandler', () => {
         jobId: 'test-job',
         provider: 'replicate',
         model: 'minimax/speech-02-hd',
-        revision: 'test-rev',
+        revision: 'rev-test',
         layerIndex: 0,
         attempt: 1,
         inputs: ['Input:SegmentNarration[segment=0]'],

@@ -31,6 +31,62 @@ describe('replicate-video', () => {
     };
   });
 
+  type TestExtras = {
+    resolvedInputs?: Record<string, unknown>;
+    jobContext?: Record<string, any>;
+    plannerContext?: { index?: Record<string, number> };
+  };
+
+  function attachCanonicalPrompt(
+    request: ProviderJobContext,
+    canonicalId: string,
+    value: string,
+    field = 'prompt',
+  ) {
+    const extras = (request.context.extras as TestExtras | undefined)
+      ?? (request.context.extras = {} as TestExtras);
+    const resolvedInputs = (extras.resolvedInputs = extras.resolvedInputs ?? {});
+    resolvedInputs[canonicalId] = value;
+    const jobContext = (extras.jobContext = extras.jobContext ?? {});
+    jobContext.inputBindings = {
+      ...(jobContext.inputBindings ?? {}),
+      Prompt: canonicalId,
+    };
+    jobContext.sdkMapping = {
+      ...(jobContext.sdkMapping ?? {}),
+      Prompt: { field, required: true },
+    };
+  }
+
+  function attachCanonicalPromptFromAlias(
+    request: ProviderJobContext,
+    alias: 'TextToVideoPrompt' | 'ImageToVideoPrompt',
+    field = 'prompt',
+  ) {
+    const extras = (request.context.extras as TestExtras | undefined)
+      ?? (request.context.extras = {} as TestExtras);
+    const resolvedInputs = (extras.resolvedInputs = extras.resolvedInputs ?? {});
+    const plannerContext = extras.plannerContext && typeof extras.plannerContext === 'object'
+      ? extras.plannerContext
+      : undefined;
+    const segmentIndex = plannerContext?.index?.segment ?? 0;
+    const source = resolvedInputs[alias];
+    let value: string | undefined;
+    if (Array.isArray(source)) {
+      value = source[segmentIndex] ?? source[0];
+    } else if (typeof source === 'string') {
+      value = source;
+    }
+    if (typeof value !== 'string' || value.trim().length === 0) {
+      throw new Error(`Test setup missing ${alias} value.`);
+    }
+    const canonicalId = alias === 'TextToVideoPrompt'
+      ? 'Input:TextToVideoPrompt'
+      : 'Input:ImageToVideoPrompt';
+    request.inputs = request.inputs.map((input) => (input === alias ? canonicalId : input));
+    attachCanonicalPrompt(request, canonicalId, value, field);
+  }
+
   describe('config validation', () => {
     it('uses default promptKey when not specified', async () => {
       const handler = createReplicateVideoHandler()({
@@ -44,6 +100,7 @@ describe('replicate-video', () => {
         logger: undefined,
       });
 
+      const promptValue = 'A beautiful sunset over mountains';
       const request: ProviderJobContext = {
         jobId: 'test-job-1',
         provider: 'replicate',
@@ -51,18 +108,17 @@ describe('replicate-video', () => {
         revision: 'rev-test',
         layerIndex: 0,
         attempt: 1,
-        inputs: ['TextToVideoPrompt'],
+        inputs: ['Input:TextToVideoPrompt'],
         produces: ['Artifact:SegmentVideo[0]'],
         context: {
           providerConfig: {},
           extras: {
-            resolvedInputs: {
-              TextToVideoPrompt: ['A beautiful sunset over mountains'],
-            },
+            resolvedInputs: {},
             plannerContext: { index: { segment: 0 } },
           },
         },
       };
+      attachCanonicalPrompt(request, 'Input:TextToVideoPrompt', promptValue);
 
       const Replicate = (await import('replicate')).default;
       const mockRun = vi.fn().mockResolvedValue('https://example.com/video.mp4');
@@ -95,6 +151,7 @@ describe('replicate-video', () => {
         logger: undefined,
       });
 
+      const promptValue = 'Test video';
       const request: ProviderJobContext = {
         jobId: 'test-job-2',
         provider: 'replicate',
@@ -102,20 +159,19 @@ describe('replicate-video', () => {
         revision: 'rev-test',
         layerIndex: 0,
         attempt: 1,
-        inputs: ['TextToVideoPrompt'],
+        inputs: ['Input:TextToVideoPrompt'],
         produces: ['Artifact:SegmentVideo[0]'],
         context: {
           providerConfig: {
             promptKey: 'description',
           },
           extras: {
-            resolvedInputs: {
-              TextToVideoPrompt: ['Test video'],
-            },
+            resolvedInputs: {},
             plannerContext: { index: { segment: 0 } },
           },
         },
       };
+      attachCanonicalPrompt(request, 'Input:TextToVideoPrompt', promptValue, 'description');
 
       const Replicate = (await import('replicate')).default;
       const mockRun = vi.fn().mockResolvedValue('https://example.com/video.mp4');
@@ -148,6 +204,7 @@ describe('replicate-video', () => {
         logger: undefined,
       });
 
+      const promptValue = 'Test video';
       const request: ProviderJobContext = {
         jobId: 'test-job-3',
         provider: 'replicate',
@@ -155,18 +212,17 @@ describe('replicate-video', () => {
         revision: 'rev-test',
         layerIndex: 0,
         attempt: 1,
-        inputs: ['TextToVideoPrompt'],
+        inputs: ['Input:TextToVideoPrompt'],
         produces: ['Artifact:SegmentVideo[0]'],
         context: {
           providerConfig: {},
           extras: {
-            resolvedInputs: {
-              TextToVideoPrompt: ['Test video'],
-            },
+            resolvedInputs: {},
             plannerContext: { index: { segment: 0 } },
           },
         },
       };
+      attachCanonicalPrompt(request, 'Input:TextToVideoPrompt', promptValue);
 
       const Replicate = (await import('replicate')).default;
       const mockRun = vi.fn().mockResolvedValue('https://example.com/video.mp4');
@@ -216,6 +272,7 @@ describe('replicate-video', () => {
           },
         },
       };
+      attachCanonicalPromptFromAlias(request, 'TextToVideoPrompt');
 
       const Replicate = (await import('replicate')).default;
       const mockRun = vi.fn().mockResolvedValue('https://example.com/video.mp4');
@@ -267,6 +324,7 @@ describe('replicate-video', () => {
           },
         },
       };
+      attachCanonicalPromptFromAlias(request, 'TextToVideoPrompt');
 
       const Replicate = (await import('replicate')).default;
       const mockRun = vi.fn().mockResolvedValue('https://example.com/video.mp4');
@@ -318,6 +376,7 @@ describe('replicate-video', () => {
           },
         },
       };
+      attachCanonicalPromptFromAlias(request, 'ImageToVideoPrompt');
 
       const Replicate = (await import('replicate')).default;
       const mockRun = vi.fn().mockResolvedValue('https://example.com/video.mp4');
@@ -369,9 +428,7 @@ describe('replicate-video', () => {
       };
 
       await handler.warmStart?.({ logger: undefined });
-      await expect(handler.invoke(request)).rejects.toThrow(
-        'No prompt available for video generation',
-      );
+      await expect(handler.invoke(request)).rejects.toThrow(/canonical input/);
     });
   });
 
@@ -408,6 +465,7 @@ describe('replicate-video', () => {
           },
         },
       };
+      attachCanonicalPromptFromAlias(request, 'ImageToVideoPrompt');
 
       const Replicate = (await import('replicate')).default;
       const mockRun = vi.fn().mockResolvedValue('https://example.com/video.mp4');
@@ -460,6 +518,7 @@ describe('replicate-video', () => {
           },
         },
       };
+      attachCanonicalPromptFromAlias(request, 'TextToVideoPrompt');
 
       const Replicate = (await import('replicate')).default;
       const mockRun = vi.fn().mockResolvedValue('https://example.com/video.mp4');
@@ -519,6 +578,7 @@ describe('replicate-video', () => {
           },
         },
       };
+      attachCanonicalPromptFromAlias(request, 'TextToVideoPrompt');
 
       const Replicate = (await import('replicate')).default;
       const mockRun = vi.fn().mockResolvedValue('https://example.com/video.mp4');
@@ -573,6 +633,7 @@ describe('replicate-video', () => {
           },
         },
       };
+      attachCanonicalPromptFromAlias(request, 'ImageToVideoPrompt');
 
       const Replicate = (await import('replicate')).default;
       const mockRun = vi.fn().mockResolvedValue('https://example.com/video.mp4');
@@ -626,6 +687,7 @@ describe('replicate-video', () => {
           },
         },
       };
+      attachCanonicalPromptFromAlias(request, 'TextToVideoPrompt');
 
       const Replicate = (await import('replicate')).default;
       const mockRun = vi.fn().mockResolvedValue('https://example.com/video.mp4');
@@ -691,6 +753,7 @@ describe('replicate-video', () => {
           },
         },
       };
+      attachCanonicalPromptFromAlias(request, 'TextToVideoPrompt');
 
       const Replicate = (await import('replicate')).default;
       const mockRun = vi.fn().mockResolvedValue('https://example.com/video.mp4');
@@ -756,6 +819,7 @@ describe('replicate-video', () => {
           },
         },
       };
+      attachCanonicalPromptFromAlias(request, 'TextToVideoPrompt');
 
       const Replicate = (await import('replicate')).default;
       const mockRun = vi.fn().mockResolvedValue('https://example.com/video.mp4');
@@ -819,6 +883,7 @@ describe('replicate-video', () => {
           },
         },
       };
+      attachCanonicalPromptFromAlias(request, 'TextToVideoPrompt');
 
       const Replicate = (await import('replicate')).default;
       const mockRun = vi.fn().mockResolvedValue('https://example.com/video.mp4');
@@ -879,6 +944,7 @@ describe('replicate-video', () => {
           },
         },
       };
+      attachCanonicalPromptFromAlias(request, 'TextToVideoPrompt');
 
       const Replicate = (await import('replicate')).default;
       const mockRun = vi.fn().mockResolvedValue('https://example.com/video.mp4');
@@ -941,6 +1007,7 @@ describe('replicate-video', () => {
           },
         },
       };
+      attachCanonicalPromptFromAlias(request, 'TextToVideoPrompt');
 
       const Replicate = (await import('replicate')).default;
       const mockRun = vi.fn().mockResolvedValue('https://example.com/video.mp4');
@@ -996,6 +1063,7 @@ describe('replicate-video', () => {
           },
         },
       };
+      attachCanonicalPromptFromAlias(request, 'TextToVideoPrompt');
 
       const Replicate = (await import('replicate')).default;
       const mockRun = vi.fn().mockResolvedValue('https://example.com/video.mp4');
@@ -1049,6 +1117,7 @@ describe('replicate-video', () => {
           },
         },
       };
+      attachCanonicalPromptFromAlias(request, 'TextToVideoPrompt');
 
       const Replicate = (await import('replicate')).default;
       const mockRun = vi.fn().mockResolvedValue('https://example.com/video.mp4');
@@ -1105,6 +1174,7 @@ describe('replicate-video', () => {
           },
         },
       };
+      attachCanonicalPromptFromAlias(request, 'TextToVideoPrompt');
 
       const Replicate = (await import('replicate')).default;
       const mockRun = vi.fn().mockResolvedValue('https://example.com/video.mp4');
@@ -1162,6 +1232,7 @@ describe('replicate-video', () => {
           },
         },
       };
+      attachCanonicalPromptFromAlias(request, 'TextToVideoPrompt');
 
       const Replicate = (await import('replicate')).default;
       const mockRun = vi.fn().mockRejectedValue(new Error('API Error'));
@@ -1204,6 +1275,7 @@ describe('replicate-video', () => {
           },
         },
       };
+      attachCanonicalPromptFromAlias(request, 'TextToVideoPrompt');
 
       const Replicate = (await import('replicate')).default;
       const mockRun = vi.fn().mockResolvedValue('https://example.com/video.mp4');

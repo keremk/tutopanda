@@ -147,6 +147,7 @@ export function createTimelineProducerHandler(): HandlerFactory {
 
       const inputIdMap = buildInputIdMap(request.inputs);
       const resolvedInputs = runtime.inputs.all();
+      const assetDurationCache = new Map<string, number>();
       const masterKind = config.masterTrack?.kind ?? config.clips[0]!.kind;
       const fanInByInput = new Map<string, FanInValue>();
 
@@ -191,36 +192,44 @@ export function createTimelineProducerHandler(): HandlerFactory {
         fanIn: masterFanIn,
         segmentCount,
         inputs: runtime.inputs,
+        durationCache: assetDurationCache,
       });
       const segmentDurations = masterSegmentDurations
         ?? allocateSegmentDurations(readTimelineDuration(resolvedInputs), segmentCount);
       const segmentOffsets = buildSegmentOffsets(segmentDurations);
 
-      const tracks: TimelineTrack[] = config.clips.map((clip, index) => {
-        const baseName = parseInputReference(clip.inputs);
-        const fanIn = fanInByInput.get(baseName);
-        if (!fanIn) {
-          throw createProviderError(`Missing fan-in data for "${clip.inputs}".`, {
-            code: 'missing_fanin',
-            kind: 'user_input',
-            causedByUser: true,
+      const totalTimelineDuration = roundSeconds(segmentDurations.reduce((sum, value) => sum + value, 0));
+
+      const tracks: TimelineTrack[] = await Promise.all(
+        config.clips.map(async (clip, index) => {
+          const baseName = parseInputReference(clip.inputs);
+          const fanIn = fanInByInput.get(baseName);
+          if (!fanIn) {
+            throw createProviderError(`Missing fan-in data for "${clip.inputs}".`, {
+              code: 'missing_fanin',
+              kind: 'user_input',
+              causedByUser: true,
+            });
+          }
+          return buildTrack({
+            clip,
+            fanIn,
+            trackIndex: index,
+            segmentDurations,
+            segmentOffsets,
+            isMaster: clip === masterClip,
+            totalDuration: totalTimelineDuration,
+            inputs: runtime.inputs,
+            durationCache: assetDurationCache,
           });
-        }
-        return buildTrack({
-          clip,
-          fanIn,
-          trackIndex: index,
-          segmentDurations,
-          segmentOffsets,
-          isMaster: clip === masterClip,
-        });
-      });
+        }),
+      );
 
       const timeline: TimelineDocument = {
         id: `timeline-${request.revision}`,
         movieId: readOptionalString(resolvedInputs, ['MovieId', 'movieId']),
         movieTitle: readOptionalString(resolvedInputs, ['MovieTitle', 'ScriptGenerator.MovieTitle']),
-        duration: roundSeconds(segmentDurations.reduce((sum, value) => sum + value, 0)),
+        duration: totalTimelineDuration,
         assetFolder: buildAssetFolder(config),
         tracks,
       };
@@ -297,15 +306,18 @@ function buildAssetFolder(config: TimelineProducerConfig): TimelineDocument['ass
   };
 }
 
-function buildTrack(args: {
+async function buildTrack(args: {
   clip: TimelineClipConfig;
   fanIn: FanInValue;
   trackIndex: number;
   segmentDurations: number[];
   segmentOffsets: number[];
   isMaster: boolean;
-}): TimelineTrack {
-  const { clip, fanIn, trackIndex, segmentDurations, segmentOffsets, isMaster } = args;
+  totalDuration: number;
+  inputs: ResolvedInputsAccessor;
+  durationCache: Map<string, number>;
+}): Promise<TimelineTrack> {
+  const { clip, fanIn, trackIndex, segmentDurations, segmentOffsets, isMaster, totalDuration, inputs, durationCache } = args;
   switch (clip.kind) {
     case 'Audio':
       return buildAudioTrack({
@@ -323,6 +335,25 @@ function buildTrack(args: {
         trackIndex,
         segmentDurations,
         segmentOffsets,
+      });
+    case 'Music':
+      return buildMusicTrack({
+        clip,
+        fanIn,
+        trackIndex,
+        totalDuration,
+        inputs,
+        durationCache,
+      });
+    case 'Video':
+      return buildVideoTrack({
+        clip,
+        fanIn,
+        trackIndex,
+        segmentDurations,
+        segmentOffsets,
+        inputs,
+        durationCache,
       });
     default:
       throw createProviderError(`TimelineProducer does not yet support clip kind "${clip.kind}".`, {
@@ -416,6 +447,137 @@ function buildImageTrack(args: {
         effect: effectName,
         effects,
       },
+    });
+  }
+
+  return {
+    id: `track-${trackIndex}`,
+    kind: clip.kind,
+    clips,
+  };
+}
+
+async function buildMusicTrack(args: {
+  clip: TimelineClipConfig;
+  fanIn: FanInValue;
+  trackIndex: number;
+  totalDuration: number;
+  inputs: ResolvedInputsAccessor;
+  durationCache: Map<string, number>;
+}): Promise<TimelineTrack> {
+  const { clip, fanIn, trackIndex, totalDuration, inputs, durationCache } = args;
+  const assets = flattenFanInAssets(fanIn);
+  if (assets.length === 0) {
+    throw createProviderError('TimelineProducer requires at least one asset for music tracks.', {
+      code: 'missing_asset',
+      kind: 'user_input',
+      causedByUser: true,
+    });
+  }
+
+  const durationMode = clip.duration === 'match' ? 'match' : 'full';
+  const playMode = clip.play === 'no-loop' ? 'no-loop' : 'loop';
+  const volume = typeof clip.volume === 'number' ? clip.volume : 1;
+  const clips: TimelineClip[] = [];
+  let cursor = 0;
+
+  const playAsset = (assetId: string, clipDuration: number): void => {
+    if (clipDuration <= 0) {
+      return;
+    }
+    clips.push({
+      id: `clip-${trackIndex}-${clips.length}`,
+      kind: clip.kind,
+      startTime: roundSeconds(cursor),
+      duration: clipDuration,
+      properties: {
+        volume,
+        assetId,
+      },
+    });
+    cursor = roundSeconds(cursor + clipDuration);
+  };
+
+  if (durationMode === 'match') {
+    for (const assetId of assets) {
+      if (cursor >= totalDuration) {
+        break;
+      }
+      const assetDuration = await loadAssetDuration({ assetId, inputs, cache: durationCache });
+      const remaining = totalDuration - cursor;
+      playAsset(assetId, Math.min(assetDuration, remaining));
+    }
+  } else if (playMode === 'no-loop') {
+    for (const assetId of assets) {
+      if (cursor >= totalDuration) {
+        break;
+      }
+      const assetDuration = await loadAssetDuration({ assetId, inputs, cache: durationCache });
+      const remaining = totalDuration - cursor;
+      playAsset(assetId, Math.min(assetDuration, remaining));
+    }
+  } else {
+    let loopIndex = 0;
+    while (cursor < totalDuration && assets.length > 0) {
+      const assetId = assets[loopIndex % assets.length]!;
+      const assetDuration = await loadAssetDuration({ assetId, inputs, cache: durationCache });
+      const remaining = totalDuration - cursor;
+      playAsset(assetId, Math.min(assetDuration, remaining));
+      loopIndex += 1;
+    }
+  }
+
+  if (clips.length === 0) {
+    throw createProviderError('TimelineProducer could not schedule any music clips.', {
+      code: 'missing_asset',
+      kind: 'user_input',
+      causedByUser: true,
+    });
+  }
+
+  return {
+    id: `track-${trackIndex}`,
+    kind: clip.kind,
+    clips,
+  };
+}
+
+async function buildVideoTrack(args: {
+  clip: TimelineClipConfig;
+  fanIn: FanInValue;
+  trackIndex: number;
+  segmentDurations: number[];
+  segmentOffsets: number[];
+  inputs: ResolvedInputsAccessor;
+  durationCache: Map<string, number>;
+}): Promise<TimelineTrack> {
+  const { clip, fanIn, trackIndex, segmentDurations, segmentOffsets, inputs, durationCache } = args;
+  const groups = normalizeGroups(fanIn.groups, segmentDurations.length);
+  const clips: TimelineClip[] = [];
+
+  for (let index = 0; index < segmentDurations.length; index += 1) {
+    const assets = groups[index] ?? [];
+    const assetId = assets[0];
+    if (!assetId) {
+      continue;
+    }
+    const originalDuration = await loadAssetDuration({ assetId, inputs, cache: durationCache });
+    const fitStrategy = resolveVideoFitStrategy(clip.fitStrategy, segmentDurations[index], originalDuration);
+    const properties: Record<string, unknown> = {
+      assetId,
+      originalDuration,
+      fitStrategy,
+    };
+    if (typeof clip.volume === 'number') {
+      properties.volume = clip.volume;
+    }
+
+    clips.push({
+      id: `clip-${trackIndex}-${index}`,
+      kind: clip.kind,
+      startTime: segmentOffsets[index],
+      duration: segmentDurations[index],
+      properties,
     });
   }
 
@@ -532,6 +694,7 @@ async function determineMasterSegmentDurations(args: {
   fanIn: FanInValue;
   segmentCount: number;
   inputs: ResolvedInputsAccessor;
+  durationCache: Map<string, number>;
 }): Promise<number[] | undefined> {
   if (!TRACK_KINDS_WITH_NATIVE_DURATION.has(args.clip.kind)) {
     return undefined;
@@ -540,6 +703,7 @@ async function determineMasterSegmentDurations(args: {
     fanIn: args.fanIn,
     segmentCount: args.segmentCount,
     inputs: args.inputs,
+    durationCache: args.durationCache,
   });
 }
 
@@ -547,10 +711,10 @@ async function readSegmentDurationsFromAssets(args: {
   fanIn: FanInValue;
   segmentCount: number;
   inputs: ResolvedInputsAccessor;
+  durationCache: Map<string, number>;
 }): Promise<number[]> {
   const groups = normalizeGroups(args.fanIn.groups, args.segmentCount);
   const durations: number[] = [];
-  const cache = new Map<string, number>();
 
   for (let index = 0; index < args.segmentCount; index += 1) {
     const assetId = groups[index]?.[0];
@@ -564,7 +728,7 @@ async function readSegmentDurationsFromAssets(args: {
     const duration = await loadAssetDuration({
       assetId,
       inputs: args.inputs,
-      cache,
+      cache: args.durationCache,
     });
     durations.push(duration);
   }
@@ -657,10 +821,36 @@ function normalizeGroups(groups: string[][], length: number): string[][] {
   });
 }
 
+function flattenFanInAssets(fanIn: FanInValue): string[] {
+  const flattened: string[] = [];
+  for (const group of fanIn.groups) {
+    if (!Array.isArray(group)) {
+      continue;
+    }
+    for (const assetId of group) {
+      if (typeof assetId === 'string' && assetId.length > 0) {
+        flattened.push(assetId);
+      }
+    }
+  }
+  return flattened;
+}
+
 function parseInputReference(reference: string): string {
   const bracketIndex = reference.indexOf('[');
   const base = bracketIndex >= 0 ? reference.slice(0, bracketIndex) : reference;
   return base.trim();
+}
+
+function resolveVideoFitStrategy(fitStrategy: string | undefined, segmentDuration: number, originalDuration: number): string {
+  if (typeof fitStrategy === 'string' && fitStrategy !== 'auto') {
+    return fitStrategy;
+  }
+  if (!Number.isFinite(originalDuration) || originalDuration <= 0) {
+    return fitStrategy ?? 'stretch';
+  }
+  const ratio = Math.abs(segmentDuration - originalDuration) / originalDuration;
+  return ratio <= 0.2 ? 'stretch' : 'freeze-fade';
 }
 
 function stripNamespace(name: string): string {

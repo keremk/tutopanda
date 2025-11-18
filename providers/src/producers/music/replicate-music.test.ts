@@ -44,10 +44,10 @@ describe('createReplicateMusicHandler', () => {
         jobId: 'test-job',
         provider: 'replicate',
         model: 'stability-ai/stable-audio-2.5',
-        revision: 'test-rev',
+        revision: 'rev-test',
         layerIndex: 0,
         attempt: 1,
-        inputs: ['Artifact:MusicPrompt', 'Input:Duration'],
+        inputs: ['Artifact:MusicPromptGenerator.MusicPrompt', 'Input:Duration'],
         produces: ['Artifact:MusicTrack'],
         context: {
           providerConfig: {
@@ -60,7 +60,7 @@ describe('createReplicateMusicHandler', () => {
           observability: undefined,
           extras: {
             resolvedInputs: {
-              MusicPrompt: 'Upbeat electronic music with a modern feel',
+              'Artifact:MusicPromptGenerator.MusicPrompt': 'Upbeat electronic music with a modern feel',
               Duration: 60,
             },
           },
@@ -92,6 +92,7 @@ describe('createReplicateMusicHandler', () => {
       });
     });
 
+
     it('caps duration at 190 seconds', async () => {
       const handler = createReplicateMusicHandler()({
         descriptor: {
@@ -108,10 +109,10 @@ describe('createReplicateMusicHandler', () => {
         jobId: 'test-job',
         provider: 'replicate',
         model: 'stability-ai/stable-audio-2.5',
-        revision: 'test-rev',
+        revision: 'rev-test',
         layerIndex: 0,
         attempt: 1,
-        inputs: ['Artifact:MusicPrompt', 'Input:Duration'],
+        inputs: ['Artifact:MusicPromptGenerator.MusicPrompt', 'Input:Duration'],
         produces: ['Artifact:MusicTrack'],
         context: {
           providerConfig: {
@@ -124,7 +125,7 @@ describe('createReplicateMusicHandler', () => {
           observability: undefined,
           extras: {
             resolvedInputs: {
-              MusicPrompt: 'Epic orchestral soundtrack',
+              'Artifact:MusicPromptGenerator.MusicPrompt': 'Epic orchestral soundtrack',
               Duration: 300, // Exceeds max
             },
           },
@@ -171,10 +172,10 @@ describe('createReplicateMusicHandler', () => {
         jobId: 'test-job',
         provider: 'replicate',
         model: 'stability-ai/stable-audio-2.5',
-        revision: 'test-rev',
+        revision: 'rev-test',
         layerIndex: 0,
         attempt: 1,
-        inputs: ['Artifact:MusicPrompt', 'Input:Duration'],
+        inputs: ['Artifact:MusicPromptGenerator.MusicPrompt', 'Input:Duration'],
         produces: ['Artifact:MusicTrack'],
         context: {
           providerConfig: {
@@ -195,7 +196,7 @@ describe('createReplicateMusicHandler', () => {
           observability: undefined,
           extras: {
             resolvedInputs: {
-              MusicPrompt: 'Calm ambient music',
+              'Artifact:MusicPromptGenerator.MusicPrompt': 'Calm ambient music',
               Duration: 120,
             },
           },
@@ -247,10 +248,10 @@ describe('createReplicateMusicHandler', () => {
         jobId: 'test-job',
         provider: 'replicate',
         model: 'elevenlabs/music',
-        revision: 'test-rev',
+        revision: 'rev-test',
         layerIndex: 0,
         attempt: 1,
-        inputs: ['Artifact:MusicPrompt', 'Input:Duration'],
+        inputs: ['Artifact:MusicPromptGenerator.MusicPrompt', 'Input:Duration'],
         produces: ['Artifact:MusicTrack'],
         context: {
           providerConfig: {
@@ -263,7 +264,7 @@ describe('createReplicateMusicHandler', () => {
           observability: undefined,
           extras: {
             resolvedInputs: {
-              MusicPrompt: 'Jazzy piano piece',
+              'Artifact:MusicPromptGenerator.MusicPrompt': 'Jazzy piano piece',
               Duration: 60,
             },
           },
@@ -311,10 +312,10 @@ describe('createReplicateMusicHandler', () => {
         jobId: 'test-job',
         provider: 'replicate',
         model: 'elevenlabs/music',
-        revision: 'test-rev',
+        revision: 'rev-test',
         layerIndex: 0,
         attempt: 1,
-        inputs: ['Artifact:MusicPrompt', 'Input:Duration'],
+        inputs: ['Artifact:MusicPromptGenerator.MusicPrompt', 'Input:Duration'],
         produces: ['Artifact:MusicTrack'],
         context: {
           providerConfig: {
@@ -327,7 +328,7 @@ describe('createReplicateMusicHandler', () => {
           observability: undefined,
           extras: {
             resolvedInputs: {
-              MusicPrompt: 'Rock anthem',
+              'Artifact:MusicPromptGenerator.MusicPrompt': 'Rock anthem',
               Duration: 400, // Exceeds max when converted
             },
           },
@@ -376,10 +377,10 @@ describe('createReplicateMusicHandler', () => {
         jobId: 'test-job',
         provider: 'replicate',
         model: 'stability-ai/stable-audio-2.5',
-        revision: 'test-rev',
+        revision: 'rev-test',
         layerIndex: 0,
         attempt: 1,
-        inputs: ['Artifact:MusicPrompt', 'Input:Duration'],
+        inputs: ['Artifact:MusicPromptGenerator.MusicPrompt', 'Input:Duration'],
         produces: ['Artifact:MusicTrack'],
         context: {
           providerConfig: {},
@@ -388,7 +389,7 @@ describe('createReplicateMusicHandler', () => {
           observability: undefined,
           extras: {
             resolvedInputs: {
-              MusicPrompt: 'Classical symphony',
+              'Artifact:MusicPromptGenerator.MusicPrompt': 'Classical symphony',
               Duration: 90,
             },
           },
@@ -435,10 +436,10 @@ describe('createReplicateMusicHandler', () => {
         jobId: 'test-job',
         provider: 'replicate',
         model: 'stability-ai/stable-audio-2.5',
-        revision: 'test-rev',
+        revision: 'rev-test',
         layerIndex: 0,
         attempt: 1,
-        inputs: ['Artifact:MusicPrompt', 'Input:Duration'],
+        inputs: ['Artifact:MusicPromptGenerator.MusicPrompt', 'Input:Duration'],
         produces: ['Artifact:MusicTrack'],
         context: {
           providerConfig: {},
@@ -447,7 +448,7 @@ describe('createReplicateMusicHandler', () => {
           observability: undefined,
           extras: {
             resolvedInputs: {
-              MusicPrompt: 'Relaxing lofi beats',
+              'Artifact:MusicPromptGenerator.MusicPrompt': 'Relaxing lofi beats',
               Duration: 120,
             },
           },
@@ -492,7 +493,7 @@ describe('createReplicateMusicHandler', () => {
         jobId: 'test-job',
         provider: 'replicate',
         model: 'stability-ai/stable-audio-2.5',
-        revision: 'test-rev',
+        revision: 'rev-test',
         layerIndex: 0,
         attempt: 1,
         inputs: ['Input:Duration'],
@@ -533,10 +534,10 @@ describe('createReplicateMusicHandler', () => {
         jobId: 'test-job',
         provider: 'replicate',
         model: 'stability-ai/stable-audio-2.5',
-        revision: 'test-rev',
+        revision: 'rev-test',
         layerIndex: 0,
         attempt: 1,
-        inputs: ['Artifact:MusicPrompt', 'Input:Duration'],
+        inputs: ['Artifact:MusicPromptGenerator.MusicPrompt', 'Input:Duration'],
         produces: ['Artifact:MusicTrack'],
         context: {
           providerConfig: {},
@@ -545,7 +546,7 @@ describe('createReplicateMusicHandler', () => {
           observability: undefined,
           extras: {
             resolvedInputs: {
-              MusicPrompt: '   ',
+              'Artifact:MusicPromptGenerator.MusicPrompt': '   ',
               Duration: 60,
             },
           },
@@ -575,10 +576,10 @@ describe('createReplicateMusicHandler', () => {
         jobId: 'test-job',
         provider: 'replicate',
         model: 'stability-ai/stable-audio-2.5',
-        revision: 'test-rev',
+        revision: 'rev-test',
         layerIndex: 0,
         attempt: 1,
-        inputs: ['Artifact:MusicPrompt'],
+        inputs: ['Artifact:MusicPromptGenerator.MusicPrompt'],
         produces: ['Artifact:MusicTrack'],
         context: {
           providerConfig: {},
@@ -587,7 +588,7 @@ describe('createReplicateMusicHandler', () => {
           observability: undefined,
           extras: {
             resolvedInputs: {
-              MusicPrompt: 'Happy tune',
+              'Artifact:MusicPromptGenerator.MusicPrompt': 'Happy tune',
             },
           },
         },
@@ -616,10 +617,10 @@ describe('createReplicateMusicHandler', () => {
         jobId: 'test-job',
         provider: 'replicate',
         model: 'stability-ai/stable-audio-2.5',
-        revision: 'test-rev',
+        revision: 'rev-test',
         layerIndex: 0,
         attempt: 1,
-        inputs: ['Artifact:MusicPrompt', 'Input:Duration'],
+        inputs: ['Artifact:MusicPromptGenerator.MusicPrompt', 'Input:Duration'],
         produces: ['Artifact:MusicTrack'],
         context: {
           providerConfig: {},
@@ -628,7 +629,7 @@ describe('createReplicateMusicHandler', () => {
           observability: undefined,
           extras: {
             resolvedInputs: {
-              MusicPrompt: 'Happy tune',
+              'Artifact:MusicPromptGenerator.MusicPrompt': 'Happy tune',
               Duration: 0,
             },
           },
@@ -660,10 +661,10 @@ describe('createReplicateMusicHandler', () => {
         jobId: 'test-job',
         provider: 'replicate',
         model: 'stability-ai/stable-audio-2.5',
-        revision: 'test-rev',
+        revision: 'rev-test',
         layerIndex: 0,
         attempt: 1,
-        inputs: ['Artifact:MusicPrompt', 'Input:Duration'],
+        inputs: ['Artifact:MusicPromptGenerator.MusicPrompt', 'Input:Duration'],
         produces: ['Artifact:MusicTrack'],
         context: {
           providerConfig: {},
@@ -672,7 +673,7 @@ describe('createReplicateMusicHandler', () => {
           observability: undefined,
           extras: {
             resolvedInputs: {
-              MusicPrompt: 'Test music',
+              'Artifact:MusicPromptGenerator.MusicPrompt': 'Test music',
               Duration: 60,
             },
           },
@@ -706,10 +707,10 @@ describe('createReplicateMusicHandler', () => {
         jobId: 'test-job',
         provider: 'replicate',
         model: 'stability-ai/stable-audio-2.5',
-        revision: 'test-rev',
+        revision: 'rev-test',
         layerIndex: 0,
         attempt: 1,
-        inputs: ['Artifact:MusicPrompt', 'Input:Duration'],
+        inputs: ['Artifact:MusicPromptGenerator.MusicPrompt', 'Input:Duration'],
         produces: ['Artifact:MusicTrack'],
         context: {
           providerConfig: {},
@@ -718,7 +719,7 @@ describe('createReplicateMusicHandler', () => {
           observability: undefined,
           extras: {
             resolvedInputs: {
-              MusicPrompt: 'Test music',
+              'Artifact:MusicPromptGenerator.MusicPrompt': 'Test music',
               Duration: 60,
             },
           },
@@ -761,10 +762,10 @@ describe('createReplicateMusicHandler', () => {
         jobId: 'test-job',
         provider: 'replicate',
         model: 'elevenlabs/music',
-        revision: 'test-rev',
+        revision: 'rev-test',
         layerIndex: 0,
         attempt: 1,
-        inputs: ['Artifact:MusicPrompt', 'Input:Duration'],
+        inputs: ['Artifact:MusicPromptGenerator.MusicPrompt', 'Input:Duration'],
         produces: ['Artifact:MusicTrack'],
         context: {
           providerConfig: {
@@ -777,7 +778,7 @@ describe('createReplicateMusicHandler', () => {
           observability: undefined,
           extras: {
             resolvedInputs: {
-              MusicPrompt: 'Dance track',
+              'Artifact:MusicPromptGenerator.MusicPrompt': 'Dance track',
               Duration: 90,
             },
           },

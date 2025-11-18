@@ -89,10 +89,8 @@ function makeRequest(options: { omitAudio?: boolean; audioDurations?: number[] }
       if (!assetId) {
         return;
       }
-      const payload = createAudioPayload(audioDurations[index] ?? audioDurations[0] ?? 1);
+      const payload = createAssetPayload(audioDurations[index] ?? audioDurations[0] ?? 1);
       resolvedInputs[assetId] = payload;
-      const trimmed = assetId.replace(/^Artifact:/, '');
-      resolvedInputs[trimmed] = payload;
     });
   }
 
@@ -129,7 +127,7 @@ function makeRequest(options: { omitAudio?: boolean; audioDurations?: number[] }
   };
 }
 
-function createAudioPayload(duration: number): Uint8Array {
+function createAssetPayload(duration: number): Uint8Array {
   const rounded = Math.max(1, Math.round(duration));
   return new Uint8Array([rounded]);
 }
@@ -173,5 +171,89 @@ describe('TimelineProducer', () => {
     const handler = createHandler();
     const request = makeRequest({ omitAudio: true });
     await expect(handler.invoke(request)).rejects.toThrow(/AudioSegments/);
+  });
+
+  it('loops music clips to cover the entire timeline', async () => {
+    const handler = createHandler();
+    const request = makeRequest();
+    const resolvedInputs = request.context.extras?.resolvedInputs as Record<string, unknown>;
+    const config = request.context.providerConfig as { config: { clips: Array<Record<string, unknown>>; numTracks: number } };
+    config.config.clips.push({ kind: 'Music', inputs: 'MusicSegments', play: 'loop', duration: 'full', volume: 0.2 });
+    config.config.numTracks = 3;
+    request.inputs.push('Input:TimelineComposer.MusicSegments');
+
+    const musicFanIn = { groupBy: 'music', groups: [['Artifact:Music[0]']] };
+    resolvedInputs['Input:TimelineComposer.MusicSegments'] = musicFanIn;
+    resolvedInputs['TimelineComposer.MusicSegments'] = musicFanIn;
+    resolvedInputs.MusicSegments = musicFanIn.groups;
+    resolvedInputs['Artifact:Music[0]'] = createAssetPayload(5);
+
+    const result = await handler.invoke(request);
+    const timeline = JSON.parse(result.artefacts[0]?.inline ?? '{}') as { tracks: Array<{ kind: string; clips: Array<{ startTime: number; duration: number }> }> };
+    const musicTrack = timeline.tracks.find((track) => track.kind === 'Music');
+    expect(musicTrack).toBeDefined();
+    expect(musicTrack?.clips).toHaveLength(4);
+    expect(musicTrack?.clips[0]?.startTime).toBe(0);
+    expect(musicTrack?.clips[3]?.startTime).toBeCloseTo(15);
+    expect(musicTrack?.clips[3]?.duration).toBeCloseTo(5);
+  });
+
+  it('stops music when looping is disabled', async () => {
+    const handler = createHandler();
+    const request = makeRequest();
+    const resolvedInputs = request.context.extras?.resolvedInputs as Record<string, unknown>;
+    const config = request.context.providerConfig as { config: { clips: Array<Record<string, unknown>>; numTracks: number } };
+    config.config.clips.push({ kind: 'Music', inputs: 'MusicSegments', play: 'no-loop', duration: 'full' });
+    config.config.numTracks = 3;
+    request.inputs.push('Input:TimelineComposer.MusicSegments');
+
+    const musicFanIn = { groupBy: 'music', groups: [['Artifact:Music[0]']] };
+    resolvedInputs['Input:TimelineComposer.MusicSegments'] = musicFanIn;
+    resolvedInputs['TimelineComposer.MusicSegments'] = musicFanIn;
+    resolvedInputs.MusicSegments = musicFanIn.groups;
+    resolvedInputs['Artifact:Music[0]'] = createAssetPayload(6);
+
+    const result = await handler.invoke(request);
+    const timeline = JSON.parse(result.artefacts[0]?.inline ?? '{}') as { tracks: Array<{ kind: string; clips: Array<{ startTime: number; duration: number }> }> };
+    const musicTrack = timeline.tracks.find((track) => track.kind === 'Music');
+    expect(musicTrack).toBeDefined();
+    expect(musicTrack?.clips).toHaveLength(1);
+    expect(musicTrack?.clips[0]?.duration).toBeCloseTo(6);
+    expect(musicTrack?.clips[0]?.startTime).toBe(0);
+  });
+
+  it('emits video clips with original durations and auto fit strategies', async () => {
+    const handler = createHandler();
+    const request = makeRequest();
+    const resolvedInputs = request.context.extras?.resolvedInputs as Record<string, unknown>;
+    const config = request.context.providerConfig as { config: { clips: Array<Record<string, unknown>>; numTracks: number } };
+    config.config.clips.push({ kind: 'Video', inputs: 'VideoSegments', fitStrategy: 'auto' });
+    config.config.numTracks = 3;
+    request.inputs.push('Input:TimelineComposer.VideoSegments');
+
+    const videoFanIn = {
+      groupBy: 'segment',
+      groups: [
+        ['Artifact:Video[0]'],
+        ['Artifact:Video[1]'],
+      ],
+    };
+    resolvedInputs['Input:TimelineComposer.VideoSegments'] = videoFanIn;
+    resolvedInputs['TimelineComposer.VideoSegments'] = videoFanIn;
+    resolvedInputs.VideoSegments = videoFanIn.groups;
+    resolvedInputs['Artifact:Video[0]'] = createAssetPayload(9);
+    resolvedInputs['Artifact:Video[1]'] = createAssetPayload(8);
+
+    const result = await handler.invoke(request);
+    const timeline = JSON.parse(result.artefacts[0]?.inline ?? '{}') as {
+      tracks: Array<{ kind: string; clips: Array<{ duration: number; properties: Record<string, unknown> }> }>;
+    };
+    const videoTrack = timeline.tracks.find((track) => track.kind === 'Video');
+    expect(videoTrack).toBeDefined();
+    expect(videoTrack?.clips).toHaveLength(2);
+    expect(videoTrack?.clips[0]?.properties.originalDuration).toBeCloseTo(9);
+    expect(videoTrack?.clips[0]?.properties.fitStrategy).toBe('freeze-fade');
+    expect(videoTrack?.clips[1]?.properties.originalDuration).toBeCloseTo(8);
+    expect(videoTrack?.clips[1]?.properties.fitStrategy).toBe('stretch');
   });
 });

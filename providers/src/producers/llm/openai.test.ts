@@ -299,6 +299,56 @@ describe('createOpenAiLlmHandler', () => {
     expect(seg2?.inline).toBe('Segment two');
   });
 
+  it('formats fan-in resolved inputs into markdown bullet lists', async () => {
+    mocks.generateText.mockResolvedValueOnce({
+      text: 'Prompt response',
+      usage: { inputTokens: 10, outputTokens: 20, totalTokens: 30 },
+      warnings: [],
+      response: { id: 'resp-fanin', model: 'openai/gpt5', createdAt: '' },
+    });
+
+    const handler = buildHandler();
+    await handler.warmStart?.({ logger: undefined });
+
+    const request = createJobContext({
+      produces: ['Artifact:MusicPrompt'],
+      context: {
+        providerConfig: {
+          systemPrompt: 'Compose',
+          userPrompt: 'Narration list:\n{{NarrationScript}}',
+          variables: ['NarrationScript'],
+          responseFormat: { type: 'text' },
+        },
+        extras: {
+          resolvedInputs: {
+            'Input:MusicPromptGenerator.NarrationScript': {
+              groupBy: 'segment',
+              groups: [
+                ['Artifact:ScriptGenerator.NarrationScript[segment=0]'],
+                ['Artifact:ScriptGenerator.NarrationScript[segment=1]'],
+              ],
+            },
+            'Artifact:ScriptGenerator.NarrationScript[segment=0]': 'Intro section',
+            'Artifact:ScriptGenerator.NarrationScript[segment=1]': 'Conflict section',
+          },
+          jobContext: {
+            inputBindings: {
+              NarrationScript: 'Input:MusicPromptGenerator.NarrationScript',
+            },
+          },
+        },
+      },
+    });
+
+    await handler.invoke(request);
+
+    expect(mocks.generateText).toHaveBeenCalledTimes(1);
+    const callArgs = mocks.generateText.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(typeof callArgs.prompt).toBe('string');
+    expect(callArgs.prompt).toContain('- Intro section');
+    expect(callArgs.prompt).toContain('- Conflict section');
+  });
+
   it('marks artefacts as failed when field is missing from JSON response', async () => {
     mocks.generateObject.mockResolvedValueOnce({
       object: { MovieTitle: 'Title only' },

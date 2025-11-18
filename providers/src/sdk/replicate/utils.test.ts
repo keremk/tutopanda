@@ -2,27 +2,41 @@ import { describe, expect, it } from 'vitest';
 import { extractPlannerContext, mergeInputs, isRecord } from './utils.js';
 import type { ProviderJobContext } from '../../types.js';
 
+function makeRequest(
+  extras: ProviderJobContext['context']['extras'] | null | undefined,
+): ProviderJobContext {
+  return {
+    jobId: 'job-ctx',
+    provider: 'replicate',
+    model: 'model/test',
+    revision: 'rev-test',
+    layerIndex: 0,
+    attempt: 1,
+    inputs: [],
+    produces: [],
+    context: {
+      providerConfig: {},
+      rawAttachments: [],
+      environment: 'local',
+      observability: undefined,
+      extras,
+    },
+  };
+}
+
 describe('extractPlannerContext', () => {
   it('extracts planner context from valid request', () => {
-    const request: Partial<ProviderJobContext> = {
-      context: {
-        providerConfig: {},
-        rawAttachments: [],
-        environment: 'local',
-        observability: undefined,
-        extras: {
-          plannerContext: {
-            index: {
-              segment: 0,
-              image: 1,
-            },
-            customField: 'value',
-          },
+    const request = makeRequest({
+      plannerContext: {
+        index: {
+          segment: 0,
+          image: 1,
         },
+        customField: 'value',
       },
-    } as ProviderJobContext;
+    });
 
-    const result = extractPlannerContext(request as ProviderJobContext);
+    const result = extractPlannerContext(request);
 
     expect(result).toEqual({
       index: {
@@ -34,91 +48,38 @@ describe('extractPlannerContext', () => {
   });
 
   it('returns empty object when extras is null', () => {
-    const request: Partial<ProviderJobContext> = {
-      context: {
-        providerConfig: {},
-        rawAttachments: [],
-        environment: 'local',
-        observability: undefined,
-        extras: null,
-      },
-    } as ProviderJobContext;
-
-    const result = extractPlannerContext(request as ProviderJobContext);
+    const request = makeRequest(null);
+    const result = extractPlannerContext(request);
 
     expect(result).toEqual({});
   });
 
   it('returns empty object when extras is undefined', () => {
-    const request: Partial<ProviderJobContext> = {
-      context: {
-        providerConfig: {},
-        rawAttachments: [],
-        environment: 'local',
-        observability: undefined,
-        extras: undefined,
-      },
-    } as ProviderJobContext;
-
-    const result = extractPlannerContext(request as ProviderJobContext);
+    const request = makeRequest(undefined);
+    const result = extractPlannerContext(request);
 
     expect(result).toEqual({});
   });
 
   it('returns empty object when plannerContext is missing', () => {
-    const request: Partial<ProviderJobContext> = {
-      context: {
-        providerConfig: {},
-        rawAttachments: [],
-        environment: 'local',
-        observability: undefined,
-        extras: {
-          otherField: 'value',
-        },
-      },
-    } as ProviderJobContext;
-
-    const result = extractPlannerContext(request as ProviderJobContext);
+    const request = makeRequest({ otherField: 'value' });
+    const result = extractPlannerContext(request);
 
     expect(result).toEqual({});
   });
 
   it('returns empty object when plannerContext is not an object', () => {
-    const request: Partial<ProviderJobContext> = {
-      context: {
-        providerConfig: {},
-        rawAttachments: [],
-        environment: 'local',
-        observability: undefined,
-        extras: {
-          plannerContext: 'not an object',
-        },
-      },
-    } as ProviderJobContext;
-
-    const result = extractPlannerContext(request as ProviderJobContext);
+    const request = makeRequest({ plannerContext: 'not an object' });
+    const result = extractPlannerContext(request);
 
     expect(result).toEqual({});
   });
 
   it('handles planner context with only segment index', () => {
-    const request: Partial<ProviderJobContext> = {
-      context: {
-        providerConfig: {},
-        rawAttachments: [],
-        environment: 'local',
-        observability: undefined,
-        extras: {
-          plannerContext: {
-            index: {
-              segment: 5,
-            },
-          },
-        },
-      },
-    } as ProviderJobContext;
-
-    const result = extractPlannerContext(request as ProviderJobContext);
+    const request = makeRequest({
+      plannerContext: { index: { segment: 5 } },
+    });
+    const result = extractPlannerContext(request);
 
     expect(result).toEqual({
       index: {
@@ -128,23 +89,10 @@ describe('extractPlannerContext', () => {
   });
 
   it('handles planner context with only image index', () => {
-    const request: Partial<ProviderJobContext> = {
-      context: {
-        providerConfig: {},
-        rawAttachments: [],
-        environment: 'local',
-        observability: undefined,
-        extras: {
-          plannerContext: {
-            index: {
-              image: 2,
-            },
-          },
-        },
-      },
-    } as ProviderJobContext;
-
-    const result = extractPlannerContext(request as ProviderJobContext);
+    const request = makeRequest({
+      plannerContext: { index: { image: 2 } },
+    });
+    const result = extractPlannerContext(request);
 
     expect(result).toEqual({
       index: {
@@ -154,21 +102,10 @@ describe('extractPlannerContext', () => {
   });
 
   it('handles planner context without index field', () => {
-    const request: Partial<ProviderJobContext> = {
-      context: {
-        providerConfig: {},
-        rawAttachments: [],
-        environment: 'local',
-        observability: undefined,
-        extras: {
-          plannerContext: {
-            someOtherField: 'value',
-          },
-        },
-      },
-    } as ProviderJobContext;
-
-    const result = extractPlannerContext(request as ProviderJobContext);
+    const request = makeRequest({
+      plannerContext: { someOtherField: 'value' },
+    });
+    const result = extractPlannerContext(request);
 
     expect(result).toEqual({
       someOtherField: 'value',

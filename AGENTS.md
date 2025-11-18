@@ -44,6 +44,8 @@ cd providers && pnpm vitest run --config vitest.config.ts --pool=threads
 
 > **Agent Rule**: Always propagate and consume the canonical node IDs (`Input:…`, `Artifact:…`, `Producer:…`). Do not introduce alias-based fallbacks or heuristic lookups—if a canonical binding is missing, throw a descriptive error so the blueprint or plan can be fixed explicitly.
 
+> **Agent Rule**: Canonical IDs must flow end-to-end. The planner emits a single canonical artefact/input ID (e.g. `Artifact:MusicPromptGenerator.MusicPrompt`). The runner copies those exact IDs into each job’s context (`job.context.inputs`, `inputBindings`, `fanIn`, and `resolvedInputs`). Providers must read only that canonical ID (via `runtime.sdk.buildPayload`, `runtime.inputs.getByNodeId`, or fan-in descriptors) and never look up aliases or “best guesses”. If a canonical ID is missing, fail immediately so the upstream blueprint/plan can be fixed instead of synthesizing a fallback. This applies to every artefact, prompt variable, and attachment across the CLI/core/provider boundary.
+
 ## Coding Style & Naming Conventions
 Write strict TypeScript and prefer functional React components with kebab-case filenames. Route segment folders in `src/app` should follow Next.js rules (`(group)`, `[param]`, etc.). Use Tailwind utilities and the design tokens defined in `tailwind.config.ts` instead of ad-hoc CSS. Internal imports should use the configured aliases such as `@/components/*` and `@/lib/*`. Reuse helpers from `src/lib` before adding new utilities, and keep new files two-space indented to match the existing style.
 

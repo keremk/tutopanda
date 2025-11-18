@@ -6,6 +6,7 @@ import {
   normalizeReplicateOutput,
   buildArtefactsFromUrls,
   mergeInputs,
+  extractPlannerContext,
   isRecord,
 } from '../../sdk/replicate/index.js';
 
@@ -43,9 +44,21 @@ export function createReplicateMusicHandler(): HandlerFactory {
         const config = runtime.config.parse<ReplicateMusicConfig>(parseReplicateMusicConfig);
 
         const resolvedInputs = runtime.inputs.all();
+        const plannerContext = extractPlannerContext(request);
+        const sdkPayload = runtime.sdk.buildPayload();
 
-        // Resolve required MusicPrompt
-        const prompt = resolveMusicPrompt(resolvedInputs);
+        const providerConfig = request.context.providerConfig;
+        const customAttributes =
+          isRecord(providerConfig) && isRecord(providerConfig.customAttributes)
+            ? (providerConfig.customAttributes as Record<string, unknown>)
+            : undefined;
+        const input = mergeInputs(config.defaults ?? {}, customAttributes);
+        Object.assign(input, sdkPayload);
+
+        const promptFromSdk = input[config.promptKey];
+        const prompt = typeof promptFromSdk === 'string' && promptFromSdk.trim().length > 0
+          ? promptFromSdk
+          : resolveMusicPrompt(resolvedInputs);
         if (!prompt) {
           throw createProviderError('No music prompt available for music generation.', {
             code: 'missing_music_prompt',
@@ -53,8 +66,8 @@ export function createReplicateMusicHandler(): HandlerFactory {
             causedByUser: true,
           });
         }
+        input[config.promptKey] = prompt;
 
-        // Resolve required Duration
         const duration = resolveDuration(resolvedInputs);
         if (duration === undefined) {
           throw createProviderError('No duration available for music generation.', {
@@ -64,18 +77,6 @@ export function createReplicateMusicHandler(): HandlerFactory {
           });
         }
 
-        // Build input by merging defaults with customAttributes
-        const providerConfig = request.context.providerConfig;
-        const customAttributes =
-          isRecord(providerConfig) && isRecord(providerConfig.customAttributes)
-            ? (providerConfig.customAttributes as Record<string, unknown>)
-            : undefined;
-        const input = mergeInputs(config.defaults ?? {}, customAttributes);
-
-        // Set required prompt
-        input[config.promptKey] = prompt;
-
-        // Map duration to model-specific field with capping
         if (config.durationKey) {
           const mappedDuration = capDuration(
             duration,
@@ -97,6 +98,7 @@ export function createReplicateMusicHandler(): HandlerFactory {
           jobId: request.jobId,
           duration,
           mappedDuration: input[config.durationKey ?? 'duration'],
+          plannerContext,
         });
 
         try {
@@ -132,6 +134,7 @@ export function createReplicateMusicHandler(): HandlerFactory {
           jobId: request.jobId,
           status,
           artefactCount: artefacts.length,
+          plannerContext,
         });
 
         return {
@@ -144,6 +147,7 @@ export function createReplicateMusicHandler(): HandlerFactory {
             outputUrls,
             duration,
             mappedDuration: input[config.durationKey ?? 'duration'],
+            plannerContext,
             ...(outputUrls.length === 0 && { rawOutput: predictionOutput }),
           },
         };
@@ -193,13 +197,11 @@ function parseReplicateMusicConfig(raw: unknown): ReplicateMusicConfig {
 }
 
 function resolveMusicPrompt(resolvedInputs: Record<string, unknown>): string | undefined {
-  const promptInput = resolvedInputs['MusicPrompt'];
-
-  // Handle single string prompt (music is per-movie, not per-segment)
-  if (typeof promptInput === 'string' && promptInput.trim()) {
-    return promptInput;
+  const canonicalId = 'Artifact:MusicPromptGenerator.MusicPrompt';
+  const value = resolvedInputs[canonicalId];
+  if (typeof value === 'string' && value.trim()) {
+    return value;
   }
-
   return undefined;
 }
 

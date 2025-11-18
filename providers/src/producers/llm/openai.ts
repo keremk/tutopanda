@@ -127,7 +127,7 @@ function buildPromptVariablePayload(
   request: ProviderJobContext,
 ): Record<string, unknown> {
   if (!variables || variables.length === 0) {
-    return runtime.inputs.all();
+    return normalizePromptValues(runtime.inputs.all(), runtime);
   }
   const inputBindings = extractInputBindings(request);
   const payload: Record<string, unknown> = {};
@@ -139,7 +139,7 @@ function buildPromptVariablePayload(
         `[providers.openai.prompts] Missing resolved input for canonical id "${canonicalId}" (variable "${variable}")`,
       );
     }
-    payload[variable] = value;
+    payload[variable] = normalizePromptValue(value, runtime);
   }
   return payload;
 }
@@ -158,4 +158,57 @@ function extractInputBindings(request: ProviderJobContext): Record<string, strin
     return undefined;
   }
   return bindings as Record<string, string>;
+}
+
+function normalizePromptValues(
+  values: Record<string, unknown>,
+  runtime: ProducerRuntime,
+): Record<string, unknown> {
+  const normalized: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(values)) {
+    normalized[key] = normalizePromptValue(value, runtime);
+  }
+  return normalized;
+}
+
+function normalizePromptValue(value: unknown, runtime: ProducerRuntime): unknown {
+  if (isFanInValue(value)) {
+    return formatFanInPromptValue(value, runtime);
+  }
+  return value;
+}
+
+function formatFanInPromptValue(value: FanInValue, runtime: ProducerRuntime): string {
+  const lines: string[] = [];
+  for (const group of value.groups) {
+    if (!Array.isArray(group)) {
+      continue;
+    }
+    for (const memberId of group) {
+      if (typeof memberId !== 'string' || memberId.length === 0) {
+        continue;
+      }
+      const resolved = runtime.inputs.getByNodeId(memberId) ?? runtime.inputs.get(memberId);
+      if (typeof resolved !== 'string' || resolved.trim().length === 0) {
+        throw new Error(
+          `[providers.openai.prompts] Fan-in member "${memberId}" is missing text content for prompt variable.`,
+        );
+      }
+      lines.push(`- ${resolved.trim()}`);
+    }
+  }
+  if (lines.length === 0) {
+    throw new Error('[providers.openai.prompts] Fan-in collection did not yield any values for prompt variable.');
+  }
+  return lines.join('\n');
+}
+
+interface FanInValue {
+  groupBy: string;
+  orderBy?: string;
+  groups: unknown[];
+}
+
+function isFanInValue(value: unknown): value is FanInValue {
+  return Boolean(value && typeof value === 'object' && Array.isArray((value as FanInValue).groups));
 }

@@ -1,5 +1,5 @@
 import { Buffer } from 'node:buffer';
-import type { HandlerFactory } from '../../types.js';
+import type { HandlerFactory, ProviderJobContext } from '../../types.js';
 import { createProducerHandlerFactory } from '../../sdk/handler-factory.js';
 import { createProviderError } from '../../sdk/errors.js';
 import {
@@ -47,59 +47,78 @@ export function createReplicateVideoHandler(): HandlerFactory {
 
         const resolvedInputs = runtime.inputs.all();
         const plannerContext = extractPlannerContext(request);
+        const sdkPayload = runtime.sdk.buildPayload();
 
-        // Resolve required prompt
-        const prompt = resolvePrompt(resolvedInputs, plannerContext);
-        if (!prompt) {
-          throw createProviderError('No prompt available for video generation.', {
-            code: 'missing_prompt',
-            kind: 'user_input',
-            causedByUser: true,
-          });
-        }
-
-        // Build input by merging defaults with customAttributes
         const providerConfig = request.context.providerConfig;
         const customAttributes =
           isRecord(providerConfig) && isRecord(providerConfig.customAttributes)
             ? (providerConfig.customAttributes as Record<string, unknown>)
             : undefined;
         const input = mergeInputs(config.defaults ?? {}, customAttributes);
+        Object.assign(input, sdkPayload);
 
-        // Set required prompt
-        input[config.promptKey] = prompt;
+        const canonicalPromptId = readCanonicalPromptId(request);
+        const existingPrompt = input[config.promptKey];
+        if (typeof existingPrompt !== 'string' || existingPrompt.trim().length === 0) {
+          throw createProviderError(
+            `No prompt available for video generation (missing canonical input "${canonicalPromptId}").`,
+            {
+              code: 'missing_prompt',
+              kind: 'user_input',
+              causedByUser: true,
+              metadata: { canonicalPromptId },
+            },
+          );
+        }
+        input[config.promptKey] = existingPrompt;
 
-        // Optionally add image for image-to-video
-        const image = resolveOptionalImage(resolvedInputs, plannerContext);
-        if (image && config.imageKey) {
-          // Convert Uint8Array to Buffer for Replicate SDK
-          input[config.imageKey] = toBufferIfNeeded(image);
+        let hasImage = false;
+        if (config.imageKey) {
+          const currentImage = input[config.imageKey];
+          if (typeof currentImage === 'string' || currentImage instanceof Uint8Array) {
+            input[config.imageKey] = toBufferIfNeeded(currentImage);
+            hasImage = true;
+          } else {
+            const fallbackImage = resolveOptionalImage(resolvedInputs, plannerContext);
+            if (fallbackImage) {
+              input[config.imageKey] = toBufferIfNeeded(fallbackImage);
+              hasImage = true;
+            }
+          }
         }
 
-        // Optionally add negative prompt
-        const negativePrompt = resolveOptionalNegativePrompt(resolvedInputs, plannerContext);
-        if (negativePrompt && config.negativePromptKey) {
-          input[config.negativePromptKey] = negativePrompt;
+        if (config.negativePromptKey && input[config.negativePromptKey] === undefined) {
+          const negativePrompt = resolveOptionalNegativePrompt(resolvedInputs, plannerContext);
+          if (negativePrompt) {
+            input[config.negativePromptKey] = negativePrompt;
+          }
+        }
+        const hasNegativePrompt = Boolean(config.negativePromptKey && input[config.negativePromptKey]);
+
+        let hasLastFrame = false;
+        if (config.lastFrameKey) {
+          const currentLastFrame = input[config.lastFrameKey];
+          if (typeof currentLastFrame === 'string' || currentLastFrame instanceof Uint8Array) {
+            input[config.lastFrameKey] = toBufferIfNeeded(currentLastFrame);
+            hasLastFrame = true;
+          } else {
+            const lastFrame = resolveOptionalLastFrame(resolvedInputs, plannerContext);
+            if (lastFrame) {
+              input[config.lastFrameKey] = toBufferIfNeeded(lastFrame);
+              hasLastFrame = true;
+            }
+          }
         }
 
-        // Optionally add last frame for interpolation
-        const lastFrame = resolveOptionalLastFrame(resolvedInputs, plannerContext);
-        if (lastFrame && config.lastFrameKey) {
-          // Convert Uint8Array to Buffer for Replicate SDK
-          input[config.lastFrameKey] = toBufferIfNeeded(lastFrame);
-        }
-
-        // Map size from input if provided (takes precedence over customAttributes)
         const size = resolveSize(resolvedInputs);
+        const sizeFieldName = getSizeFieldName(request.model);
         if (size) {
-          const sizeFieldName = getSizeFieldName(request.model);
           input[sizeFieldName] = size;
         }
 
-        // Map aspect ratio from input if provided (takes precedence over customAttributes)
         const aspectRatio = resolveAspectRatio(resolvedInputs);
+        const aspectRatioFieldName = getAspectRatioFieldName(request.model);
         if (aspectRatio) {
-          const aspectRatioFieldName = getAspectRatioFieldName(request.model);
           input[aspectRatioFieldName] = aspectRatio;
         }
 
@@ -113,9 +132,9 @@ export function createReplicateVideoHandler(): HandlerFactory {
           provider: descriptor.provider,
           model: request.model,
           jobId: request.jobId,
-          hasImage: Boolean(image),
-          hasNegativePrompt: Boolean(negativePrompt),
-          hasLastFrame: Boolean(lastFrame),
+          hasImage,
+          hasNegativePrompt,
+          hasLastFrame,
         });
 
         try {
@@ -162,9 +181,9 @@ export function createReplicateVideoHandler(): HandlerFactory {
             input,
             outputUrls,
             plannerContext,
-            hasImage: Boolean(image),
-            hasNegativePrompt: Boolean(negativePrompt),
-            hasLastFrame: Boolean(lastFrame),
+          hasImage,
+          hasNegativePrompt,
+          hasLastFrame,
             ...(outputUrls.length === 0 && { rawOutput: predictionOutput }),
           },
         };
@@ -209,44 +228,21 @@ function parseReplicateVideoConfig(raw: unknown): ReplicateVideoConfig {
   };
 }
 
-function resolvePrompt(
-  resolvedInputs: Record<string, unknown>,
-  planner: PlannerContext,
-): string | undefined {
-  // Try TextToVideoPrompt first (for text-to-video)
-  const textToVideoPrompt = resolvedInputs['TextToVideoPrompt'];
-  const segmentIndex = planner.index?.segment ?? 0;
-
-  // Handle array of prompts (for segments)
-  if (Array.isArray(textToVideoPrompt) && textToVideoPrompt.length > 0) {
-    const prompt = textToVideoPrompt[segmentIndex] ?? textToVideoPrompt[0];
-    if (typeof prompt === 'string' && prompt.trim()) {
-      return prompt;
+function readCanonicalPromptId(request: ProviderJobContext): string {
+  const extras = request.context.extras;
+  if (extras && typeof extras === 'object') {
+    const jobContext = (extras as Record<string, unknown>).jobContext;
+    if (jobContext && typeof jobContext === 'object') {
+      const bindings = (jobContext as Record<string, unknown>).inputBindings;
+      if (bindings && typeof bindings === 'object') {
+        const mapped = (bindings as Record<string, string>).Prompt;
+        if (typeof mapped === 'string' && mapped.length > 0) {
+          return mapped;
+        }
+      }
     }
   }
-
-  // Handle single string prompt
-  if (typeof textToVideoPrompt === 'string' && textToVideoPrompt.trim()) {
-    return textToVideoPrompt;
-  }
-
-  // Try ImageToVideoPrompt (for image-to-video)
-  const imageToVideoPrompt = resolvedInputs['ImageToVideoPrompt'];
-
-  // Handle array of prompts
-  if (Array.isArray(imageToVideoPrompt) && imageToVideoPrompt.length > 0) {
-    const prompt = imageToVideoPrompt[segmentIndex] ?? imageToVideoPrompt[0];
-    if (typeof prompt === 'string' && prompt.trim()) {
-      return prompt;
-    }
-  }
-
-  // Handle single string prompt
-  if (typeof imageToVideoPrompt === 'string' && imageToVideoPrompt.trim()) {
-    return imageToVideoPrompt;
-  }
-
-  return undefined;
+  return 'Prompt';
 }
 
 function resolveOptionalImage(
@@ -341,11 +337,13 @@ function resolveOptionalLastFrame(
  * @param data String URL or Uint8Array blob
  * @returns String URL unchanged, or Buffer converted from Uint8Array
  */
-function toBufferIfNeeded(data: string | Uint8Array): string | Buffer {
+function toBufferIfNeeded(data: string | Uint8Array | Buffer): string | Buffer {
   if (typeof data === 'string') {
     return data;
   }
-  // Convert Uint8Array to Buffer for Replicate SDK compatibility
+  if (Buffer.isBuffer(data)) {
+    return data;
+  }
   return Buffer.from(data);
 }
 
