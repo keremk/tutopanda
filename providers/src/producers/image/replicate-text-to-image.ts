@@ -23,8 +23,8 @@ interface ReplicateImageConfig {
 
 export function createReplicateTextToImageHandler(): HandlerFactory {
   return (init) => {
-    const { descriptor, secretResolver, logger } = init;
-    const clientManager = createReplicateClientManager(secretResolver, logger);
+    const { descriptor, secretResolver, logger, schemaRegistry } = init;
+    const clientManager = createReplicateClientManager(secretResolver, logger, init.mode, schemaRegistry);
 
     const factory = createProducerHandlerFactory({
       domain: 'media',
@@ -91,6 +91,7 @@ export function createReplicateTextToImageHandler(): HandlerFactory {
           produces: request.produces,
           urls: outputUrls,
           mimeType: config.outputMimeType,
+          mode: init.mode,
         });
 
         const status = artefacts.some((artefact) => artefact.status === 'failed') ? 'failed' : 'succeeded';

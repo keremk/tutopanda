@@ -37,6 +37,7 @@ export function createProviderRegistry(options: ProviderRegistryOptions = {}): P
       mode,
       secretResolver,
       logger,
+      schemaRegistry: options.schemaRegistry,
     });
     handlerCache.set(cacheKey, handler);
     return handler;

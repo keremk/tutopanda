@@ -21,8 +21,8 @@ interface ReplicateMusicConfig {
 
 export function createReplicateMusicHandler(): HandlerFactory {
   return (init) => {
-    const { descriptor, secretResolver, logger } = init;
-    const clientManager = createReplicateClientManager(secretResolver, logger);
+    const { descriptor, secretResolver, logger, schemaRegistry } = init;
+    const clientManager = createReplicateClientManager(secretResolver, logger, init.mode, schemaRegistry);
 
     return createProducerHandlerFactory({
       domain: 'media',
@@ -124,6 +124,7 @@ export function createReplicateMusicHandler(): HandlerFactory {
           produces: request.produces,
           urls: outputUrls,
           mimeType: config.outputMimeType,
+          mode: init.mode,
         });
 
         const status = artefacts.some((a) => a.status === 'failed') ? 'failed' : 'succeeded';

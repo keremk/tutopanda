@@ -9,20 +9,26 @@ import {
   buildPrompt,
   callOpenAi,
   buildArtefactsFromResponse,
+  parseArtefactIdentifier,
   sanitizeResponseMetadata,
   type OpenAiLlmConfig,
+  type GenerationResult,
 } from '../../sdk/openai/index.js';
 
 export function createOpenAiLlmHandler(): HandlerFactory {
   return (init) => {
-    const { descriptor, secretResolver, logger } = init;
-    const clientManager = createOpenAiClientManager(secretResolver, logger);
+    const { descriptor, secretResolver, logger, schemaRegistry } = init;
+    const clientManager = createOpenAiClientManager(secretResolver, logger, init.mode, schemaRegistry);
+    const isSimulated = init.mode === 'simulated';
     const consoleLogger = globalThis.console;
 
     const factory = createProducerHandlerFactory({
       domain: 'prompt',
       configValidator: parseOpenAiConfig,
       warmStart: async () => {
+        if (isSimulated) {
+          return;
+        }
         try {
           await clientManager.ensure();
         } catch (error) {
@@ -55,11 +61,7 @@ export function createOpenAiLlmHandler(): HandlerFactory {
         logger?.debug?.('providers.openai.config', configLogPayload);
         consoleLogger.log('[providers.openai.config]', configLogPayload);
 
-        // 2. Get OpenAI client and model
-        await clientManager.ensure();
-        const model = clientManager.getModel(request.model);
-
-        // 3. Render prompts with variable substitution
+        // 2. Render prompts with variable substitution
         const promptInputs = buildPromptVariablePayload(config.variables, runtime, request);
         const prompts = renderPrompts(config, promptInputs);
         const prompt = buildPrompt(prompts);
@@ -76,13 +78,20 @@ export function createOpenAiLlmHandler(): HandlerFactory {
         logger?.debug?.('providers.openai.prompts', promptLogPayload);
         consoleLogger.log('[providers.openai.prompts]', promptLogPayload);
 
-        // 4. Call OpenAI via AI SDK
-        const generation = await callOpenAi({
-          model,
-          prompts,
-          responseFormat: config.responseFormat,
-          config,
-        });
+        // 3. Call OpenAI via AI SDK or simulate the response
+        let generation: GenerationResult;
+        if (isSimulated) {
+          generation = simulateOpenAiGeneration(request, runtime, config, prompt);
+        } else {
+          await clientManager.ensure();
+          const model = clientManager.getModel(request.model);
+          generation = await callOpenAi({
+            model,
+            prompts,
+            responseFormat: config.responseFormat,
+            config,
+          });
+        }
 
         // 5. Build artifacts using implicit mapping
         const artefacts = buildArtefactsFromResponse(generation.data, request.produces, {
@@ -211,4 +220,113 @@ interface FanInValue {
 
 function isFanInValue(value: unknown): value is FanInValue {
   return Boolean(value && typeof value === 'object' && Array.isArray((value as FanInValue).groups));
+}
+
+function simulateOpenAiGeneration(
+  request: ProviderJobContext,
+  runtime: ProducerRuntime,
+  config: OpenAiLlmConfig,
+  compiledPrompt: string,
+): GenerationResult {
+  const subject = resolveSimulationSubject(runtime);
+  const responseMeta = {
+    id: `simulated-openai-${request.jobId}`,
+    model: request.model,
+    createdAt: new Date().toISOString(),
+  } satisfies Record<string, unknown>;
+
+  if (config.responseFormat?.type === 'json_schema') {
+    const data = buildStructuredSimulationPayload(request, subject);
+    return {
+      data,
+      usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+      warnings: [],
+      response: responseMeta,
+    } satisfies GenerationResult;
+  }
+
+  const text = buildSimulatedText(compiledPrompt, subject, request.jobId);
+  return {
+    data: text,
+    usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+    warnings: [],
+    response: responseMeta,
+  } satisfies GenerationResult;
+}
+
+function buildStructuredSimulationPayload(
+  request: ProviderJobContext,
+  subject: string,
+): Record<string, unknown> {
+  const payload: Record<string, unknown> = {};
+  for (const artefactId of request.produces) {
+    const parsed = parseArtefactIdentifier(artefactId);
+    if (!parsed) {
+      continue;
+    }
+    const fieldName = getBaseFieldName(parsed.kind);
+    if (parsed.ordinal && parsed.ordinal.length > 0) {
+      const label = describeSegmentValue(fieldName, subject, parsed.ordinal);
+      payload[fieldName] = assignOrdinalValue(payload[fieldName], parsed.ordinal, label);
+      continue;
+    }
+    if (parsed.index?.segment !== undefined) {
+      const index = parsed.index.segment;
+      const existing = Array.isArray(payload[fieldName]) ? (payload[fieldName] as unknown[]) : [];
+      existing[index] = describeSegmentValue(fieldName, subject, [index]);
+      payload[fieldName] = existing;
+      continue;
+    }
+    payload[fieldName] = `Simulated ${fieldName} for ${subject}`;
+  }
+  return payload;
+}
+
+function buildSimulatedText(prompt: string, subject: string, jobId: string): string {
+  const snippet = prompt.trim().replace(/\s+/g, ' ').slice(0, 160);
+  const base = snippet.length > 0 ? snippet : subject;
+  return `[Simulated ${jobId}] ${base}`;
+}
+
+function resolveSimulationSubject(runtime: ProducerRuntime): string {
+  const candidates = runtime.inputs.all();
+  const preferredKeys = ['Input:InquiryPrompt', 'InquiryPrompt', 'Input:Prompt', 'Prompt'];
+  for (const key of preferredKeys) {
+    const value = candidates[key];
+    if (typeof value === 'string' && value.trim().length > 0) {
+      return value.trim();
+    }
+  }
+  for (const value of Object.values(candidates)) {
+    if (typeof value === 'string' && value.trim().length > 0) {
+      return value.trim();
+    }
+  }
+  return 'simulation subject';
+}
+
+function getBaseFieldName(kind: string): string {
+  return kind.includes('.') ? kind.slice(kind.lastIndexOf('.') + 1) : kind;
+}
+
+function assignOrdinalValue(existing: unknown, ordinal: number[], value: string): unknown[] {
+  const root = Array.isArray(existing) ? (existing as unknown[]) : [];
+  let cursor = root;
+  for (let i = 0; i < ordinal.length; i += 1) {
+    const index = ordinal[i]!;
+    if (i === ordinal.length - 1) {
+      cursor[index] = value;
+      break;
+    }
+    if (!Array.isArray(cursor[index])) {
+      cursor[index] = [];
+    }
+    cursor = cursor[index] as unknown[];
+  }
+  return root;
+}
+
+function describeSegmentValue(fieldName: string, subject: string, ordinal: number[]): string {
+  const formatted = ordinal.map((value) => value + 1).join('.');
+  return `Simulated ${fieldName} segment ${formatted} for ${subject}`;
 }

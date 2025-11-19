@@ -9,8 +9,9 @@ import {
   type ExecutionPlan,
   type Manifest,
   type RunResult,
+  type ProviderName,
 } from 'tutopanda-core';
-import { createProviderRegistry } from 'tutopanda-providers';
+import { createProviderRegistry, SchemaRegistry } from 'tutopanda-providers';
 import { createProviderProduce, prepareProviderHandlers } from './build.js';
 import type { ProducerOptionsMap } from './producer-options.js';
 
@@ -60,7 +61,26 @@ export async function executeDryRun(args: ExecuteDryRunArgs): Promise<DryRunSumm
   }
   const eventLog = createEventLog(storage);
   const manifestService = createManifestService(storage);
-  const registry = createProviderRegistry({ mode: 'mock' });
+
+
+  // Populate SchemaRegistry from provider options (blueprints)
+  const schemaRegistry = new SchemaRegistry();
+  for (const [_, options] of args.providerOptions) {
+    for (const option of options) {
+      if (option.config) {
+        const config = option.config as Record<string, unknown>;
+        // Check if sdkMapping exists in the config (it comes from the blueprint)
+        if (config.sdkMapping) {
+          schemaRegistry.register(option.provider as ProviderName, option.model, {
+            sdkMapping: config.sdkMapping as any,
+            config: config.config as any,
+          });
+        }
+      }
+    }
+  }
+
+  const registry = createProviderRegistry({ mode: 'simulated', schemaRegistry });
   const preResolved = prepareProviderHandlers(registry, args.plan, args.providerOptions);
   await registry.warmStart?.(preResolved);
   const produce = createProviderProduce(

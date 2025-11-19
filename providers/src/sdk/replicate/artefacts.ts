@@ -1,10 +1,12 @@
 import { Buffer } from 'node:buffer';
 import type { ProducedArtefact } from 'tutopanda-core';
+import type { ProviderMode } from '../../types.js';
 
 export interface BuildArtefactsOptions {
   produces: string[];
   urls: string[];
   mimeType: string;
+  mode?: ProviderMode;
 }
 
 /**
@@ -12,8 +14,9 @@ export interface BuildArtefactsOptions {
  * Handles missing URLs and download failures gracefully.
  */
 export async function buildArtefactsFromUrls(options: BuildArtefactsOptions): Promise<ProducedArtefact[]> {
-  const { produces, urls, mimeType } = options;
+  const { produces, urls, mimeType, mode } = options;
   const artefacts: ProducedArtefact[] = [];
+  const useMockDownloads = mode === 'simulated';
 
   for (let index = 0; index < produces.length; index += 1) {
     const providedId = produces[index];
@@ -33,7 +36,9 @@ export async function buildArtefactsFromUrls(options: BuildArtefactsOptions): Pr
     }
 
     try {
-      const buffer = await downloadBinary(url);
+      const buffer = useMockDownloads
+        ? Buffer.from(`simulated-output:${artefactId}`)
+        : await downloadBinary(url);
       artefacts.push({
         artefactId,
         status: 'succeeded',

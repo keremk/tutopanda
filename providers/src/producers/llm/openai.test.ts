@@ -475,6 +475,70 @@ describe('createOpenAiLlmHandler', () => {
     expect(args.system).toBe('System prompt');
   });
 
+  it('simulates responses in dry-run mode without contacting OpenAI', async () => {
+    const factory = createOpenAiLlmHandler();
+    const handler = factory({
+      descriptor: {
+        provider: 'openai',
+        model: 'openai/gpt5',
+        environment: 'local',
+      },
+      mode: 'simulated',
+      secretResolver: {
+        async getSecret() {
+          return 'unused';
+        },
+      },
+      logger: undefined,
+    });
+
+    const request = createJobContext({
+      jobId: 'job-sim',
+      produces: [
+        'Artifact:ScriptGenerator.MovieTitle',
+        'Artifact:ScriptGenerator.NarrationScript[0]',
+        'Artifact:ScriptGenerator.NarrationScript[1]',
+      ],
+      context: {
+        providerConfig: {
+          systemPrompt: 'Summarise {{InquiryPrompt}}',
+          responseFormat: {
+            type: 'json_schema',
+            schema: {
+              type: 'object',
+              properties: {
+                MovieTitle: { type: 'string' },
+                NarrationScript: { type: 'array', items: { type: 'string' } },
+              },
+            },
+          },
+          variables: ['InquiryPrompt'],
+        },
+        extras: {
+          resolvedInputs: {
+            InquiryPrompt: 'The Silk Road',
+          },
+        },
+      },
+    });
+
+    const result = await handler.invoke(request);
+
+    expect(mocks.generateObject).not.toHaveBeenCalled();
+    expect(mocks.generateText).not.toHaveBeenCalled();
+    expect(result.status).toBe('succeeded');
+
+    const title = result.artefacts.find(
+      (artefact) => artefact.artefactId === 'Artifact:ScriptGenerator.MovieTitle',
+    );
+    expect(title?.inline).toContain('Simulated MovieTitle');
+
+    const segmentOne = result.artefacts.find(
+      (artefact) => artefact.artefactId === 'Artifact:ScriptGenerator.NarrationScript[0]',
+    );
+    expect(segmentOne?.inline).toContain('segment 1');
+  });
+
   it('normalizes TOML config from [prompt_settings] section', async () => {
     mocks.generateObject.mockResolvedValueOnce({
       object: {

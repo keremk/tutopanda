@@ -4,8 +4,9 @@ import type {
   ProviderName,
   RevisionId,
 } from 'tutopanda-core';
+import type { SchemaRegistry } from './schema-registry.js';
 
-export type ProviderMode = 'mock' | 'live';
+export type ProviderMode = 'mock' | 'live' | 'simulated';
 export type ProviderEnvironment = 'local' | 'cloud';
 
 export interface ProviderDescriptor {
@@ -81,6 +82,7 @@ export interface HandlerFactoryInit {
   mode: ProviderMode;
   secretResolver: SecretResolver;
   logger?: ProviderLogger;
+  schemaRegistry?: SchemaRegistry;
 }
 
 export type HandlerFactory = (init: HandlerFactoryInit) => ProducerHandler;
@@ -97,6 +99,7 @@ export interface ProviderRegistryOptions {
   mode?: ProviderMode;
   logger?: ProviderLogger;
   secretResolver?: SecretResolver;
+  schemaRegistry?: SchemaRegistry;
 }
 
 export interface ResolvedProviderHandler {

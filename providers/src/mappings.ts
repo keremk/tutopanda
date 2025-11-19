@@ -28,6 +28,15 @@ export const providerImplementations: ProviderImplementationRegistry = [
     mode: 'live',
     factory: createOpenAiLlmHandler(),
   },
+  {
+    match: {
+      provider: 'openai',
+      model: wildcard,
+      environment: wildcard,
+    },
+    mode: 'simulated',
+    factory: createOpenAiLlmHandler(),
+  },
   // Replicate Image Models
   {
     match: {
@@ -36,6 +45,15 @@ export const providerImplementations: ProviderImplementationRegistry = [
       environment: wildcard,
     },
     mode: 'live',
+    factory: createReplicateTextToImageHandler(),
+  },
+  {
+    match: {
+      provider: 'replicate',
+      model: 'bytedance/seedream-4',
+      environment: wildcard,
+    },
+    mode: 'simulated',
     factory: createReplicateTextToImageHandler(),
   },
   {
@@ -50,7 +68,34 @@ export const providerImplementations: ProviderImplementationRegistry = [
   {
     match: {
       provider: 'replicate',
+      model: 'google/imagen-4',
+      environment: wildcard,
+    },
+    mode: 'simulated',
+    factory: createReplicateTextToImageHandler(),
+  },
+  {
+    match: {
+      provider: 'replicate',
       model: 'google/nano-banana',
+      environment: wildcard,
+    },
+    mode: 'live',
+    factory: createReplicateTextToImageHandler(),
+  },
+  {
+    match: {
+      provider: 'replicate',
+      model: 'google/nano-banana',
+      environment: wildcard,
+    },
+    mode: 'simulated',
+    factory: createReplicateTextToImageHandler(),
+  },
+  {
+    match: {
+      provider: 'replicate',
+      model: 'tencent/hunyuan-image-3',
       environment: wildcard,
     },
     mode: 'live',
@@ -62,7 +107,7 @@ export const providerImplementations: ProviderImplementationRegistry = [
       model: 'tencent/hunyuan-image-3',
       environment: wildcard,
     },
-    mode: 'live',
+    mode: 'simulated',
     factory: createReplicateTextToImageHandler(),
   },
   // Replicate Audio Models
@@ -78,7 +123,34 @@ export const providerImplementations: ProviderImplementationRegistry = [
   {
     match: {
       provider: 'replicate',
+      model: 'minimax/speech-02-hd',
+      environment: wildcard,
+    },
+    mode: 'simulated',
+    factory: createReplicateAudioHandler(),
+  },
+  {
+    match: {
+      provider: 'replicate',
       model: 'minimax/speech-2.6-hd',
+      environment: wildcard,
+    },
+    mode: 'live',
+    factory: createReplicateAudioHandler(),
+  },
+  {
+    match: {
+      provider: 'replicate',
+      model: 'minimax/speech-2.6-hd',
+      environment: wildcard,
+    },
+    mode: 'simulated',
+    factory: createReplicateAudioHandler(),
+  },
+  {
+    match: {
+      provider: 'replicate',
+      model: 'elevenlabs/v3',
       environment: wildcard,
     },
     mode: 'live',
@@ -90,7 +162,7 @@ export const providerImplementations: ProviderImplementationRegistry = [
       model: 'elevenlabs/v3',
       environment: wildcard,
     },
-    mode: 'live',
+    mode: 'simulated',
     factory: createReplicateAudioHandler(),
   },
   // Replicate Video Models
@@ -106,7 +178,34 @@ export const providerImplementations: ProviderImplementationRegistry = [
   {
     match: {
       provider: 'replicate',
+      model: 'bytedance/seedance-1-pro-fast',
+      environment: wildcard,
+    },
+    mode: 'simulated',
+    factory: createReplicateVideoHandler(),
+  },
+  {
+    match: {
+      provider: 'replicate',
       model: 'bytedance/seedance-1-lite',
+      environment: wildcard,
+    },
+    mode: 'live',
+    factory: createReplicateVideoHandler(),
+  },
+  {
+    match: {
+      provider: 'replicate',
+      model: 'bytedance/seedance-1-lite',
+      environment: wildcard,
+    },
+    mode: 'simulated',
+    factory: createReplicateVideoHandler(),
+  },
+  {
+    match: {
+      provider: 'replicate',
+      model: 'google/veo-3.1-fast',
       environment: wildcard,
     },
     mode: 'live',
@@ -118,7 +217,7 @@ export const providerImplementations: ProviderImplementationRegistry = [
       model: 'google/veo-3.1-fast',
       environment: wildcard,
     },
-    mode: 'live',
+    mode: 'simulated',
     factory: createReplicateVideoHandler(),
   },
   // Replicate Music Models
@@ -134,10 +233,28 @@ export const providerImplementations: ProviderImplementationRegistry = [
   {
     match: {
       provider: 'replicate',
+      model: 'stability-ai/stable-audio-2.5',
+      environment: wildcard,
+    },
+    mode: 'simulated',
+    factory: createReplicateMusicHandler(),
+  },
+  {
+    match: {
+      provider: 'replicate',
       model: 'elevenlabs/music',
       environment: wildcard,
     },
     mode: 'live',
+    factory: createReplicateMusicHandler(),
+  },
+  {
+    match: {
+      provider: 'replicate',
+      model: 'elevenlabs/music',
+      environment: wildcard,
+    },
+    mode: 'simulated',
     factory: createReplicateMusicHandler(),
   },
   {
@@ -147,6 +264,15 @@ export const providerImplementations: ProviderImplementationRegistry = [
       environment: wildcard,
     },
     mode: 'live',
+    factory: createTimelineProducerHandler(),
+  },
+  {
+    match: {
+      provider: 'tutopanda',
+      model: 'OrderedTimeline',
+      environment: wildcard,
+    },
+    mode: 'simulated',
     factory: createTimelineProducerHandler(),
   },
   {

@@ -212,4 +212,18 @@ describe('buildArtefactsFromUrls', () => {
       },
     });
   });
+
+  it('skips downloads and creates placeholder data in simulated mode', async () => {
+    const result = await buildArtefactsFromUrls({
+      produces: ['Artifact:Image#0'],
+      urls: ['https://example.com/img.jpg'],
+      mimeType: 'image/jpeg',
+      mode: 'simulated',
+    });
+
+    expect(global.fetch).not.toHaveBeenCalled();
+    expect(result).toHaveLength(1);
+    expect(result[0]?.status).toBe('succeeded');
+    expect(result[0]?.blob?.data).toBeInstanceOf(Buffer);
+  });
 });
