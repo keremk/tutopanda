@@ -20,7 +20,7 @@ inputs:
     description: Aspect ratio such as 16:9 or 3:2.
     type: string
     required: false
-    default: 1K
+    default: "16:9"
 
 artifacts:
   - name: SegmentImage

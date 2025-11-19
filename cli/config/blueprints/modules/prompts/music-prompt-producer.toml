@@ -27,7 +27,6 @@ The audience is specified as:
 {{Audience}}
 The musical style is:
 {{MusicalStyle}}
-The overall length of the video is:
-{{Duration}}
+The overall length of the video is {{Duration}} seconds.
 Generate a prompt to be fed into a music generator to generate a musical score.
 """

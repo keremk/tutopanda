@@ -110,10 +110,10 @@ export function createReplicateVideoHandler(): HandlerFactory {
           }
         }
 
-        const size = resolveSize(resolvedInputs);
-        const sizeFieldName = getSizeFieldName(request.model);
-        if (size) {
-          input[sizeFieldName] = size;
+        const resolution = resolveResolution(resolvedInputs);
+        const resolutionFieldName = getResolutionFieldName(request.model);
+        if (resolution) {
+          input[resolutionFieldName] = resolution;
         }
 
         const aspectRatio = resolveAspectRatio(resolvedInputs);
@@ -347,12 +347,12 @@ function toBufferIfNeeded(data: string | Uint8Array | Buffer): string | Buffer {
   return Buffer.from(data);
 }
 
-function resolveSize(resolvedInputs: Record<string, unknown>): string | undefined {
-  const sizeInput = resolvedInputs['Size'];
+function resolveResolution(resolvedInputs: Record<string, unknown>): string | undefined {
+  const resolutionInput = resolvedInputs['Resolution'];
 
-  // Handle single string value (size is uniform across segments)
-  if (typeof sizeInput === 'string' && sizeInput.trim()) {
-    return sizeInput;
+  // Handle single string value (resolution is uniform across segments)
+  if (typeof resolutionInput === 'string' && resolutionInput.trim()) {
+    return resolutionInput;
   }
 
   return undefined;
@@ -370,10 +370,10 @@ function resolveAspectRatio(resolvedInputs: Record<string, unknown>): string | u
 }
 
 /**
- * Determine the size parameter name based on the model.
- * Currently all video models use 'resolution' for size.
+ * Determine the resolution parameter name based on the model.
+ * Currently all video models use 'resolution'.
  */
-function getSizeFieldName(model: string): string {
+function getResolutionFieldName(model: string): string {
   // All current video models use 'resolution'
   return 'resolution';
 }

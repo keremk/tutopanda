@@ -910,8 +910,8 @@ describe('replicate-video', () => {
     });
   });
 
-  describe('Size and AspectRatio resolution', () => {
-    it('maps Size from resolvedInputs to resolution field', async () => {
+  describe('Resolution and AspectRatio propagation', () => {
+    it('maps Resolution from resolvedInputs to resolution field', async () => {
       const handler = createReplicateVideoHandler()({
         descriptor: {
           provider: 'replicate',
@@ -924,20 +924,20 @@ describe('replicate-video', () => {
       });
 
       const request: ProviderJobContext = {
-        jobId: 'test-job-size',
+        jobId: 'test-job-resolution',
         provider: 'replicate',
         model: 'bytedance/seedance-1-pro-fast',
         revision: 'rev-test',
         layerIndex: 0,
         attempt: 1,
-        inputs: ['TextToVideoPrompt', 'Input:Size', 'Input:AspectRatio'],
+        inputs: ['TextToVideoPrompt', 'Input:Resolution', 'Input:AspectRatio'],
         produces: ['Artifact:SegmentVideo[0]'],
         context: {
           providerConfig: {},
           extras: {
             resolvedInputs: {
               TextToVideoPrompt: 'Test video',
-              Size: '720p',
+              Resolution: '720p',
               AspectRatio: '9:16',
             },
             plannerContext: { index: { segment: 0 } },
@@ -968,7 +968,7 @@ describe('replicate-video', () => {
       });
     });
 
-    it('Size and AspectRatio from resolvedInputs take precedence over customAttributes', async () => {
+    it('Resolution and AspectRatio from resolvedInputs take precedence over customAttributes', async () => {
       const handler = createReplicateVideoHandler()({
         descriptor: {
           provider: 'replicate',
@@ -987,7 +987,7 @@ describe('replicate-video', () => {
         revision: 'rev-test',
         layerIndex: 0,
         attempt: 1,
-        inputs: ['TextToVideoPrompt', 'Input:Size', 'Input:AspectRatio'],
+        inputs: ['TextToVideoPrompt', 'Input:Resolution', 'Input:AspectRatio'],
         produces: ['Artifact:SegmentVideo[0]'],
         context: {
           providerConfig: {
@@ -1000,7 +1000,7 @@ describe('replicate-video', () => {
           extras: {
             resolvedInputs: {
               TextToVideoPrompt: 'Test video',
-              Size: '1080p',
+              Resolution: '1080p',
               AspectRatio: '1:1',
             },
             plannerContext: { index: { segment: 0 } },
@@ -1032,7 +1032,7 @@ describe('replicate-video', () => {
       });
     });
 
-    it('does not add resolution/aspect_ratio fields when Size/AspectRatio are not provided', async () => {
+    it('does not add resolution/aspect_ratio fields when Resolution/AspectRatio are not provided', async () => {
       const handler = createReplicateVideoHandler()({
         descriptor: {
           provider: 'replicate',
@@ -1045,7 +1045,7 @@ describe('replicate-video', () => {
       });
 
       const request: ProviderJobContext = {
-        jobId: 'test-job-no-size',
+        jobId: 'test-job-no-resolution',
         provider: 'replicate',
         model: 'bytedance/seedance-1-pro-fast',
         revision: 'rev-test',
@@ -1085,7 +1085,7 @@ describe('replicate-video', () => {
       expect(callArgs.input).not.toHaveProperty('aspect_ratio');
     });
 
-    it('works with only Size provided (no AspectRatio)', async () => {
+    it('works with only Resolution provided (no AspectRatio)', async () => {
       const handler = createReplicateVideoHandler()({
         descriptor: {
           provider: 'replicate',
@@ -1098,20 +1098,20 @@ describe('replicate-video', () => {
       });
 
       const request: ProviderJobContext = {
-        jobId: 'test-job-size-only',
+        jobId: 'test-job-resolution-only',
         provider: 'replicate',
         model: 'bytedance/seedance-1-lite',
         revision: 'rev-test',
         layerIndex: 0,
         attempt: 1,
-        inputs: ['TextToVideoPrompt', 'Input:Size'],
+        inputs: ['TextToVideoPrompt', 'Input:Resolution'],
         produces: ['Artifact:SegmentVideo[0]'],
         context: {
           providerConfig: {},
           extras: {
             resolvedInputs: {
               TextToVideoPrompt: 'Test video',
-              Size: '480p',
+              Resolution: '480p',
             },
             plannerContext: { index: { segment: 0 } },
           },
@@ -1142,7 +1142,7 @@ describe('replicate-video', () => {
       expect(callArgs.input).not.toHaveProperty('aspect_ratio');
     });
 
-    it('works with only AspectRatio provided (no Size)', async () => {
+    it('works with only AspectRatio provided (no Resolution)', async () => {
       const handler = createReplicateVideoHandler()({
         descriptor: {
           provider: 'replicate',
