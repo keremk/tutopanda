@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef } from "react";
 import { Player, type PlayerRef, type CallbackListener } from "@remotion/player";
 import type { TimelineDocument } from "@/types/timeline";
 import { VideoComposition } from "@/remotion/VideoComposition";
+import { buildAssetUrl } from "@/data/client";
 
 interface RemotionPreviewProps {
   movieId: string;
@@ -52,6 +53,52 @@ export const RemotionPreview = ({
     0,
     Math.min(currentTime, durationInFrames / FPS),
   );
+
+  const assetIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const track of timeline.tracks ?? []) {
+      for (const clip of track.clips ?? []) {
+        const props = (clip as { properties?: Record<string, unknown> }).properties;
+        const assetId = props?.assetId;
+        if (typeof assetId === "string" && assetId.length > 0) {
+          ids.add(assetId);
+        }
+        const effects = props?.effects;
+        if (Array.isArray(effects)) {
+          for (const effect of effects) {
+            const effectAsset = (effect as { assetId?: string }).assetId;
+            if (typeof effectAsset === "string" && effectAsset.length > 0) {
+              ids.add(effectAsset);
+            }
+          }
+        }
+      }
+    }
+    return Array.from(ids);
+  }, [timeline.tracks]);
+
+  // Prefetch media aggressively to reduce clip boundary stalls
+  useEffect(() => {
+    const controller = new AbortController();
+    const prefetch = async () => {
+      await Promise.all(
+        assetIds.map(async (assetId) => {
+          try {
+            const resp = await fetch(buildAssetUrl(movieId, assetId), {
+              method: "GET",
+              signal: controller.signal,
+            });
+            // Read the body to ensure it is cached; ignore contents
+            await resp.arrayBuffer();
+          } catch {
+            // best effort prefetch
+          }
+        }),
+      );
+    };
+    void prefetch();
+    return () => controller.abort();
+  }, [assetIds, movieId]);
 
   useEffect(() => {
     if (!playerRef.current) {

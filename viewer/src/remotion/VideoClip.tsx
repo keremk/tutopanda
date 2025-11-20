@@ -8,6 +8,7 @@ interface VideoClipSequenceProps {
   fps: number;
   from: number;
   durationInFrames: number;
+  premountFor: number;
 }
 
 const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
@@ -18,6 +19,7 @@ export const VideoClipSequence = ({
   fps,
   from,
   durationInFrames,
+  premountFor,
 }: VideoClipSequenceProps) => {
   const assetId = clip.properties.assetId;
   if (!assetId) {
@@ -36,7 +38,7 @@ export const VideoClipSequence = ({
   const localFrame = clamp(useCurrentFrame() - from, 0, durationInFrames);
 
   return (
-    <Sequence from={from} durationInFrames={durationInFrames}>
+    <Sequence from={from} durationInFrames={durationInFrames} premountFor={premountFor}>
       <AbsoluteFill>
         {renderVideoContent({
           sourceUrl,
