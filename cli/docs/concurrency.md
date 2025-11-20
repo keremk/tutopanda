@@ -14,10 +14,7 @@ Yes—the current architecture still supports pushing concurrency, rate limiting
 - `createProviderRegistry` just caches handlers keyed by descriptor (`providers/src/registry.ts:16-61`). The handlers themselves (e.g., OpenAI) are stateless—warm start caches SDK clients, but invocation contains no global locks (`providers/src/producers/llm/openai.ts:30-201`). You can invoke them from multiple workers/steps as long as you provide the same descriptor.
 
 ### CLI already sits above the runner
-- In `cli/src/lib/build.ts`, we invoke `createRunner` and `run.execute(...)` (`cli/src/lib/build.ts:32-116`). If we want CLI-specific concurrency, we can switch that to our own pipeline that:
-  1. Prepares storage/loggers exactly as today,
-  2. Uses `runner.executeJob` inside a p-limit pool,
-  3. Collects `JobResults` and finally calls `manifestService.buildFromEvents`.
+- The CLI now schedules jobs per layer through `executePlanWithConcurrency` (`cli/src/lib/plan-runner.ts`), which wraps `runner.executeJob` in a `p-limit` pool. The `--concurrency` flag (persisted to `cli-config.json`, default `1`) feeds that pool so users can raise or lower parallelism without changing core.
 
 ### Cloud workflow fits the same mold
 - A cloud worker can initialize storage + registry, call `runner.executeJob` in each Vercel Workflow step, and rely on durable storage for the event log. Because every job is identified by `(movieId, revision, jobId)`, repeated or retried steps won't break invariants; at worst you'll append duplicate artefact events, which manifest building overwrites by latest revision.

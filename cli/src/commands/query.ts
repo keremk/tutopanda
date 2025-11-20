@@ -1,7 +1,7 @@
 /* eslint-disable no-console */
 import crypto from 'node:crypto';
 import { resolve } from 'node:path';
-import { readCliConfig } from '../lib/cli-config.js';
+import { getDefaultCliConfigPath, readCliConfig } from '../lib/cli-config.js';
 import { generatePlan } from '../lib/planner.js';
 import {
   executeDryRun,
@@ -15,6 +15,7 @@ import { expandPath } from '../lib/path.js';
 import { confirmPlanExecution } from '../lib/interactive-confirm.js';
 import { cleanupPlanFiles } from '../lib/plan-cleanup.js';
 import { resolveBlueprintSpecifier } from '../lib/config-assets.js';
+import { resolveAndPersistConcurrency } from '../lib/concurrency.js';
 
 const console = globalThis.console;
 
@@ -24,6 +25,7 @@ export interface QueryOptions {
   dryRun?: boolean;
   nonInteractive?: boolean;
   usingBlueprint: string;
+  concurrency?: number;
 }
 
 export interface QueryResult {
@@ -47,10 +49,15 @@ export async function runQuery(options: QueryOptions): Promise<QueryResult> {
     throw new Error('Blueprint path is required. Provide --usingBlueprint=/path/to/blueprint.yaml');
   }
 
-  const cliConfig = await readCliConfig();
+  const configPath = getDefaultCliConfigPath();
+  const cliConfig = await readCliConfig(configPath);
   if (!cliConfig) {
     throw new Error('Tutopanda CLI is not initialized. Run "tutopanda init" first.');
   }
+  const { concurrency } = await resolveAndPersistConcurrency(cliConfig, {
+    override: options.concurrency,
+    configPath,
+  });
 
   const movieId = generateMovieId();
   const storageMovieId = formatMovieId(movieId);
@@ -76,6 +83,7 @@ export async function runQuery(options: QueryOptions): Promise<QueryResult> {
   if (!options.dryRun && !options.nonInteractive) {
     const confirmed = await confirmPlanExecution(planResult.plan, {
       inputs: planResult.inputEvents,
+      concurrency,
     });
     if (!confirmed) {
       await cleanupPlanFiles(movieDir);
@@ -101,6 +109,7 @@ export async function runQuery(options: QueryOptions): Promise<QueryResult> {
         manifest: planResult.manifest,
         providerOptions: planResult.providerOptions,
         resolvedInputs: planResult.resolvedInputs,
+        concurrency,
         storage: { rootDir: storageRoot, basePath: storageBasePath },
       })
     : undefined;
@@ -116,6 +125,7 @@ export async function runQuery(options: QueryOptions): Promise<QueryResult> {
         providerOptions: planResult.providerOptions,
         resolvedInputs: planResult.resolvedInputs,
         logger: console,
+        concurrency,
       });
 
   return {

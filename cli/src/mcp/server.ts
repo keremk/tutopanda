@@ -423,23 +423,15 @@ export class MovieStorage {
     if (!artefact) {
       throw new Error(`Timeline artefact missing for movie ${movieId}`);
     }
-    if (artefact.inline) {
-      const pretty = formatJson(artefact.inline);
-      return wrapTextResource(buildTimelineUri(movieId), pretty, 'application/json');
-    }
     if (artefact.blob?.hash) {
       const payload = await this.readBlob(movieId, artefact.blob.hash, artefact.blob.mimeType);
-      return {
-        contents: [
-          {
-            uri: buildTimelineUri(movieId),
-            blob: payload.toString('base64'),
-            mimeType: artefact.blob.mimeType ?? 'application/json',
-          },
-        ],
-      };
+      const asText = toMaybeText(payload, artefact.blob.mimeType);
+      if (asText !== undefined) {
+        return wrapTextResource(buildTimelineUri(movieId), asText, artefact.blob.mimeType ?? 'application/json');
+      }
+      return wrapBlobResource(buildTimelineUri(movieId), payload, artefact.blob.mimeType ?? 'application/json');
     }
-    throw new Error('Timeline artefact has no inline or blob payload.');
+    throw new Error('Timeline artefact has no blob payload.');
   }
 
   async readArtefact(movieId: string, encodedArtefactId: string): Promise<ReadResourceResult> {
@@ -450,22 +442,15 @@ export class MovieStorage {
       throw new Error(`Artefact "${artefactId}" not found for movie ${movieId}.`);
     }
     const uri = buildArtefactUri(movieId, artefactId);
-    if (record.inline !== undefined) {
-      return wrapTextResource(uri, record.inline, 'text/plain');
-    }
     if (record.blob) {
       const data = await this.readBlob(movieId, record.blob.hash, record.blob.mimeType);
-      return {
-        contents: [
-          {
-            uri,
-            blob: data.toString('base64'),
-            mimeType: record.blob.mimeType ?? 'application/octet-stream',
-          },
-        ],
-      };
+      const asText = toMaybeText(data, record.blob.mimeType);
+      if (asText !== undefined) {
+        return wrapTextResource(uri, asText, record.blob.mimeType ?? 'text/plain');
+      }
+      return wrapBlobResource(uri, data, record.blob.mimeType ?? 'application/octet-stream');
     }
-    throw new Error(`Artefact "${artefactId}" has no inline or blob payload.`);
+    throw new Error(`Artefact "${artefactId}" has no blob payload.`);
   }
 
   private async listMovieIds(): Promise<string[]> {
@@ -528,6 +513,28 @@ export class MovieStorage {
     const buf = await readFile(legacy);
     return Buffer.from(buf);
   }
+}
+
+function toMaybeText(buffer: Buffer, mimeType?: string): string | undefined {
+  const type = (mimeType ?? '').toLowerCase();
+  if (type.startsWith('text/') || type === 'application/json') {
+    return type === 'application/json'
+      ? formatJson(buffer.toString('utf8'))
+      : buffer.toString('utf8');
+  }
+  return undefined;
+}
+
+function wrapBlobResource(uri: string, buffer: Buffer, mimeType: string): ReadResourceResult {
+  return {
+    contents: [
+      {
+        uri,
+        blob: buffer.toString('base64'),
+        mimeType,
+      },
+    ],
+  };
 }
 
 async function listBlueprintFiles(rootDir: string): Promise<{ slug: string; absolutePath: string }[]> {

@@ -67,7 +67,7 @@ const console = globalThis.console;
 type ProviderListOutputEntry = Awaited<ReturnType<typeof runProvidersList>>['entries'][number];
 
 const cli = meow(
-  `\nUsage\n  $ tutopanda <command> [options]\n\nCommands\n  install             Guided setup (alias for init)\n  init                Initialize Tutopanda CLI configuration\n  query               Generate a plan using a blueprint (YAML) and inputs YAML\n  inspect             Export prompts or timeline data for a movie\n  edit                Regenerate a movie with edited inputs\n  viewer:start        Start the bundled viewer server in the foreground\n  viewer:view         Open the viewer for a movie id (starts server if needed)\n  viewer:stop         Stop the background viewer server\n  providers:list      Show providers defined in a blueprint\n  blueprints:list     List available blueprint YAML files\n  blueprints:describe <path>  Show details for a blueprint YAML file\n  blueprints:validate <path>  Validate a blueprint YAML file\n  mcp                 Run the Tutopanda MCP server over stdio\n\nExamples\n  $ tutopanda install --rootFolder=~/media/tutopanda\n  $ tutopanda query --inputs=~/movies/my-inputs.yaml --using-blueprint=audio-only.yaml\n  $ tutopanda providers:list --using-blueprint=image-audio.yaml\n  $ tutopanda blueprints:list\n  $ tutopanda blueprints:describe audio-only.yaml\n  $ tutopanda blueprints:validate image-audio.yaml\n  $ tutopanda inspect --movieId=q123456 --prompts\n  $ tutopanda edit --movieId=q123456 --inputs=edited-inputs.yaml\n  $ tutopanda viewer:start\n  $ tutopanda viewer:view --movieId=q123456\n  $ tutopanda mcp --defaultBlueprint=image-audio.yaml\n`,
+  `\nUsage\n  $ tutopanda <command> [options]\n\nCommands\n  install             Guided setup (alias for init)\n  init                Initialize Tutopanda CLI configuration\n  query               Generate a plan using a blueprint (YAML) and inputs YAML\n  inspect             Export prompts or timeline data for a movie\n  edit                Regenerate a movie with edited inputs\n  viewer:start        Start the bundled viewer server in the foreground\n  viewer:view         Open the viewer for a movie id (starts server if needed)\n  viewer:stop         Stop the background viewer server\n  providers:list      Show providers defined in a blueprint\n  blueprints:list     List available blueprint YAML files\n  blueprints:describe <path>  Show details for a blueprint YAML file\n  blueprints:validate <path>  Validate a blueprint YAML file\n  mcp                 Run the Tutopanda MCP server over stdio\n\nExamples\n  $ tutopanda install --rootFolder=~/media/tutopanda\n  $ tutopanda query --inputs=~/movies/my-inputs.yaml --using-blueprint=audio-only.yaml\n  $ tutopanda query --inputs=~/movies/my-inputs.yaml --using-blueprint=audio-only.yaml --concurrency=3\n  $ tutopanda providers:list --using-blueprint=image-audio.yaml\n  $ tutopanda blueprints:list\n  $ tutopanda blueprints:describe audio-only.yaml\n  $ tutopanda blueprints:validate image-audio.yaml\n  $ tutopanda inspect --movieId=q123456 --prompts\n  $ tutopanda edit --movieId=q123456 --inputs=edited-inputs.yaml\n  $ tutopanda viewer:start\n  $ tutopanda viewer:view --movieId=q123456\n  $ tutopanda mcp --defaultBlueprint=image-audio.yaml\n`,
   {
     importMeta: import.meta,
     flags: {
@@ -79,6 +79,7 @@ const cli = meow(
       dryrun: { type: 'boolean' },
       nonInteractive: { type: 'boolean' },
       usingBlueprint: { type: 'string' },
+      concurrency: { type: 'number' },
       interactiveEdit: { type: 'boolean' },
       submitEdits: { type: 'boolean' },
       movie: { type: 'string' },
@@ -102,14 +103,15 @@ async function main(): Promise<void> {
     movieId?: string;
     prompts?: boolean;
     inputs?: string;
-    dryrun?: boolean;
-    nonInteractive?: boolean;
-    usingBlueprint?: string;
-    interactiveEdit?: boolean;
-    submitEdits?: boolean;
-    movie?: string;
-    viewerHost?: string;
-    viewerPort?: number;
+      dryrun?: boolean;
+      nonInteractive?: boolean;
+      usingBlueprint?: string;
+      concurrency?: number;
+      interactiveEdit?: boolean;
+      submitEdits?: boolean;
+      movie?: string;
+      viewerHost?: string;
+      viewerPort?: number;
     blueprintsDir?: string;
     defaultBlueprint?: string;
     openViewer?: boolean;
@@ -148,6 +150,7 @@ async function main(): Promise<void> {
         dryRun: Boolean(flags.dryrun),
         nonInteractive: Boolean(flags.nonInteractive),
         usingBlueprint: flags.usingBlueprint,
+        concurrency: flags.concurrency,
       });
       console.log(`Movie created with id = ${result.movieId}`);
       console.log(`Plan saved to ${result.planPath}`);
@@ -372,12 +375,13 @@ async function main(): Promise<void> {
         return;
       }
       if (submitEdits) {
-        const result = await runWorkspaceSubmit({
-          movieId: flags.movieId,
-          dryRun: Boolean(flags.dryrun),
-          nonInteractive: Boolean(flags.nonInteractive),
-          usingBlueprint: flags.usingBlueprint,
-        });
+      const result = await runWorkspaceSubmit({
+        movieId: flags.movieId,
+        dryRun: Boolean(flags.dryrun),
+        nonInteractive: Boolean(flags.nonInteractive),
+        usingBlueprint: flags.usingBlueprint,
+        concurrency: flags.concurrency,
+      });
         if (!result.changesApplied) {
           return;
         }
@@ -404,6 +408,7 @@ async function main(): Promise<void> {
         dryRun: Boolean(flags.dryrun),
         nonInteractive: Boolean(flags.nonInteractive),
         usingBlueprint: flags.usingBlueprint,
+        concurrency: flags.concurrency,
       });
       console.log(`Updated prompts for movie ${flags.movieId}. New revision: ${result.targetRevision}`);
       console.log(`Plan saved to ${result.planPath}`);

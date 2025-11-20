@@ -4,7 +4,6 @@ import {
   createEventLog,
   createManifestService,
   prepareJobContext,
-  createRunner,
   createStorageContext,
   initializeMovieStorage,
   type ExecutionPlan,
@@ -23,7 +22,9 @@ import {
   type ProviderDescriptor,
 } from 'tutopanda-providers';
 import type { CliConfig } from './cli-config.js';
+import { normalizeConcurrency } from './cli-config.js';
 import type { ProducerOptionsMap, LoadedProducerOption } from './producer-options.js';
+import { executePlanWithConcurrency } from './plan-runner.js';
 
 const console = globalThis.console;
 type LoggerFn = (message?: string) => void; // eslint-disable-line no-unused-vars
@@ -36,6 +37,7 @@ export interface ExecuteBuildOptions {
   manifestHash: string | null;
   providerOptions: ProducerOptionsMap;
   resolvedInputs: Record<string, unknown>;
+  concurrency?: number;
   logger?: {
     info?: LoggerFn;
   };
@@ -67,6 +69,7 @@ export async function executeBuild(options: ExecuteBuildOptions): Promise<Execut
     rootDir: options.cliConfig.storage.root,
     basePath: options.cliConfig.storage.basePath,
   });
+  const concurrency = normalizeConcurrency(options.concurrency);
 
   await initializeMovieStorage(storage, options.movieId);
 
@@ -82,17 +85,20 @@ export async function executeBuild(options: ExecuteBuildOptions): Promise<Execut
     preResolved,
     options.logger ?? console,
   );
-  const runner = createRunner();
 
-  const run = await runner.execute(options.plan, {
-    movieId: options.movieId,
-    manifest: options.manifest,
-    storage,
-    eventLog,
-    manifestService,
-    produce,
-    logger: options.logger ?? console,
-  });
+  const run = await executePlanWithConcurrency(
+    options.plan,
+    {
+      movieId: options.movieId,
+      manifest: options.manifest,
+      storage,
+      eventLog,
+      manifestService,
+      produce,
+      logger: options.logger ?? console,
+    },
+    { concurrency },
+  );
 
   const manifest = await run.buildManifest();
   const { hash } = await manifestService.saveManifest(manifest, {

@@ -2,7 +2,6 @@
 import {
   createEventLog,
   createManifestService,
-  createRunner,
   createStorageContext,
   initializeMovieStorage,
   type ArtefactEventStatus,
@@ -13,7 +12,9 @@ import {
 } from 'tutopanda-core';
 import { createProviderRegistry, SchemaRegistry } from 'tutopanda-providers';
 import { createProviderProduce, prepareProviderHandlers } from './build.js';
+import { executePlanWithConcurrency } from './plan-runner.js';
 import type { ProducerOptionsMap } from './producer-options.js';
+import { normalizeConcurrency } from './cli-config.js';
 
 const console = globalThis.console;
 
@@ -45,6 +46,7 @@ interface ExecuteDryRunArgs {
   manifest: Manifest;
   providerOptions: ProducerOptionsMap;
   resolvedInputs: Record<string, unknown>;
+  concurrency?: number;
   storage?: {
     rootDir: string;
     basePath: string;
@@ -52,7 +54,7 @@ interface ExecuteDryRunArgs {
 }
 
 export async function executeDryRun(args: ExecuteDryRunArgs): Promise<DryRunSummary> {
-  const runner = createRunner();
+  const concurrency = normalizeConcurrency(args.concurrency);
   const storage = args.storage
     ? createStorageContext({ kind: 'local', rootDir: args.storage.rootDir, basePath: args.storage.basePath })
     : createStorageContext({ kind: 'memory' });
@@ -91,14 +93,18 @@ export async function executeDryRun(args: ExecuteDryRunArgs): Promise<DryRunSumm
     console,
   );
 
-  const runResult = await runner.execute(args.plan, {
-    movieId: args.movieId,
-    manifest: args.manifest,
-    storage,
-    eventLog,
-    manifestService,
-    produce,
-  });
+  const runResult = await executePlanWithConcurrency(
+    args.plan,
+    {
+      movieId: args.movieId,
+      manifest: args.manifest,
+      storage,
+      eventLog,
+      manifestService,
+      produce,
+    },
+    { concurrency },
+  );
   return summarizeRun(runResult, args.plan);
 }
 

@@ -9,6 +9,7 @@ export interface CliConfig {
     root: string;
     basePath: string;
   };
+  concurrency?: number;
   viewer?: {
     port?: number;
     host?: string;
@@ -34,6 +35,7 @@ export async function readCliConfig(configPath?: string): Promise<CliConfig | nu
     }
     return {
       storage: parsed.storage,
+      concurrency: normalizeConcurrency(parsed.concurrency),
       viewer: parsed.viewer,
     };
   } catch {
@@ -44,10 +46,33 @@ export async function readCliConfig(configPath?: string): Promise<CliConfig | nu
 export async function writeCliConfig(config: CliConfig, configPath?: string): Promise<string> {
   const targetPath = resolve(configPath ?? getDefaultCliConfigPath());
   await mkdir(dirname(targetPath), { recursive: true });
-  await writeFile(targetPath, JSON.stringify(config, null, 2), 'utf8');
+  await writeFile(
+    targetPath,
+    JSON.stringify(
+      {
+        ...config,
+        concurrency: normalizeConcurrency(config.concurrency),
+      },
+      null,
+      2,
+    ),
+    'utf8',
+  );
   return targetPath;
 }
 
 export function getDefaultRoot(): string {
   return DEFAULT_ROOT;
+}
+
+export const DEFAULT_CONCURRENCY = 1;
+
+export function normalizeConcurrency(value: number | undefined): number {
+  if (value === undefined) {
+    return DEFAULT_CONCURRENCY;
+  }
+  if (!Number.isInteger(value) || value <= 0) {
+    throw new Error('Concurrency must be a positive integer.');
+  }
+  return value;
 }

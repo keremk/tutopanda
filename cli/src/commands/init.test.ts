@@ -43,5 +43,6 @@ describe('runInit', () => {
     const cliConfig = await readCliConfig(result.cliConfigPath);
     expect(cliConfig?.storage.root).toBe(result.rootFolder);
     expect(cliConfig?.storage.basePath).toBe('builds');
+    expect(cliConfig?.concurrency).toBe(1);
   });
 });

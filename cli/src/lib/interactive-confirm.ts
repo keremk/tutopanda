@@ -7,6 +7,7 @@ const console = globalThis.console;
 
 interface PlanConfirmationOptions {
   inputs?: InputEvent[];
+  concurrency?: number;
 }
 
 function displayInputSummary(events: InputEvent[] | undefined): void {
@@ -73,6 +74,7 @@ export async function confirmPlanExecution(
 ): Promise<boolean> {
   displayInputSummary(options.inputs);
   displayPlanSummary(plan);
+  displayLayerBreakdown(plan, options.concurrency ?? 1);
 
   const rl = readline.createInterface({
     input: process.stdin,
@@ -85,5 +87,30 @@ export async function confirmPlanExecution(
       const normalized = answer.trim().toLowerCase();
       resolve(normalized === 'y' || normalized === 'yes');
     });
+  });
+}
+
+function displayLayerBreakdown(plan: ExecutionPlan, concurrency: number): void {
+  const safeConcurrency = Number.isInteger(concurrency) && concurrency > 0 ? concurrency : 1;
+  console.log('Execution Order (by layer):');
+  console.log(`Concurrency: ${safeConcurrency} job(s) in parallel per layer (where available)\n`);
+
+  plan.layers.forEach((layer, index) => {
+    if (layer.length === 0) {
+      console.log(`  Layer ${index}: (no jobs)`);
+      return;
+    }
+
+    const concurrencyLabel =
+      layer.length > 1 && safeConcurrency > 1
+        ? `parallel (up to ${Math.min(safeConcurrency, layer.length)} at once)`
+        : 'sequential';
+
+    console.log(`  Layer ${index} (${layer.length} job${layer.length === 1 ? '' : 's'} - ${concurrencyLabel}):`);
+    for (const job of layer) {
+      const producerLabel = typeof job.producer === 'string' ? job.producer : 'unknown-producer';
+      console.log(`    • ${job.jobId} [${producerLabel}]`);
+    }
+    console.log('');
   });
 }

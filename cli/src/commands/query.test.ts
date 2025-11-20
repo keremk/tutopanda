@@ -160,6 +160,25 @@ describe('runQuery', () => {
     expect(storedPrompt.trim()).toBe(overridePrompt);
   });
 
+  it('persists concurrency overrides into the CLI config', async () => {
+    const root = await createTempRoot();
+    const cliConfigPath = join(root, 'cli-config.json');
+    process.env.TUTOPANDA_CLI_CONFIG = cliConfigPath;
+
+    await runInit({ rootFolder: root, configPath: cliConfigPath });
+
+    const inputsPath = await createInputsFile({ root, prompt: 'Concurrency check' });
+    await runQuery({
+      inputsPath,
+      nonInteractive: true,
+      usingBlueprint: SCRIPT_BLUEPRINT_PATH,
+      concurrency: 3,
+    });
+
+    const cliConfig = await readCliConfig(cliConfigPath);
+    expect(cliConfig?.concurrency).toBe(3);
+  });
+
   it('schedules TimelineProducer after upstream image/audio jobs', async () => {
     const root = await createTempRoot();
     const cliConfigPath = join(root, 'cli-config.json');

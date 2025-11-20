@@ -20,15 +20,18 @@ const expectedMimeTypes: Partial<Record<ArtifactKind, string>> = {
   FinalVideo: 'video/mp4',
 };
 
+const SIMULATED_OUTPUT_PREFIX = 'simulated-output:';
+
 export function createMockArtefacts(request: ProviderJobContext): ProducedArtefact[] {
   return request.produces.map((artefactId, index) => {
     const kind = parseArtifactKind(artefactId);
-    const expectedMimeType = kind ? expectedMimeTypes[kind] : undefined;
+    const baseKind = kind?.split('.').pop();
+    const expectedMimeType = baseKind ? expectedMimeTypes[baseKind] : undefined;
     const mockResponse = createMockResponse({
       provider: request.provider,
       model: request.model,
       artefactId,
-      kind,
+      kind: baseKind ?? kind,
       index,
     });
     const report = serializeReport({
@@ -39,14 +42,18 @@ export function createMockArtefacts(request: ProviderJobContext): ProducedArtefa
       expectedMimeType,
       mockResponse,
     });
+    const isBinaryKind = Boolean(baseKind && blobKinds.has(baseKind));
+    const dataBuffer = isBinaryKind
+      ? Buffer.from(`${SIMULATED_OUTPUT_PREFIX}${report}`, 'utf8')
+      : Buffer.from(report, 'utf8');
 
     return {
       artefactId,
       status: 'succeeded',
-      inline: !kind || !blobKinds.has(kind) ? mockResponse : undefined,
+      inline: !baseKind || !blobKinds.has(baseKind) ? mockResponse : undefined,
       blob: {
-        data: Buffer.from(report, 'utf8'),
-        mimeType: 'text/plain',
+        data: dataBuffer,
+        mimeType: expectedMimeType ?? 'text/plain',
       },
       diagnostics: {
         provider: request.provider,

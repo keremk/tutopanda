@@ -2,7 +2,7 @@
 import { Buffer } from 'node:buffer';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import { readCliConfig } from '../lib/cli-config.js';
+import { getDefaultCliConfigPath, readCliConfig } from '../lib/cli-config.js';
 import type { CliConfig } from '../lib/cli-config.js';
 import { formatMovieId } from './query.js';
 import { generatePlan, type PendingArtefactDraft } from '../lib/planner.js';
@@ -29,6 +29,7 @@ import {
 import { readMovieMetadata } from '../lib/movie-metadata.js';
 import { resolveBlueprintSpecifier } from '../lib/config-assets.js';
 import { WORKSPACE_INPUTS_RELATIVE_PATH } from '../lib/input-files.js';
+import { resolveAndPersistConcurrency } from '../lib/concurrency.js';
 
 const console = globalThis.console;
 
@@ -39,6 +40,7 @@ export interface EditOptions {
   nonInteractive?: boolean;
   usingBlueprint?: string;
   pendingArtefacts?: PendingArtefactDraft[];
+  concurrency?: number;
 }
 
 export interface EditResult {
@@ -52,13 +54,18 @@ export interface EditResult {
 }
 
 export async function runEdit(options: EditOptions): Promise<EditResult> {
-  const cliConfig = await readCliConfig();
+  const configPath = getDefaultCliConfigPath();
+  const cliConfig = await readCliConfig(configPath);
   if (!cliConfig) {
     throw new Error('Tutopanda CLI is not initialized. Run "tutopanda init" first.');
   }
   if (!options.movieId) {
     throw new Error('Movie ID is required for edit.');
   }
+  const { concurrency } = await resolveAndPersistConcurrency(cliConfig, {
+    override: options.concurrency,
+    configPath,
+  });
 
   const storageMovieId = formatMovieId(options.movieId);
   const storageRoot = cliConfig.storage.root;
@@ -96,6 +103,7 @@ export async function runEdit(options: EditOptions): Promise<EditResult> {
   if (hasJobs && !options.dryRun && !options.nonInteractive) {
     const confirmed = await confirmPlanExecution(planResult.plan, {
       inputs: planResult.inputEvents,
+      concurrency,
     });
     if (!confirmed) {
       await cleanupPlanFiles(movieDir);
@@ -120,6 +128,7 @@ export async function runEdit(options: EditOptions): Promise<EditResult> {
         manifest: planResult.manifest,
         providerOptions: planResult.providerOptions,
         resolvedInputs: planResult.resolvedInputs,
+        concurrency,
         storage: { rootDir: storageRoot, basePath },
       })
     : undefined;
@@ -134,6 +143,7 @@ export async function runEdit(options: EditOptions): Promise<EditResult> {
         providerOptions: planResult.providerOptions,
         resolvedInputs: planResult.resolvedInputs,
         logger: console,
+        concurrency,
       });
 
   return {
@@ -183,6 +193,7 @@ export interface WorkspaceSubmitOptions {
   dryRun?: boolean;
   nonInteractive?: boolean;
   usingBlueprint?: string;
+  concurrency?: number;
 }
 
 export interface WorkspaceSubmitResult {
@@ -240,6 +251,7 @@ export async function runWorkspaceSubmit(options: WorkspaceSubmitOptions): Promi
     nonInteractive: options.nonInteractive,
     usingBlueprint: blueprintPath,
     pendingArtefacts,
+    concurrency: options.concurrency,
   });
 
   if (!options.dryRun) {
