@@ -1,5 +1,4 @@
 import { AbsoluteFill, Audio, Sequence, useVideoConfig } from "remotion";
-import { useEffect, useMemo } from "react";
 import type {
   AudioTrack,
   ImageTrack,
@@ -22,74 +21,6 @@ const secondsToFrames = (seconds: number, fps: number) =>
 
 export const VideoComposition = ({ timeline, movieId }: VideoCompositionProps) => {
   const { fps } = useVideoConfig();
-  const videoUrls = useMemo(() => {
-    const urls = new Set<string>();
-    for (const track of timeline.tracks ?? []) {
-      if (!isVideoTrack(track)) continue;
-      for (const clip of track.clips ?? []) {
-        const assetId = typeof clip.properties.assetId === "string" ? clip.properties.assetId : undefined;
-        if (assetId) {
-          urls.add(buildAssetUrl(movieId, assetId));
-        }
-      }
-    }
-    return Array.from(urls);
-  }, [timeline.tracks, movieId]);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    const preloadOne = (url: string) =>
-      new Promise<void>((resolve) => {
-        if (typeof window === "undefined") {
-          resolve();
-          return;
-        }
-        const video = document.createElement("video");
-        video.preload = "auto";
-        video.muted = true;
-        video.playsInline = true;
-        video.src = url;
-        video.style.position = "fixed";
-        video.style.width = "1px";
-        video.style.height = "1px";
-        video.style.opacity = "0";
-        video.style.pointerEvents = "none";
-        const cleanup = () => {
-          video.oncanplaythrough = null;
-          video.onerror = null;
-          video.onabort = null;
-          video.remove();
-        };
-        video.oncanplaythrough = () => {
-          cleanup();
-          resolve();
-        };
-        video.onerror = () => {
-          cleanup();
-          resolve();
-        };
-        video.onabort = () => {
-          cleanup();
-          resolve();
-        };
-        try {
-          document.body.appendChild(video);
-          video.load();
-        } catch {
-          cleanup();
-          resolve();
-        }
-      });
-
-    const run = async () => {
-      for (const url of videoUrls) {
-        if (controller.signal.aborted) break;
-        await preloadOne(url);
-      }
-    };
-    void run();
-    return () => controller.abort();
-  }, [videoUrls]);
 
   return (
     <AbsoluteFill style={{ backgroundColor: "black" }}>
