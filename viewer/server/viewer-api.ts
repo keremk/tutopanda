@@ -82,7 +82,7 @@ export function createViewerApiHandler(rootFolder: string): ViewerApiHandler {
             res.end("Missing assetId");
             return true;
           }
-          await streamAsset(res, buildsRoot, movieId, assetId);
+          await streamAsset(req, res, buildsRoot, movieId, assetId);
           return true;
         }
         case "files": {
@@ -92,7 +92,7 @@ export function createViewerApiHandler(rootFolder: string): ViewerApiHandler {
             res.end("Missing hash");
             return true;
           }
-          await streamBlobFile(res, buildsRoot, movieId, hash);
+          await streamBlobFile(req, res, buildsRoot, movieId, hash);
           return true;
         }
         default: {
@@ -159,6 +159,7 @@ async function readTimeline(manifest: ManifestFile, buildsRoot: string, movieId:
 }
 
 async function streamAsset(
+  req: IncomingMessage,
   res: ServerResponse,
   buildsRoot: string,
   movieId: string,
@@ -181,9 +182,8 @@ async function streamAsset(
 
   if (artefact.blob?.hash) {
     const filePath = resolveBlobPath(buildsRoot, movieId, artefact.blob.hash, artefact.blob.mimeType);
-    res.setHeader("Content-Type", artefact.blob.mimeType ?? "application/octet-stream");
-    res.setHeader("Content-Length", artefact.blob.size.toString());
-    createReadStream(filePath).pipe(res);
+    const mimeType = artefact.blob.mimeType ?? "application/octet-stream";
+    await streamFileWithRange(req, res, filePath, mimeType, artefact.blob.size);
     return;
   }
 
@@ -192,6 +192,7 @@ async function streamAsset(
 }
 
 async function streamBlobFile(
+  req: IncomingMessage,
   res: ServerResponse,
   buildsRoot: string,
   movieId: string,
@@ -203,8 +204,7 @@ async function streamBlobFile(
     res.end("Blob not found");
     return;
   }
-  res.setHeader("Content-Type", "application/octet-stream");
-  createReadStream(filePath).pipe(res);
+  await streamFileWithRange(req, res, filePath, "application/octet-stream");
 }
 
 function resolveMovieDir(buildsRoot: string, movieId: string): string {
@@ -282,4 +282,45 @@ function respondNotFound(res: ServerResponse): true {
   res.statusCode = 404;
   res.end("Not Found");
   return true;
+}
+
+async function streamFileWithRange(
+  req: IncomingMessage,
+  res: ServerResponse,
+  filePath: string,
+  mimeType: string,
+  expectedSize?: number,
+): Promise<void> {
+  const stat = await fs.stat(filePath);
+  const totalSize = stat.size;
+  const size = Number.isFinite(expectedSize) ? Math.min(Number(expectedSize), totalSize) : totalSize;
+  const rangeHeader = req.headers.range;
+
+  if (rangeHeader) {
+    const match = /^bytes=(\d*)-(\d*)$/.exec(rangeHeader);
+    const start = match && match[1] ? Number.parseInt(match[1], 10) : 0;
+    const end = match && match[2] ? Number.parseInt(match[2], 10) : size - 1;
+
+    if (Number.isNaN(start) || Number.isNaN(end) || start < 0 || end < start || start >= size) {
+      res.statusCode = 416;
+      res.setHeader("Content-Range", `bytes */${size}`);
+      res.end("Requested Range Not Satisfiable");
+      return;
+    }
+
+    const chunkSize = end - start + 1;
+    res.statusCode = 206;
+    res.setHeader("Content-Range", `bytes ${start}-${end}/${size}`);
+    res.setHeader("Accept-Ranges", "bytes");
+    res.setHeader("Content-Length", chunkSize.toString());
+    res.setHeader("Content-Type", mimeType);
+    createReadStream(filePath, { start, end }).pipe(res);
+    return;
+  }
+
+  res.statusCode = 200;
+  res.setHeader("Accept-Ranges", "bytes");
+  res.setHeader("Content-Length", size.toString());
+  res.setHeader("Content-Type", mimeType);
+  createReadStream(filePath).pipe(res);
 }

@@ -1,0 +1,71 @@
+meta:
+  name: Timeline Composer (Video+Audio+Music)
+  description: Compose generated video, narration, and music assets into a Remotion timeline.
+  id: TimelineComposer
+  version: 0.1.0
+  author: Tutopanda
+  license: MIT
+
+inputs:
+  - name: VideoSegments
+    description: Collected video assets grouped per narration segment.
+    type: collection
+    itemType: video
+    dimensions: segment
+    fanIn: true
+  - name: AudioSegments
+    description: Narration audio clips grouped per segment (master track).
+    type: collection
+    itemType: audio
+    dimensions: segment
+    fanIn: true
+  - name: Music
+    description: Background music clips that score the movie (looped as needed).
+    type: audio
+    required: true
+    fanIn: true
+  - name: Duration
+    description: Total duration of the movie in seconds.
+    type: int
+    required: true
+
+artifacts:
+  - name: Timeline
+    description: OrderedTimeline JSON manifest combining video, narration, and music.
+    type: json
+
+connections:
+  - from: VideoSegments
+    to: TimelineProducer
+  - from: AudioSegments
+    to: TimelineProducer
+  - from: Music
+    to: TimelineProducer
+  - from: Duration
+    to: TimelineProducer
+  - from: TimelineProducer
+    to: Timeline
+
+producers:
+  - name: TimelineProducer
+    provider: Tutopanda
+    model: OrderedTimeline
+    config:
+      rootFolder: ~/tutopanda
+      source: local
+      numTracks: 3
+      masterTrack:
+        kind: Audio
+      clips:
+        - kind: Video
+          inputs: VideoSegments
+          fitStrategy: auto
+          volume: 0
+        - kind: Audio
+          inputs: AudioSegments
+          volume: 0.9
+        - kind: Music
+          inputs: Music
+          duration: full
+          play: loop
+          volume: 0.2

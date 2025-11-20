@@ -1,3 +1,4 @@
+import { Buffer } from 'node:buffer';
 import { Input, ALL_FORMATS, BufferSource as MediaBufferSource } from 'mediabunny';
 import { createProducerHandlerFactory } from '../../sdk/handler-factory.js';
 import { createProviderError } from '../../sdk/errors.js';
@@ -130,6 +131,7 @@ const KEN_BURNS_PRESETS: KenBurnsPreset[] = [
 ];
 
 const TRACK_KINDS_WITH_NATIVE_DURATION = new Set<ClipKind>(['Audio', 'Music', 'Video']);
+const SIMULATED_OUTPUT_PREFIX = 'simulated-output:';
 
 export function createTimelineProducerHandler(): HandlerFactory {
   return createProducerHandlerFactory({
@@ -747,6 +749,17 @@ async function loadAssetDuration(args: {
   }
 
   const payload = resolveAssetBinary(args.inputs, args.assetId);
+  const synthetic = maybeResolveSyntheticDuration({
+    assetId: args.assetId,
+    payload,
+    inputs: args.inputs,
+  });
+  if (synthetic !== undefined) {
+    const rounded = roundSeconds(synthetic);
+    args.cache.set(args.assetId, rounded);
+    return rounded;
+  }
+
   let input: Input<MediaBufferSource> | undefined;
 
   try {
@@ -799,6 +812,81 @@ function resolveAssetBinary(inputs: ResolvedInputsAccessor, assetId: string): Ar
 
 function isBinaryPayload(value: unknown): value is ArrayBuffer | ArrayBufferView {
   return value instanceof ArrayBuffer || ArrayBuffer.isView(value);
+}
+
+function maybeResolveSyntheticDuration(args: {
+  assetId: string;
+  payload: ArrayBuffer | ArrayBufferView;
+  inputs: ResolvedInputsAccessor;
+}): number | undefined {
+  if (!isSimulatedPayload(args.payload)) {
+    return undefined;
+  }
+
+  const resolvedInputs = args.inputs.all();
+
+  if (args.assetId.includes('MusicGenerator.Music')) {
+    const timelineDuration = readOptionalPositiveNumber(resolvedInputs, [
+      'Input:TimelineComposer.Duration',
+      'TimelineComposer.Duration',
+      'Input:Duration',
+      'Duration',
+    ]);
+    if (timelineDuration !== undefined) {
+      return timelineDuration;
+    }
+  }
+
+  const segmentDuration = readOptionalPositiveNumber(resolvedInputs, [
+    'Input:SegmentDuration',
+    'SegmentDuration',
+  ]);
+  if (segmentDuration !== undefined) {
+    return segmentDuration;
+  }
+
+  const totalDuration = readOptionalPositiveNumber(resolvedInputs, [
+    'Input:TimelineComposer.Duration',
+    'TimelineComposer.Duration',
+    'Input:Duration',
+    'Duration',
+  ]);
+  const numSegments = readOptionalPositiveNumber(resolvedInputs, [
+    'Input:NumOfSegments',
+    'NumOfSegments',
+  ]);
+
+  if (totalDuration !== undefined && numSegments !== undefined && numSegments > 0) {
+    return totalDuration / numSegments;
+  }
+
+  return undefined;
+}
+
+function isSimulatedPayload(payload: ArrayBuffer | ArrayBufferView): boolean {
+  const view = toUint8Array(payload);
+  if (view.byteLength < SIMULATED_OUTPUT_PREFIX.length) {
+    return false;
+  }
+  const prefix = Buffer.from(view.slice(0, SIMULATED_OUTPUT_PREFIX.length)).toString('utf8');
+  return prefix.startsWith(SIMULATED_OUTPUT_PREFIX);
+}
+
+function toUint8Array(payload: ArrayBuffer | ArrayBufferView): Uint8Array {
+  if (payload instanceof ArrayBuffer) {
+    return new Uint8Array(payload);
+  }
+  return new Uint8Array(payload.buffer, payload.byteOffset, payload.byteLength);
+}
+
+function readOptionalPositiveNumber(inputs: Record<string, unknown>, keys: string[]): number | undefined {
+  for (const key of keys) {
+    const value = inputs[key];
+    if (typeof value === 'number' && Number.isFinite(value) && value > 0) {
+      return value;
+    }
+  }
+  return undefined;
 }
 
 function buildSegmentOffsets(durations: number[]): number[] {

@@ -5,6 +5,7 @@ inputs:
   NumOfImagesPerNarrative: 2
   VoiceId: "Wise_Woman"
   ImageStyle: "Ghibli"
+  VideoStyle: "Ghibli"
   SegmentDuration: 10
   Size: "1K"
   AspectRatio: "16:9"
