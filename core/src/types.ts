@@ -315,7 +315,6 @@ export interface ManifestInputEntry {
 export interface ManifestArtefactEntry {
   hash: string;
   blob?: BlobRef;
-  inline?: string;
   producedBy: Id;
   status: ArtefactEventStatus;
   diagnostics?: Record<string, unknown>;

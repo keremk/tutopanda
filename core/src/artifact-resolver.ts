@@ -1,3 +1,4 @@
+import { Buffer } from 'node:buffer';
 import type { EventLog } from './event-log.js';
 import type { StorageContext } from './storage.js';
 import type { BlobRef, ArtefactEvent } from './types.js';
@@ -49,18 +50,11 @@ export async function resolveArtifactsFromEventLog(args: {
   for (const [artifactId, event] of latestEvents) {
     const kind = extractArtifactKind(artifactId);
 
-    if (event.output.inline !== undefined) {
-      resolvedByKind.set(kind, event.output.inline);
-      resolvedById.set(artifactId, event.output.inline);
-      resolvedById.set(formatResolvedKey(artifactId), event.output.inline);
-      continue;
-    }
-
     if (event.output.blob) {
-      const blobData = await readBlob(args.storage, args.movieId, event.output.blob);
-      resolvedByKind.set(kind, blobData);
-      resolvedById.set(artifactId, blobData);
-      resolvedById.set(formatResolvedKey(artifactId), blobData);
+      const decoded = await readBlob(args.storage, args.movieId, event.output.blob);
+      resolvedByKind.set(kind, decoded);
+      resolvedById.set(artifactId, decoded);
+      resolvedById.set(formatResolvedKey(artifactId), decoded);
     }
   }
 
@@ -108,19 +102,37 @@ async function readBlob(
   storage: StorageContext,
   movieId: string,
   blobRef: BlobRef,
-): Promise<Uint8Array> {
+): Promise<unknown> {
   const prefix = blobRef.hash.slice(0, 2);
   const fileName = formatBlobFileName(blobRef.hash, blobRef.mimeType);
   const primaryPath = storage.resolve(movieId, 'blobs', prefix, fileName);
   try {
-    return await storage.storage.readToUint8Array(primaryPath);
+    const payload = await storage.storage.readToUint8Array(primaryPath);
+    return decodePayload(payload, blobRef.mimeType);
   } catch (error) {
     if (fileName !== blobRef.hash) {
       const legacyPath = storage.resolve(movieId, 'blobs', prefix, blobRef.hash);
-      return await storage.storage.readToUint8Array(legacyPath);
+      const payload = await storage.storage.readToUint8Array(legacyPath);
+      return decodePayload(payload, blobRef.mimeType);
     }
     throw error;
   }
+}
+
+function decodePayload(payload: Uint8Array, mimeType?: string): unknown {
+  const type = mimeType?.toLowerCase() ?? '';
+  if (type.startsWith('text/') || type === 'application/json') {
+    const text = Buffer.from(payload).toString('utf8');
+    if (type === 'application/json') {
+      try {
+        return JSON.parse(text);
+      } catch {
+        return text;
+      }
+    }
+    return text;
+  }
+  return payload;
 }
 
 function formatResolvedKey(artifactId: string): string {

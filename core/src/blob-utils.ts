@@ -16,6 +16,8 @@ const EXTENSION_MAP: Record<string, string> = {
   'image/jpg': 'jpg',
   'image/webp': 'webp',
   'image/gif': 'gif',
+  'text/plain': 'txt',
+  'application/json': 'json',
 };
 
 export function inferBlobExtension(mimeType?: string): string | null {

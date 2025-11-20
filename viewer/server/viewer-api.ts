@@ -150,7 +150,7 @@ async function readTimeline(manifest: ManifestFile, buildsRoot: string, movieId:
   }
 
   if (artefact.blob?.hash) {
-    const timelinePath = resolveBlobPath(buildsRoot, movieId, artefact.blob.hash, artefact.blob.mimeType);
+    const timelinePath = await resolveExistingBlobPath(buildsRoot, movieId, artefact.blob.hash, artefact.blob.mimeType);
     const contents = await fs.readFile(timelinePath, "utf8");
     return JSON.parse(contents);
   }
@@ -180,12 +180,12 @@ async function streamAsset(
     return;
   }
 
-  if (artefact.blob?.hash) {
-    const filePath = resolveBlobPath(buildsRoot, movieId, artefact.blob.hash, artefact.blob.mimeType);
-    const mimeType = artefact.blob.mimeType ?? "application/octet-stream";
-    await streamFileWithRange(req, res, filePath, mimeType, artefact.blob.size);
-    return;
-  }
+    if (artefact.blob?.hash) {
+      const filePath = await resolveExistingBlobPath(buildsRoot, movieId, artefact.blob.hash, artefact.blob.mimeType);
+      const mimeType = artefact.blob.mimeType ?? "application/octet-stream";
+      await streamFileWithRange(req, res, filePath, mimeType, artefact.blob.size);
+      return;
+    }
 
   res.statusCode = 404;
   res.end("Asset missing data");
@@ -198,12 +198,7 @@ async function streamBlobFile(
   movieId: string,
   hash: string,
 ): Promise<void> {
-  const filePath = resolveBlobPath(buildsRoot, movieId, hash);
-  if (!existsSync(filePath)) {
-    res.statusCode = 404;
-    res.end("Blob not found");
-    return;
-  }
+  const filePath = await resolveExistingBlobPath(buildsRoot, movieId, hash);
   await streamFileWithRange(req, res, filePath, "application/octet-stream");
 }
 
@@ -215,15 +210,23 @@ function resolveMovieDir(buildsRoot: string, movieId: string): string {
   return movieDir;
 }
 
-function resolveBlobPath(
+async function resolveExistingBlobPath(
   buildsRoot: string,
   movieId: string,
   hash: string,
   mimeType?: string,
-): string {
+): Promise<string> {
   const prefix = hash.slice(0, 2);
   const fileName = formatBlobFileName(hash, mimeType);
-  return path.join(resolveMovieDir(buildsRoot, movieId), "blobs", prefix, fileName);
+  const primary = path.join(resolveMovieDir(buildsRoot, movieId), "blobs", prefix, fileName);
+  if (existsSync(primary)) {
+    return primary;
+  }
+  const legacy = path.join(resolveMovieDir(buildsRoot, movieId), "blobs", prefix, hash);
+  if (existsSync(legacy)) {
+    return legacy;
+  }
+  throw new Error("Blob not found");
 }
 
 function formatBlobFileName(hash: string, mimeType?: string): string {

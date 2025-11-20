@@ -404,9 +404,6 @@ function deriveArtefactHash(event: ArtefactEvent): string {
   if (event.output.blob?.hash) {
     return event.output.blob.hash;
   }
-  if (event.output.inline !== undefined) {
-    return hashArtefactOutput({ inline: event.output.inline });
-  }
   return hashPayload({
     artefactId: event.artefactId,
     revision: event.revision,

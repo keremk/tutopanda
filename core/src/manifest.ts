@@ -214,7 +214,6 @@ async function collectLatestArtefacts(
     latest.set(event.artefactId, {
       hash: deriveArtefactHash(event),
       blob: event.output.blob,
-      inline: event.output.inline,
       producedBy: event.producedBy,
       status: event.status,
       diagnostics: event.diagnostics,
@@ -227,9 +226,6 @@ async function collectLatestArtefacts(
 function deriveArtefactHash(event: ArtefactEvent): string {
   if (event.output.blob?.hash) {
     return event.output.blob.hash;
-  }
-  if (event.output.inline) {
-    return hashArtefactOutput({ inline: event.output.inline });
   }
   return createHash('sha256')
     .update(JSON.stringify({ artefactId: event.artefactId, revision: event.revision }))

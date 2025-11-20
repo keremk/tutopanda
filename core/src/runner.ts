@@ -289,11 +289,7 @@ async function materializeArtefacts(
   const events: ArtefactEvent[] = [];
   for (const artefact of artefacts) {
     const status = normalizeStatus(artefact.status);
-    const output: { blob?: BlobRef; inline?: string } = {};
-
-    if (artefact.inline !== undefined) {
-      output.inline = artefact.inline;
-    }
+    const output: { blob?: BlobRef } = {};
 
     const blobPayload = artefact.blob
       ?? (artefact.inline !== undefined
