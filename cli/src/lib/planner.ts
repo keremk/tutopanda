@@ -1,5 +1,6 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
+import { stringify as stringifyYaml } from 'yaml';
 import {
   createStorageContext,
   initializeMovieStorage,
@@ -75,14 +76,11 @@ export async function generatePlan(options: GeneratePlanOptions): Promise<Genera
   const { root: blueprintRoot } = await loadBlueprintBundle(blueprintPath);
   await mergeMovieMetadata(movieDir, { blueprintPath });
 
-  const inputValues = await loadInputsFromYaml(options.inputsPath, blueprintRoot);
-  if (options.inquiryPromptOverride) {
-    inputValues.InquiryPrompt = options.inquiryPromptOverride;
-  }
+  const inputValues = await loadInputsFromYaml(options.inputsPath, blueprintRoot, options.inquiryPromptOverride);
   if (typeof inputValues.InquiryPrompt !== 'string' || inputValues.InquiryPrompt.trim().length === 0) {
     throw new Error('Input YAML must specify inputs.InquiryPrompt as a non-empty string.');
   }
-  await persistInputs(movieDir, options.inputsPath, inputValues);
+  await persistInputs(movieDir, inputValues);
 
   const providerOptions = buildProducerOptionsFromBlueprint(blueprintRoot);
   const catalog = buildProducerCatalog(providerOptions);
@@ -113,8 +111,8 @@ export async function generatePlan(options: GeneratePlanOptions): Promise<Genera
   };
 }
 
-async function persistInputs(movieDir: string, inputsPath: string, values: InputMap): Promise<void> {
-  const contents = await readFile(inputsPath, 'utf8');
+async function persistInputs(movieDir: string, values: InputMap): Promise<void> {
+  const contents = stringifyYaml({ inputs: values });
   await writeFile(join(movieDir, INPUT_FILE_NAME), contents, 'utf8');
   const promptValue = values.InquiryPrompt;
   if (typeof promptValue === 'string' && promptValue.trim().length > 0) {

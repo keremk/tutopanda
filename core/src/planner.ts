@@ -216,13 +216,16 @@ function determineInitialDirtyJobs(
       dirtyJobs.add(jobId);
       continue;
     }
+    const producesMissing = info.node.produces.some(
+      (id) => id.startsWith('Artifact:') && manifest.artefacts[id] === undefined,
+    );
     const touchesDirtyInput = Array.from(info.inputBases).some((id) =>
       dirtyInputs.has(id),
     );
     const touchesDirtyArtefact = Array.from(info.artefactInputs).some((artefactId) =>
       dirtyArtefacts.has(artefactId),
     );
-    if (touchesDirtyInput || touchesDirtyArtefact) {
+    if (producesMissing || touchesDirtyInput || touchesDirtyArtefact) {
       dirtyJobs.add(jobId);
     }
   }
@@ -257,70 +260,74 @@ function buildExecutionLayers(
   metadata: Map<string, GraphMetadata>,
   blueprint: ProducerGraph,
 ): ExecutionPlan['layers'] {
+  // Determine stable layer indices for all producer jobs, then place dirty jobs into their original layer slots.
   const indegree = new Map<string, number>();
   const adjacency = new Map<string, Set<string>>();
 
-  for (const jobId of dirtyJobs) {
+  for (const [jobId] of metadata) {
     indegree.set(jobId, 0);
     adjacency.set(jobId, new Set());
   }
 
   for (const edge of blueprint.edges) {
-    if (!dirtyJobs.has(edge.from) || !dirtyJobs.has(edge.to)) {
+    if (!metadata.has(edge.from) || !metadata.has(edge.to)) {
       continue;
     }
     adjacency.get(edge.from)!.add(edge.to);
     indegree.set(edge.to, (indegree.get(edge.to) ?? 0) + 1);
   }
 
-  const ready: string[] = [];
+  const queue: Array<{ node: string; level: number }> = [];
   for (const [jobId, degree] of indegree) {
     if (degree === 0) {
-      ready.push(jobId);
+      queue.push({ node: jobId, level: 0 });
     }
   }
 
-  const layers: ExecutionPlan['layers'] = [];
+  const levelMap = new Map<string, number>();
 
-  while (ready.length > 0) {
-    const currentJobIds = ready.splice(0, ready.length);
-    const nextReady: string[] = [];
-    const layer: ExecutionPlan['layers'][number] = [];
-
-    for (const jobId of currentJobIds) {
-      const info = metadata.get(jobId);
-      if (!info) {
-        continue;
-      }
-      layer.push({
-        jobId: info.node.jobId,
-        producer: info.node.producer,
-        inputs: info.node.inputs,
-        produces: info.node.produces,
-        provider: info.node.provider,
-        providerModel: info.node.providerModel,
-        rateKey: info.node.rateKey,
-        context: info.node.context,
-      });
-
-      const neighbours = adjacency.get(jobId);
-      if (!neighbours) {
-        continue;
-      }
-      for (const neighbour of neighbours) {
-        const remaining = (indegree.get(neighbour) ?? 0) - 1;
-        indegree.set(neighbour, remaining);
-        if (remaining === 0) {
-          nextReady.push(neighbour);
-        }
+  while (queue.length > 0) {
+    const { node, level } = queue.shift()!;
+    const current = levelMap.get(node);
+    if (current !== undefined && current <= level) {
+      continue;
+    }
+    levelMap.set(node, level);
+    const neighbours = adjacency.get(node);
+    if (!neighbours) {
+      continue;
+    }
+    for (const neighbour of neighbours) {
+      const remaining = (indegree.get(neighbour) ?? 0) - 1;
+      indegree.set(neighbour, remaining);
+      if (remaining === 0) {
+        queue.push({ node: neighbour, level: level + 1 });
       }
     }
-
-    layers.push(layer);
-    ready.push(...nextReady);
   }
 
   ensureNoCycles(indegree);
+
+  const maxLevel = levelMap.size === 0 ? 0 : Math.max(...levelMap.values());
+  const layers: ExecutionPlan['layers'] = Array.from({ length: maxLevel + 1 }, () => []);
+
+  for (const jobId of dirtyJobs) {
+    const info = metadata.get(jobId);
+    const level = levelMap.get(jobId);
+    if (!info || level === undefined) {
+      continue;
+    }
+    layers[level].push({
+      jobId: info.node.jobId,
+      producer: info.node.producer,
+      inputs: info.node.inputs,
+      produces: info.node.produces,
+      provider: info.node.provider,
+      providerModel: info.node.providerModel,
+      rateKey: info.node.rateKey,
+      context: info.node.context,
+    });
+  }
 
   return layers;
 }

@@ -186,6 +186,7 @@ async function executeJob(
   const { movieId, layerIndex, attempt, revision, produce, logger, clock, storage, eventLog } = context;
   const startedAt = clock.now();
   const inputsHash = hashInputs(job.inputs);
+  const expectedArtefacts = job.produces.filter((id) => id.startsWith('Artifact:'));
 
   try {
     // Resolve artifacts from event log
@@ -245,6 +246,33 @@ async function executeJob(
   } catch (error) {
     const completedAt = clock.now();
     const serialized = serializeError(error);
+
+    // Record failed artefacts for observability even when produce throws.
+    try {
+      for (const artefactId of expectedArtefacts) {
+        const event: ArtefactEvent = {
+          artefactId,
+          revision,
+          inputsHash,
+          output: {},
+          status: 'failed',
+          producedBy: job.jobId,
+          diagnostics: { error: serialized },
+          createdAt: clock.now(),
+        };
+        await eventLog.appendArtefact(movieId, event);
+      }
+    } catch (logError) {
+      logger.error?.('runner.job.failed.log', {
+        movieId,
+        revision,
+        jobId: job.jobId,
+        producer: job.producer,
+        layerIndex,
+        attempt,
+        error: serializeError(logError),
+      });
+    }
 
     logger.error?.('runner.job.failed', {
       movieId,

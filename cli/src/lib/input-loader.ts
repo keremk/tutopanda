@@ -12,11 +12,16 @@ interface RawInputsFile {
 export async function loadInputsFromYaml(
   filePath: string,
   blueprint: BlueprintTreeNode,
+  inquiryPromptOverride?: string,
 ): Promise<InputMap> {
   validateYamlExtension(filePath);
   const contents = await readFile(filePath, 'utf8');
   const parsed = parseYaml(contents) as RawInputsFile;
   const values = resolveInputSection(parsed);
+
+  if (inquiryPromptOverride && typeof inquiryPromptOverride === 'string' && inquiryPromptOverride.trim()) {
+    values.InquiryPrompt = inquiryPromptOverride;
+  }
 
   const missingRequired = blueprint.document.inputs
     .filter((input) => input.required)

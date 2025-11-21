@@ -116,7 +116,7 @@ function buildProducerGraph(): ProducerGraph {
       provider: 'openai',
       providerModel: 'openai/GPT-5',
       rateKey: 'llm:script',
-      context: {},
+      context: { namespacePath: [], indices: {}, qualifiedName: 'Producer:ScriptProducer', inputs: [], produces: [] },
     },
     {
       jobId: 'Producer:AudioProducer[0]',
@@ -126,7 +126,7 @@ function buildProducerGraph(): ProducerGraph {
       provider: 'replicate',
       providerModel: 'elevenlabs/turbo-v2.5',
       rateKey: 'audio:elevenlabs-turbo',
-      context: {},
+      context: { namespacePath: [], indices: {}, qualifiedName: 'Producer:AudioProducer[0]', inputs: [], produces: [] },
     },
     {
       jobId: 'Producer:AudioProducer[1]',
@@ -136,7 +136,7 @@ function buildProducerGraph(): ProducerGraph {
       provider: 'replicate',
       providerModel: 'elevenlabs/turbo-v2.5',
       rateKey: 'audio:elevenlabs-turbo',
-      context: {},
+      context: { namespacePath: [], indices: {}, qualifiedName: 'Producer:AudioProducer[1]', inputs: [], produces: [] },
     },
     {
       jobId: 'Producer:TimelineAssembler',
@@ -146,7 +146,7 @@ function buildProducerGraph(): ProducerGraph {
       provider: 'internal',
       providerModel: 'workflow/timeline-assembler',
       rateKey: 'internal:timeline',
-      context: {},
+      context: { namespacePath: [], indices: {}, qualifiedName: 'Producer:TimelineAssembler', inputs: [], produces: [] },
     },
   ];
 
@@ -361,7 +361,6 @@ describe('planner', () => {
       artefacts: {
         [scriptArtefactId]: {
           hash: originalHash,
-          inline: originalScript,
           producedBy: 'Producer:ScriptProducer',
           status: 'succeeded',
           createdAt: new Date().toISOString(),
@@ -412,7 +411,7 @@ describe('planner', () => {
           provider: 'internal',
           providerModel: 'mock/ProducerA',
           rateKey: 'internal:a',
-          context: {},
+          context: { namespacePath: [], indices: {}, qualifiedName: 'Producer:A', inputs: [], produces: [] },
         },
         {
           jobId: 'Producer:B',
@@ -422,7 +421,7 @@ describe('planner', () => {
           provider: 'internal',
           providerModel: 'mock/ProducerB',
           rateKey: 'internal:b',
-          context: {},
+          context: { namespacePath: [], indices: {}, qualifiedName: 'Producer:B', inputs: [], produces: [] },
         },
       ],
       edges: [

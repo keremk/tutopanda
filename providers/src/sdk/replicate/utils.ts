@@ -23,11 +23,11 @@ export function extractPlannerContext(request: ProviderJobContext): PlannerConte
  */
 export function mergeInputs(
   defaults: Record<string, unknown>,
-  customAttributes?: Record<string, unknown>,
+  customAttributes?: Record<string, unknown> | null,
 ): Record<string, unknown> {
   return {
     ...defaults,
-    ...(customAttributes || {}),
+    ...(customAttributes ?? {}),
   };
 }
 

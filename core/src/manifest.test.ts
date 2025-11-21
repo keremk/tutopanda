@@ -171,7 +171,6 @@ function exampleInputEntry(): ManifestInputEntry {
 function exampleArtefactEntry(): ManifestArtefactEntry {
   return {
     hash: 'sha-output',
-    inline: 'script contents',
     producedBy: 'script_producer',
     status: 'succeeded',
     createdAt: clock.now(),

@@ -80,6 +80,15 @@ export function createReplicateAudioHandler(): HandlerFactory {
         try {
           predictionOutput = await replicate.run(modelIdentifier, { input });
         } catch (error) {
+          logger?.error?.('providers.replicate.audio.invoke.error', {
+            producer: request.jobId,
+            model: request.model,
+            plannerContext,
+            inputKeys: Object.keys(input),
+            inputPreview: Object.fromEntries(Object.entries(input).slice(0, 5)),
+            error: error instanceof Error ? error.message : String(error),
+            stack: error instanceof Error ? error.stack : undefined,
+          });
           throw createProviderError('Replicate prediction failed.', {
             code: 'replicate_prediction_failed',
             kind: 'transient',

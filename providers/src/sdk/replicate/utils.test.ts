@@ -3,7 +3,7 @@ import { extractPlannerContext, mergeInputs, isRecord } from './utils.js';
 import type { ProviderJobContext } from '../../types.js';
 
 function makeRequest(
-  extras: ProviderJobContext['context']['extras'] | null | undefined,
+  extras: Record<string, unknown> | undefined,
 ): ProviderJobContext {
   return {
     jobId: 'job-ctx',
@@ -48,7 +48,7 @@ describe('extractPlannerContext', () => {
   });
 
   it('returns empty object when extras is null', () => {
-    const request = makeRequest(null);
+    const request = makeRequest(undefined);
     const result = extractPlannerContext(request);
 
     expect(result).toEqual({});
