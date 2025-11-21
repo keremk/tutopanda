@@ -35,6 +35,7 @@ export interface ExecuteBuildOptions {
   providerOptions: ProducerOptionsMap;
   resolvedInputs: Record<string, unknown>;
   concurrency?: number;
+  upToLayer?: number;
   logger?: Logger;
 }
 
@@ -93,7 +94,7 @@ export async function executeBuild(options: ExecuteBuildOptions): Promise<Execut
       produce,
       logger,
     },
-    { concurrency },
+    { concurrency, upToLayer: options.upToLayer },
   );
 
   const manifest = await run.buildManifest();

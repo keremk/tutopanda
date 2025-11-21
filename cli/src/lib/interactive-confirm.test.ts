@@ -34,6 +34,39 @@ function createPlan(): ExecutionPlan {
   };
 }
 
+function createMultiLayerPlan(): ExecutionPlan {
+  return {
+    revision: 'rev-0002',
+    manifestBaseHash: 'base-hash',
+    layers: [
+      [
+        {
+          jobId: 'job-1',
+          producer: 'ScriptProducer',
+          inputs: [],
+          produces: [],
+          provider: 'openai',
+          providerModel: 'gpt-5-mini',
+          rateKey: 'openai:gpt-5-mini',
+        },
+      ],
+      [],
+      [
+        {
+          jobId: 'job-2',
+          producer: 'AudioProducer',
+          inputs: [],
+          produces: [],
+          provider: 'openai',
+          providerModel: 'gpt-5-mini',
+          rateKey: 'openai:gpt-5-mini',
+        },
+      ],
+    ],
+    createdAt: new Date().toISOString(),
+  };
+}
+
 function createInputs(): InputEvent[] {
   const now = new Date().toISOString();
   return [
@@ -76,5 +109,15 @@ describe('confirmPlanExecution', () => {
       logs.find((line) => typeof line === 'string' && line.includes('InquiryPrompt: Tell me a story')),
     ).toBeDefined();
     expect(logs.find((line) => typeof line === 'string' && line.includes('NumOfSegments: 3'))).toBeDefined();
+  });
+
+  it('logs which layers will run when upToLayer is provided', async () => {
+    const infoSpy = vi.fn();
+    const logger = { info: infoSpy, warn: vi.fn(), error: vi.fn(), debug: vi.fn() };
+    await confirmPlanExecution(createMultiLayerPlan(), { logger, upToLayer: 0 });
+    const message = infoSpy.mock.calls
+      .map((call) => call[0])
+      .find((line) => typeof line === 'string' && line.includes('Layer limit set'));
+    expect(message).toContain('Running 1 layer (layers 0-0)');
   });
 });

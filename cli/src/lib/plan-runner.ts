@@ -21,10 +21,14 @@ interface PlanExecutionContext extends RunnerExecutionContext {
 export async function executePlanWithConcurrency(
   plan: ExecutionPlan,
   context: PlanExecutionContext,
-  options: { concurrency: number },
+  options: { concurrency: number; upToLayer?: number },
 ): Promise<RunResult> {
   if (!Number.isInteger(options.concurrency) || options.concurrency <= 0) {
     throw new Error('Concurrency must be a positive integer.');
+  }
+  const layerLimit = options.upToLayer;
+  if (layerLimit !== undefined && (!Number.isInteger(layerLimit) || layerLimit < 0)) {
+    throw new Error('upToLayer must be a non-negative integer.');
   }
   const runner = createRunner();
   const limit = pLimit(options.concurrency);
@@ -33,7 +37,18 @@ export async function executePlanWithConcurrency(
   const startedAt = clock.now();
   const jobs: JobResult[] = [];
 
+  if (layerLimit !== undefined) {
+    logger.info?.('runner.layer.limit', {
+      movieId: context.movieId,
+      revision: plan.revision,
+      upToLayer: layerLimit,
+    });
+  }
+
   for (let layerIndex = 0; layerIndex < plan.layers.length; layerIndex += 1) {
+    if (layerLimit !== undefined && layerIndex > layerLimit) {
+      break;
+    }
     const layer = plan.layers[layerIndex] ?? [];
     if (layer.length === 0) {
       continue;

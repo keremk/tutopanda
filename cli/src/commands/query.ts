@@ -24,6 +24,7 @@ export interface QueryOptions {
   nonInteractive?: boolean;
   usingBlueprint: string;
   concurrency?: number;
+  upToLayer?: number;
   logger?: Logger;
 }
 
@@ -58,6 +59,10 @@ export async function runQuery(options: QueryOptions): Promise<QueryResult> {
     override: options.concurrency,
     configPath,
   });
+  const upToLayer = options.upToLayer;
+  if (options.dryRun && upToLayer !== undefined) {
+    logger.info('--upToLayer applies only to live runs; dry runs will simulate all layers.');
+  }
 
   const movieId = generateMovieId();
   const storageMovieId = formatMovieId(movieId);
@@ -85,6 +90,7 @@ export async function runQuery(options: QueryOptions): Promise<QueryResult> {
     const confirmed = await confirmPlanExecution(planResult.plan, {
       inputs: planResult.inputEvents,
       concurrency,
+      upToLayer,
       logger,
     });
     if (!confirmed) {
@@ -129,6 +135,7 @@ export async function runQuery(options: QueryOptions): Promise<QueryResult> {
         resolvedInputs: planResult.resolvedInputs,
         logger,
         concurrency,
+        upToLayer,
       });
 
   return {

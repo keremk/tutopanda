@@ -39,6 +39,7 @@ export interface EditOptions {
   usingBlueprint?: string;
   pendingArtefacts?: PendingArtefactDraft[];
   concurrency?: number;
+  upToLayer?: number;
   logger?: Logger;
 }
 
@@ -66,6 +67,10 @@ export async function runEdit(options: EditOptions): Promise<EditResult> {
     override: options.concurrency,
     configPath,
   });
+  const upToLayer = options.upToLayer;
+  if (options.dryRun && upToLayer !== undefined) {
+    logger.info('--upToLayer applies only to live runs; dry runs will simulate all layers.');
+  }
 
   const storageMovieId = formatMovieId(options.movieId);
   const storageRoot = cliConfig.storage.root;
@@ -105,6 +110,7 @@ export async function runEdit(options: EditOptions): Promise<EditResult> {
     const confirmed = await confirmPlanExecution(planResult.plan, {
       inputs: planResult.inputEvents,
       concurrency,
+      upToLayer,
       logger,
     });
     if (!confirmed) {
@@ -147,6 +153,7 @@ export async function runEdit(options: EditOptions): Promise<EditResult> {
         resolvedInputs: planResult.resolvedInputs,
         logger,
         concurrency,
+        upToLayer,
       });
 
   return {
@@ -197,6 +204,7 @@ export interface WorkspaceSubmitOptions {
   nonInteractive?: boolean;
   usingBlueprint?: string;
   concurrency?: number;
+  upToLayer?: number;
   logger?: Logger;
 }
 
@@ -257,6 +265,7 @@ export async function runWorkspaceSubmit(options: WorkspaceSubmitOptions): Promi
     usingBlueprint: blueprintPath,
     pendingArtefacts,
     concurrency: options.concurrency,
+    upToLayer: options.upToLayer,
     logger,
   });
 

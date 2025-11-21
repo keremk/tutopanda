@@ -2,10 +2,17 @@ import process from 'node:process';
 import * as readline from 'node:readline';
 import type { ExecutionPlan, InputEvent, Logger } from 'tutopanda-core';
 
+const ANSI_COLORS = {
+  run: '\u001B[32m',
+  skip: '\u001B[31m',
+  reset: '\u001B[0m',
+} as const;
+
 interface PlanConfirmationOptions {
   inputs?: InputEvent[];
   concurrency?: number;
   logger?: Logger;
+  upToLayer?: number;
 }
 
 function displayInputSummary(events: InputEvent[] | undefined, logger: Logger): void {
@@ -73,7 +80,10 @@ export async function confirmPlanExecution(
   const logger = options.logger ?? globalThis.console;
   displayInputSummary(options.inputs, logger);
   displayPlanSummary(plan, logger);
-  displayLayerBreakdown(plan, options.concurrency ?? 1, logger);
+  if (typeof options.upToLayer === 'number') {
+    logLayerLimit(plan, options.upToLayer, logger);
+  }
+  displayLayerBreakdown(plan, options.concurrency ?? 1, logger, options.upToLayer);
 
   const rl = readline.createInterface({
     input: process.stdin,
@@ -89,27 +99,74 @@ export async function confirmPlanExecution(
   });
 }
 
-function displayLayerBreakdown(plan: ExecutionPlan, concurrency: number, logger: Logger): void {
+function displayLayerBreakdown(
+  plan: ExecutionPlan,
+  concurrency: number,
+  logger: Logger,
+  upToLayer?: number,
+): void {
   const safeConcurrency = Number.isInteger(concurrency) && concurrency > 0 ? concurrency : 1;
   logger.info('Execution Order (by layer):');
   logger.info(`Concurrency: ${safeConcurrency} job(s) in parallel per layer (where available)\n`);
 
   plan.layers.forEach((layer, index) => {
-    if (layer.length === 0) {
-      logger.info(`  Layer ${index}: (no jobs)`);
-      return;
-    }
-
+    const skipLayer = typeof upToLayer === 'number' && index > upToLayer;
+    const willRun = !skipLayer;
     const concurrencyLabel =
       layer.length > 1 && safeConcurrency > 1
         ? `parallel (up to ${Math.min(safeConcurrency, layer.length)} at once)`
         : 'sequential';
-
-    logger.info(`  Layer ${index} (${layer.length} job${layer.length === 1 ? '' : 's'} - ${concurrencyLabel}):`);
+    const skippedLabel = skipLayer ? ' [Will Not Run]' : '';
+    const layerLine = `  Layer ${index} (${layer.length} job${layer.length === 1 ? '' : 's'} - ${concurrencyLabel})${skippedLabel}:`;
+    logger.info(colorLayer(lineColor(willRun), layerLine));
+    if (layer.length === 0) {
+      logger.info('');
+      return;
+    }
     for (const job of layer) {
       const producerLabel = typeof job.producer === 'string' ? job.producer : 'unknown-producer';
-      logger.info(`    • ${job.jobId} [${producerLabel}]`);
+      const jobSuffix = skipLayer ? ' (Will Not Run)' : '';
+      const jobLine = `    • ${job.jobId} [${producerLabel}]${jobSuffix}`;
+      logger.info(colorLayer(lineColor(willRun), jobLine));
     }
     logger.info('');
   });
+}
+
+function logLayerLimit(plan: ExecutionPlan, requestedLimit: number, logger: Logger): void {
+  if (!Number.isFinite(requestedLimit)) {
+    return;
+  }
+  const totalLayers = plan.layers.length;
+  if (totalLayers === 0) {
+    logger.info(`Layer limit set (--upToLayer=${requestedLimit}), but this plan has no layers to execute.`);
+    return;
+  }
+  const highestAvailable = totalLayers - 1;
+  const normalizedLimit = Number.isInteger(requestedLimit) ? requestedLimit : Math.floor(requestedLimit);
+  const clamped = Math.min(Math.max(normalizedLimit, 0), highestAvailable);
+  const runningLayers = clamped + 1;
+  const skippedLayers = totalLayers - runningLayers;
+  if (normalizedLimit >= highestAvailable) {
+    logger.info(
+      `Layer limit set (--upToLayer=${requestedLimit}). Plan has ${totalLayers} layer${
+        totalLayers === 1 ? '' : 's'
+      }; all layers (0-${highestAvailable}) will run.`,
+    );
+    return;
+  }
+  logger.info(
+    `Layer limit set (--upToLayer=${requestedLimit}). Running ${runningLayers} layer${
+      runningLayers === 1 ? '' : 's'
+    } (layers 0-${clamped}). ${skippedLayers} layer${skippedLayers === 1 ? '' : 's'} will not run.`,
+  );
+}
+
+function lineColor(willRun: boolean): 'run' | 'skip' {
+  return willRun ? 'run' : 'skip';
+}
+
+function colorLayer(kind: 'run' | 'skip', text: string): string {
+  const prefix = kind === 'run' ? ANSI_COLORS.run : ANSI_COLORS.skip;
+  return `${prefix}${text}${ANSI_COLORS.reset}`;
 }

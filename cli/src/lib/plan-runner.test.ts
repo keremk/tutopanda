@@ -7,34 +7,40 @@ import {
   type ExecutionPlan,
   type Manifest,
   type ProduceFn,
+  type JobDescriptor,
+  type ProviderName,
 } from 'tutopanda-core';
 import { executePlanWithConcurrency } from './plan-runner.js';
 
+async function createRunnerContext() {
+  const movieId = 'movie-test';
+  const storage = createStorageContext({ kind: 'memory' });
+  await initializeMovieStorage(storage, movieId);
+  const eventLog = createEventLog(storage);
+  const manifestService = createManifestService(storage);
+  const manifest: Manifest = {
+    revision: 'rev-0000',
+    baseRevision: null,
+    createdAt: new Date().toISOString(),
+    inputs: {},
+    artefacts: {},
+  };
+  return { movieId, storage, eventLog, manifestService, manifest };
+}
+
+const makeJob = (jobId: string): JobDescriptor => ({
+  jobId,
+  producer: jobId,
+  inputs: [],
+  produces: [`Artifact:${jobId}`],
+  provider: 'openai' as ProviderName,
+  providerModel: 'test-model',
+  rateKey: 'openai:test-model',
+});
+
 describe('executePlanWithConcurrency', () => {
   it('runs layer jobs in parallel up to the limit and keeps layers sequential', async () => {
-    const movieId = 'movie-test';
-    const storage = createStorageContext({ kind: 'memory' });
-    await initializeMovieStorage(storage, movieId);
-    const eventLog = createEventLog(storage);
-    const manifestService = createManifestService(storage);
-
-    const manifest: Manifest = {
-      revision: 'rev-0000',
-      baseRevision: null,
-      createdAt: new Date().toISOString(),
-      inputs: {},
-      artefacts: {},
-    };
-
-    const makeJob = (jobId: string) => ({
-      jobId,
-      producer: jobId,
-      inputs: [],
-      produces: [`Artifact:${jobId}`],
-      provider: 'openai',
-      providerModel: 'test-model',
-      rateKey: 'openai:test-model',
-    });
+    const { movieId, storage, eventLog, manifestService, manifest } = await createRunnerContext();
 
     const layerOne = ['job-1', 'job-2', 'job-3'].map(makeJob);
     const layerTwo = [makeJob('job-4')];
@@ -91,5 +97,57 @@ describe('executePlanWithConcurrency', () => {
     expect(starts.slice(0, layerOne.length)).toEqual(layerOne.map((job) => job.jobId));
     expect(starts[layerOne.length]).toBe('job-4');
     expect(result.jobs).toHaveLength(4);
+  });
+
+  it('stops executing after reaching the requested layer', async () => {
+    const { movieId, storage, eventLog, manifestService, manifest } = await createRunnerContext();
+    const layers: ExecutionPlan['layers'] = [
+      [makeJob('layer-0-job')],
+      [makeJob('layer-1-job')],
+      [makeJob('layer-2-job')],
+    ];
+    const plan: ExecutionPlan = {
+      revision: 'rev-0002',
+      manifestBaseHash: 'hash',
+      layers,
+      createdAt: new Date().toISOString(),
+    };
+    const executed: string[] = [];
+    const produce: ProduceFn = async ({ job }) => {
+      executed.push(job.jobId);
+      return { jobId: job.jobId, status: 'succeeded', artefacts: [] };
+    };
+
+    const result = await executePlanWithConcurrency(
+      plan,
+      { movieId, manifest, storage, eventLog, manifestService, produce },
+      { concurrency: 2, upToLayer: 1 },
+    );
+
+    expect(executed).toEqual(['layer-0-job', 'layer-1-job']);
+    expect(result.jobs).toHaveLength(2);
+  });
+
+  it('rejects negative upToLayer values', async () => {
+    const { movieId, storage, eventLog, manifestService, manifest } = await createRunnerContext();
+    const plan: ExecutionPlan = {
+      revision: 'rev-0003',
+      manifestBaseHash: 'hash',
+      layers: [[makeJob('job-a')]],
+      createdAt: new Date().toISOString(),
+    };
+    const produce: ProduceFn = async ({ job }) => ({
+      jobId: job.jobId,
+      status: 'succeeded',
+      artefacts: [],
+    });
+
+    await expect(
+      executePlanWithConcurrency(
+        plan,
+        { movieId, manifest, storage, eventLog, manifestService, produce },
+        { concurrency: 1, upToLayer: -1 },
+      ),
+    ).rejects.toThrow(/upToLayer/);
   });
 });

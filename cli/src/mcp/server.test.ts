@@ -79,14 +79,22 @@ describe('MovieStorage', () => {
 
   it('reads timeline artefact as formatted JSON', async () => {
     const response = await storage.readTimeline(movieId);
-    expect(response.contents[0]?.mimeType).toBe('application/json');
-    const parsed = JSON.parse(response.contents[0]?.text ?? '{}');
+    const first = response.contents[0];
+    if (!first || !('text' in first)) {
+      throw new Error('Expected text content for timeline response');
+    }
+    expect(first.mimeType).toBe('application/json');
+    const parsed = JSON.parse(first.text ?? '{}');
     expect(parsed.duration).toBe(30);
   });
 
   it('reads blob artefacts as base64 resources', async () => {
     const response = await storage.readArtefact(movieId, encodeURIComponent('Artifact:Audio.Sample'));
-    expect(response.contents[0]?.blob).toBe(Buffer.from([1, 2, 3]).toString('base64'));
-    expect(response.contents[0]?.mimeType).toBe('audio/mpeg');
+    const first = response.contents[0];
+    if (!first || !('blob' in first)) {
+      throw new Error('Expected blob content for artefact response');
+    }
+    expect(first.blob).toBe(Buffer.from([1, 2, 3]).toString('base64'));
+    expect(first.mimeType).toBe('audio/mpeg');
   });
 });

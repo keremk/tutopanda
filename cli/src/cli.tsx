@@ -66,7 +66,7 @@ import { createCliLogger, type CliLogger } from './lib/logger.js';
 type ProviderListOutputEntry = Awaited<ReturnType<typeof runProvidersList>>['entries'][number];
 
 const cli = meow(
-  `\nUsage\n  $ tutopanda <command> [options]\n\nCommands\n  install             Guided setup (alias for init)\n  init                Initialize Tutopanda CLI configuration\n  query               Generate a plan using a blueprint (YAML) and inputs YAML\n  inspect             Export prompts or timeline data for a movie\n  edit                Regenerate a movie with edited inputs\n  viewer:start        Start the bundled viewer server in the foreground\n  viewer:view         Open the viewer for a movie id (starts server if needed)\n  viewer:stop         Stop the background viewer server\n  providers:list      Show providers defined in a blueprint\n  blueprints:list     List available blueprint YAML files\n  blueprints:describe <path>  Show details for a blueprint YAML file\n  blueprints:validate <path>  Validate a blueprint YAML file\n  mcp                 Run the Tutopanda MCP server over stdio\n\nExamples\n  $ tutopanda install --rootFolder=~/media/tutopanda\n  $ tutopanda query --inputs=~/movies/my-inputs.yaml --using-blueprint=audio-only.yaml\n  $ tutopanda query --inputs=~/movies/my-inputs.yaml --using-blueprint=audio-only.yaml --concurrency=3\n  $ tutopanda providers:list --using-blueprint=image-audio.yaml\n  $ tutopanda blueprints:list\n  $ tutopanda blueprints:describe audio-only.yaml\n  $ tutopanda blueprints:validate image-audio.yaml\n  $ tutopanda inspect --movieId=q123456 --prompts\n  $ tutopanda edit --movieId=q123456 --inputs=edited-inputs.yaml\n  $ tutopanda viewer:start\n  $ tutopanda viewer:view --movieId=q123456\n  $ tutopanda mcp --defaultBlueprint=image-audio.yaml\n`,
+  `\nUsage\n  $ tutopanda <command> [options]\n\nCommands\n  install             Guided setup (alias for init)\n  init                Initialize Tutopanda CLI configuration\n  query               Generate a plan using a blueprint (YAML) and inputs YAML\n  inspect             Export prompts or timeline data for a movie\n  edit                Regenerate a movie with edited inputs\n  viewer:start        Start the bundled viewer server in the foreground\n  viewer:view         Open the viewer for a movie id (starts server if needed)\n  viewer:stop         Stop the background viewer server\n  providers:list      Show providers defined in a blueprint\n  blueprints:list     List available blueprint YAML files\n  blueprints:describe <path>  Show details for a blueprint YAML file\n  blueprints:validate <path>  Validate a blueprint YAML file\n  mcp                 Run the Tutopanda MCP server over stdio\n\nExamples\n  $ tutopanda install --rootFolder=~/media/tutopanda\n  $ tutopanda query --inputs=~/movies/my-inputs.yaml --using-blueprint=audio-only.yaml\n  $ tutopanda query --inputs=~/movies/my-inputs.yaml --using-blueprint=audio-only.yaml --concurrency=3\n  $ tutopanda query --inputs=~/movies/my-inputs.yaml --using-blueprint=audio-only.yaml --upToLayer=1\n  $ tutopanda providers:list --using-blueprint=image-audio.yaml\n  $ tutopanda blueprints:list\n  $ tutopanda blueprints:describe audio-only.yaml\n  $ tutopanda blueprints:validate image-audio.yaml\n  $ tutopanda inspect --movieId=q123456 --prompts\n  $ tutopanda edit --movieId=q123456 --inputs=edited-inputs.yaml\n  $ tutopanda viewer:start\n  $ tutopanda viewer:view --movieId=q123456\n  $ tutopanda mcp --defaultBlueprint=image-audio.yaml\n`,
   {
     importMeta: import.meta,
     flags: {
@@ -88,6 +88,7 @@ const cli = meow(
       defaultBlueprint: { type: 'string' },
       openViewer: { type: 'boolean' },
       verbose: { type: 'boolean', default: false },
+      upToLayer: { type: 'number' },
     },
   },
 );
@@ -116,6 +117,7 @@ async function main(): Promise<void> {
     defaultBlueprint?: string;
     openViewer?: boolean;
     verbose?: boolean;
+    upToLayer?: number;
   };
   const logger = createCliLogger({ verbose: Boolean(flags.verbose) });
 
@@ -153,6 +155,7 @@ async function main(): Promise<void> {
         nonInteractive: Boolean(flags.nonInteractive),
         usingBlueprint: flags.usingBlueprint,
         concurrency: flags.concurrency,
+        upToLayer: flags.upToLayer,
         logger,
       });
       logger.info(`Movie created with id = ${result.movieId}`);
@@ -384,6 +387,7 @@ async function main(): Promise<void> {
         nonInteractive: Boolean(flags.nonInteractive),
         usingBlueprint: flags.usingBlueprint,
         concurrency: flags.concurrency,
+        upToLayer: flags.upToLayer,
         logger,
       });
         if (!result.changesApplied) {
@@ -413,6 +417,7 @@ async function main(): Promise<void> {
         nonInteractive: Boolean(flags.nonInteractive),
         usingBlueprint: flags.usingBlueprint,
         concurrency: flags.concurrency,
+        upToLayer: flags.upToLayer,
         logger,
       });
       logger.info(`Updated prompts for movie ${flags.movieId}. New revision: ${result.targetRevision}`);
