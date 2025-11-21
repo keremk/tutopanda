@@ -26,14 +26,10 @@ import {
   type ProducerJobContextExtras,
   type FanInDescriptor,
 } from './types.js';
+import type { Logger } from './logger.js';
 
 /* eslint-disable no-unused-vars */
-export interface RunnerLogger {
-  info?(message: string, meta?: Record<string, unknown>): void;
-  warn?(message: string, meta?: Record<string, unknown>): void;
-  error?(message: string, meta?: Record<string, unknown>): void;
-  debug?(message: string, meta?: Record<string, unknown>): void;
-}
+export interface RunnerLogger extends Partial<Logger> {}
 
 export interface RunnerOptions {
   clock?: Clock;

@@ -1,4 +1,3 @@
-/* eslint-disable no-console */
 import { resolve as resolvePath } from 'node:path';
 import {
   createEventLog,
@@ -12,6 +11,7 @@ import {
   type ProduceResult,
   type RunResult,
   type ProducerJobContext,
+  type Logger,
 } from 'tutopanda-core';
 import {
   createProviderRegistry,
@@ -26,9 +26,6 @@ import { normalizeConcurrency } from './cli-config.js';
 import type { ProducerOptionsMap, LoadedProducerOption } from './producer-options.js';
 import { executePlanWithConcurrency } from './plan-runner.js';
 
-const console = globalThis.console;
-type LoggerFn = (message?: string) => void; // eslint-disable-line no-unused-vars
-
 export interface ExecuteBuildOptions {
   cliConfig: CliConfig;
   movieId: string;
@@ -38,9 +35,7 @@ export interface ExecuteBuildOptions {
   providerOptions: ProducerOptionsMap;
   resolvedInputs: Record<string, unknown>;
   concurrency?: number;
-  logger?: {
-    info?: LoggerFn;
-  };
+  logger?: Logger;
 }
 
 export interface BuildSummary {
@@ -64,6 +59,7 @@ export interface ExecuteBuildResult {
 }
 
 export async function executeBuild(options: ExecuteBuildOptions): Promise<ExecuteBuildResult> {
+  const logger = options.logger ?? globalThis.console;
   const storage = createStorageContext({
     kind: 'local',
     rootDir: options.cliConfig.storage.root,
@@ -75,7 +71,7 @@ export async function executeBuild(options: ExecuteBuildOptions): Promise<Execut
 
   const eventLog = createEventLog(storage);
   const manifestService = createManifestService(storage);
-  const registry = createProviderRegistry({ mode: 'live' });
+  const registry = createProviderRegistry({ mode: 'live', logger });
   const preResolved = prepareProviderHandlers(registry, options.plan, options.providerOptions);
   await registry.warmStart?.(preResolved);
   const produce = createProviderProduce(
@@ -83,7 +79,7 @@ export async function executeBuild(options: ExecuteBuildOptions): Promise<Execut
     options.providerOptions,
     options.resolvedInputs,
     preResolved,
-    options.logger ?? console,
+    logger,
   );
 
   const run = await executePlanWithConcurrency(
@@ -95,7 +91,7 @@ export async function executeBuild(options: ExecuteBuildOptions): Promise<Execut
       eventLog,
       manifestService,
       produce,
-      logger: options.logger ?? console,
+      logger,
     },
     { concurrency },
   );
@@ -154,7 +150,7 @@ export function createProviderProduce(
   providerOptions: ProducerOptionsMap,
   resolvedInputs: Record<string, unknown>,
   preResolved: ResolvedProviderHandler[] = [],
-  logger: { info?: LoggerFn } = {},
+  logger: Logger = globalThis.console,
 ): ProduceFn {
   const handlerCache = new Map<string, ProducerHandler>();
 
@@ -197,9 +193,12 @@ export function createProviderProduce(
     const prepared = prepareJobContext(request.job, resolvedInputs);
     const context = buildProviderContext(providerOption, prepared.context, prepared.resolvedInputs);
     const log = formatResolvedInputs(prepared.resolvedInputs);
-    console.debug('[provider.invoke.inputs]', producerName, log);
-    validateResolvedInputs(producerName, providerOption, prepared.resolvedInputs);
-    logger.info?.(
+    logger.debug('provider.invoke.inputs', {
+      producer: producerName,
+      values: log,
+    });
+    validateResolvedInputs(producerName, providerOption, prepared.resolvedInputs, logger);
+    logger.info(
       `provider.invoke.start ${providerOption.provider}/${providerOption.model} [${providerOption.environment}] -> ${request.job.produces.join(', ')}`,
     );
 
@@ -218,13 +217,16 @@ export function createProviderProduce(
       });
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      console.error(
-        `ERROR: provider.invoke.failed ${providerOption.provider}/${providerOption.model} [${providerOption.environment}]: ${errorMessage}`,
-      );
+      logger.error('provider.invoke.failed', {
+        provider: providerOption.provider,
+        model: providerOption.model,
+        environment: providerOption.environment,
+        error: errorMessage,
+      });
       throw error;
     }
 
-    logger.info?.(
+    logger.info(
       `provider.invoke.end ${providerOption.provider}/${providerOption.model} [${providerOption.environment}]`,
     );
 
@@ -396,6 +398,7 @@ function validateResolvedInputs(
   producerName: string,
   option: LoadedProducerOption,
   inputs: Record<string, unknown>,
+  logger: Logger,
 ): void {
   const keys = Object.keys(inputs);
   if (keys.length === 0) {
@@ -405,7 +408,7 @@ function validateResolvedInputs(
   const required = Array.isArray(config?.variables) ? (config?.variables as string[]) : [];
   const missing = required.filter((key) => inputs[key] === undefined);
   if (missing.length > 0) {
-    console.warn(
+    logger.warn(
       `[provider.invoke.inputs] ${producerName} missing resolved input(s): ${missing.join(', ')}.`,
     );
   }

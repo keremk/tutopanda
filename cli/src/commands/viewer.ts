@@ -12,12 +12,12 @@ import {
   removeViewerState,
   writeViewerState,
 } from '../lib/viewer-state.js';
-
-const console = globalThis.console;
+import type { Logger } from 'tutopanda-core';
 
 export interface ViewerStartOptions {
   host?: string;
   port?: number;
+  logger?: Logger;
 }
 
 export interface ViewerViewOptions extends ViewerStartOptions {
@@ -25,11 +25,12 @@ export interface ViewerViewOptions extends ViewerStartOptions {
 }
 
 export async function runViewerStart(options: ViewerStartOptions = {}): Promise<void> {
-  const cliConfig = await ensureInitializedConfig();
+  const logger = options.logger ?? globalThis.console;
+  const cliConfig = await ensureInitializedConfig(logger);
   if (!cliConfig) {
     return;
   }
-  const bundle = resolveViewerBundleOrExit();
+  const bundle = resolveViewerBundleOrExit(logger);
   if (!bundle) {
     return;
   }
@@ -40,7 +41,7 @@ export async function runViewerStart(options: ViewerStartOptions = {}): Promise<
   if (existingState) {
     const alive = await isViewerServerRunning(existingState.host, existingState.port);
     if (alive) {
-      console.error(
+      logger.error?.(
         `A background viewer server is already running on http://${existingState.host}:${existingState.port}. Stop it first with "tutopanda viewer:stop".`,
       );
       process.exitCode = 1;
@@ -50,11 +51,11 @@ export async function runViewerStart(options: ViewerStartOptions = {}): Promise<
   }
 
   if (await isViewerServerRunning(network.host, network.port)) {
-    console.log(`Viewer server already running on http://${network.host}:${network.port}`);
+    logger.info?.(`Viewer server already running on http://${network.host}:${network.port}`);
     return;
   }
 
-  console.log(`Starting viewer server at http://${network.host}:${network.port} (Ctrl+C to stop)`);
+  logger.info?.(`Starting viewer server at http://${network.host}:${network.port} (Ctrl+C to stop)`);
   await launchViewerServer({
     bundle,
     rootFolder: cliConfig.storage.root,
@@ -65,17 +66,18 @@ export async function runViewerStart(options: ViewerStartOptions = {}): Promise<
 }
 
 export async function runViewerView(options: ViewerViewOptions = {}): Promise<void> {
+  const logger = options.logger ?? globalThis.console;
   if (!options.movieId) {
-    console.error('Error: --movieId is required for viewer:view.');
+    logger.error?.('Error: --movieId is required for viewer:view.');
     process.exitCode = 1;
     return;
   }
 
-  const cliConfig = await ensureInitializedConfig();
+  const cliConfig = await ensureInitializedConfig(logger);
   if (!cliConfig) {
     return;
   }
-  const bundle = resolveViewerBundleOrExit();
+  const bundle = resolveViewerBundleOrExit(logger);
   if (!bundle) {
     return;
   }
@@ -96,7 +98,7 @@ export async function runViewerView(options: ViewerViewOptions = {}): Promise<vo
   }
 
   if (!(await isViewerServerRunning(activeHost, activePort))) {
-    console.log('Viewer server is not running. Launching background instance...');
+    logger.info?.('Viewer server is not running. Launching background instance...');
     await launchViewerServer({
       bundle,
       rootFolder: cliConfig.storage.root,
@@ -110,42 +112,43 @@ export async function runViewerView(options: ViewerViewOptions = {}): Promise<vo
     const ready = await waitForViewerServer(activeHost, activePort);
     if (!ready) {
       await removeViewerState(statePath);
-      console.error('Viewer server failed to start in time. Check logs with "tutopanda viewer:start".');
+      logger.error?.('Viewer server failed to start in time. Check logs with "tutopanda viewer:start".');
       process.exitCode = 1;
       return;
     }
   }
 
   const targetUrl = `http://${activeHost}:${activePort}/movies/${encodeURIComponent(options.movieId)}`;
-  console.log(`Opening viewer at ${targetUrl}`);
-  openBrowser(targetUrl);
+  logger.info?.(`Opening viewer at ${targetUrl}`);
+  void openBrowser(targetUrl);
 }
 
-export async function runViewerStop(): Promise<void> {
+export async function runViewerStop(options: { logger?: Logger } = {}): Promise<void> {
+  const logger = options.logger ?? globalThis.console;
   const cliConfig = await readCliConfig();
   if (!cliConfig?.storage?.root) {
-    console.error('Tutopanda viewer requires a configured root. Run "tutopanda init" first.');
+    logger.error?.('Tutopanda viewer requires a configured root. Run "tutopanda init" first.');
     process.exitCode = 1;
     return;
   }
   const statePath = getViewerStatePath(cliConfig);
   const state = await readViewerState(statePath);
   if (!state) {
-    console.log('No background viewer server found.');
+    logger.info?.('No background viewer server found.');
     return;
   }
 
   const alive = await isViewerServerRunning(state.host, state.port);
   if (!alive) {
     await removeViewerState(statePath);
-    console.log('Viewer server was not running. Cleaned up stale state.');
+    logger.info?.('Viewer server was not running. Cleaned up stale state.');
     return;
   }
 
   try {
     process.kill(state.pid, 'SIGTERM');
   } catch (error) {
-    console.error(
+    logger.error?.(
       `Unable to stop viewer server (pid ${state.pid}): ${
         error instanceof Error ? error.message : String(error)
       }`,
@@ -157,16 +160,16 @@ export async function runViewerStop(): Promise<void> {
   const stopped = await waitForProcessExit(state.pid);
   await removeViewerState(statePath);
   if (stopped) {
-    console.log('Viewer server stopped.');
+    logger.info?.('Viewer server stopped.');
   } else {
-    console.warn('Viewer server did not exit cleanly. It may still be running.');
+    logger.warn?.('Viewer server did not exit cleanly. It may still be running.');
   }
 }
 
-async function ensureInitializedConfig(): Promise<CliConfig | null> {
+async function ensureInitializedConfig(logger: Logger): Promise<CliConfig | null> {
   const cliConfig = await readCliConfig();
   if (!cliConfig?.storage?.root) {
-    console.error('Tutopanda viewer requires a configured root. Run "tutopanda init" first.');
+    logger.error?.('Tutopanda viewer requires a configured root. Run "tutopanda init" first.');
     process.exitCode = 1;
     return null;
   }
@@ -287,11 +290,11 @@ function isProcessAlive(pid: number): boolean {
   }
 }
 
-function resolveViewerBundleOrExit(): ReturnType<typeof resolveViewerBundlePaths> | null {
+function resolveViewerBundleOrExit(logger: Logger): ReturnType<typeof resolveViewerBundlePaths> | null {
   try {
     return resolveViewerBundlePaths();
   } catch (error) {
-    console.error(
+    logger.error?.(
       `Unable to locate the bundled viewer. Build the viewer project or set TUTOPANDA_VIEWER_BUNDLE_ROOT. ${
         error instanceof Error ? error.message : error
       }`,

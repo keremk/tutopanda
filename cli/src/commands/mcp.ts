@@ -14,8 +14,7 @@ import {
   type CliConfig,
 } from '../lib/cli-config.js';
 import { expandPath } from '../lib/path.js';
-
-const console = globalThis.console;
+import type { Logger } from 'tutopanda-core';
 type ShutdownSignal = 'SIGINT' | 'SIGTERM';
 
 export interface RunMcpServerOptions {
@@ -23,9 +22,11 @@ export interface RunMcpServerOptions {
   blueprintsDir?: string;
   defaultBlueprint?: string;
   openViewer?: boolean;
+  logger?: Logger;
 }
 
 export async function runMcpServer(options: RunMcpServerOptions = {}): Promise<void> {
+  const logger = options.logger ?? globalThis.console;
   const resolvedConfigPath = options.configPath ? expandPath(options.configPath) : getDefaultCliConfigPath();
   const cliConfig = await readCliConfig(resolvedConfigPath);
   if (!cliConfig) {
@@ -59,7 +60,7 @@ export async function runMcpServer(options: RunMcpServerOptions = {}): Promise<v
 
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.log(`Tutopanda MCP server ready. Default blueprint: ${shortBlueprintLabel(defaultBlueprintPath, blueprintDirectory)}`);
+  logger.info?.(`Tutopanda MCP server ready. Default blueprint: ${shortBlueprintLabel(defaultBlueprintPath, blueprintDirectory)}`);
 
   await new Promise<void>((resolvePromise, rejectPromise) => {
     let closed = false;
@@ -70,17 +71,21 @@ export async function runMcpServer(options: RunMcpServerOptions = {}): Promise<v
       }
       closed = true;
       if (signal) {
-        console.log(`Received ${signal}. Shutting down Tutopanda MCP server...`);
+        logger.info?.(`Received ${signal}. Shutting down Tutopanda MCP server...`);
       }
       try {
         await transport.close();
       } catch (error) {
-        console.error('Error closing MCP transport:', error);
+        logger.error?.('Error closing MCP transport:', {
+          error: error instanceof Error ? error.message : String(error),
+        });
       }
       try {
         await server.close();
       } catch (error) {
-        console.error('Error closing MCP server:', error);
+        logger.error?.('Error closing MCP server:', {
+          error: error instanceof Error ? error.message : String(error),
+        });
       }
       resolvePromise();
     }
@@ -89,7 +94,7 @@ export async function runMcpServer(options: RunMcpServerOptions = {}): Promise<v
       if (closed) {
         return;
       }
-      console.error('MCP server transport error:', error);
+      logger.error?.('MCP server transport error:', { error });
       rejectPromise(error);
     };
 

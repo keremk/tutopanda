@@ -45,7 +45,7 @@ export function createReplicateAudioHandler(): HandlerFactory {
         const voice = sdkPayload.voice_id ?? sdkPayload.voice;
 
         if (!text) {
-          console.warn('[providers.replicate.audio.missingText]', {
+          logger?.warn?.('providers.replicate.audio.missingText', {
             producer: request.jobId,
             keys: Object.keys(runtime.inputs.all()),
             plannerContext,

@@ -16,9 +16,13 @@ describe('MovieStorage', () => {
     rootDir = await mkdtemp(join(tmpdir(), 'tutopanda-test-'));
     const buildsDir = join(rootDir, 'builds', movieId);
     await mkdir(join(buildsDir, 'blobs', 'ab'), { recursive: true });
+    await mkdir(join(buildsDir, 'blobs', 'fe'), { recursive: true });
     await mkdir(join(buildsDir, 'manifests'), { recursive: true });
 
     await writeFile(join(buildsDir, 'inputs.yaml'), 'inputs:\n  InquiryPrompt: "Hello"\n', 'utf8');
+
+    const timelineBody = JSON.stringify({ duration: 30 });
+    await writeFile(join(buildsDir, 'blobs', 'fe', 'feed1234'), timelineBody, 'utf8');
 
     const manifest = {
       revision: 'rev-0001',
@@ -27,11 +31,15 @@ describe('MovieStorage', () => {
       inputs: {},
       artefacts: {
         [TIMELINE_ID]: {
-          hash: 'timeline-hash',
+          hash: 'feed1234',
           producedBy: 'Producer:Timeline',
           status: 'succeeded',
           createdAt: new Date().toISOString(),
-          inline: JSON.stringify({ duration: 30 }),
+          blob: {
+            hash: 'feed1234',
+            size: Buffer.byteLength(timelineBody, 'utf8'),
+            mimeType: 'application/json',
+          },
         },
         'Artifact:Audio.Sample': {
           hash: 'audio-hash',

@@ -1,4 +1,3 @@
-/* eslint-disable no-console */
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
 import {
@@ -11,6 +10,7 @@ import {
   type Manifest,
   type ExecutionPlan,
   type PendingArtefactDraft,
+  type Logger,
 } from 'tutopanda-core';
 export type { PendingArtefactDraft } from 'tutopanda-core';
 import type { CliConfig } from './cli-config.js';
@@ -26,7 +26,6 @@ import { expandPath } from './path.js';
 import { mergeMovieMetadata } from './movie-metadata.js';
 import { INPUT_FILE_NAME } from './input-files.js';
 
-const console = globalThis.console;
 const planningService = createPlanningService();
 
 export interface GeneratePlanOptions {
@@ -37,6 +36,7 @@ export interface GeneratePlanOptions {
   usingBlueprint: string; // Path to blueprint YAML file
   inquiryPromptOverride?: string;
   pendingArtefacts?: PendingArtefactDraft[];
+  logger?: Logger;
 }
 
 export interface GeneratePlanResult {
@@ -52,6 +52,7 @@ export interface GeneratePlanResult {
 }
 
 export async function generatePlan(options: GeneratePlanOptions): Promise<GeneratePlanResult> {
+  const logger = options.logger ?? globalThis.console;
   const { cliConfig, movieId } = options;
   const storageRoot = cliConfig.storage.root;
   const basePath = cliConfig.storage.basePath;
@@ -85,7 +86,7 @@ export async function generatePlan(options: GeneratePlanOptions): Promise<Genera
 
   const providerOptions = buildProducerOptionsFromBlueprint(blueprintRoot);
   const catalog = buildProducerCatalog(providerOptions);
-  console.log(`Using blueprint: ${blueprintPath}`);
+  logger.info(`Using blueprint: ${blueprintPath}`);
 
   const planResult = await planningService.generatePlan({
     movieId,
@@ -97,7 +98,7 @@ export async function generatePlan(options: GeneratePlanOptions): Promise<Genera
     eventLog,
     pendingArtefacts: options.pendingArtefacts,
   });
-  console.debug('[planner] resolved inputs', Object.keys(planResult.resolvedInputs));
+  logger.debug('[planner] resolved inputs', { inputs: Object.keys(planResult.resolvedInputs) });
 
   return {
     planPath: planResult.planPath,

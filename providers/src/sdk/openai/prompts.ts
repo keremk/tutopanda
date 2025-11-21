@@ -1,4 +1,5 @@
 import type { OpenAiLlmConfig } from './config.js';
+import type { ProviderLogger } from '../../types.js';
 
 export interface RenderedPrompts {
   system: string;
@@ -23,9 +24,10 @@ export interface RenderedPrompts {
 export function renderPrompts(
   config: OpenAiLlmConfig,
   inputs: Record<string, unknown>,
+  logger?: ProviderLogger,
 ): RenderedPrompts {
-  const system = substituteVariables(config.systemPrompt, inputs);
-  const user = config.userPrompt ? substituteVariables(config.userPrompt, inputs) : undefined;
+  const system = substituteVariables(config.systemPrompt, inputs, logger);
+  const user = config.userPrompt ? substituteVariables(config.userPrompt, inputs, logger) : undefined;
 
   return { system, user };
 }
@@ -34,11 +36,15 @@ export function renderPrompts(
  * Substitutes {{VariableName}} placeholders with values from inputs.
  * Uses simple direct lookup - variable names must match input keys exactly.
  */
-function substituteVariables(template: string, inputs: Record<string, unknown>): string {
+function substituteVariables(
+  template: string,
+  inputs: Record<string, unknown>,
+  logger?: ProviderLogger,
+): string {
   return template.replace(/\{\{(\w+)\}\}/g, (_, varName: string) => {
     const value = inputs[varName];
     if (value == null) {
-      console.warn('[openai] Missing input for prompt variable', varName);
+      logger?.warn?.('openai.prompts.missingInput', { variable: varName });
       return '';
     }
     return String(value);

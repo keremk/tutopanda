@@ -12,3 +12,4 @@ export * from './provider-context.js';
 export * from './revisions.js';
 export * from './runner.js';
 export * from './json-path.js';
+export * from './logger.js';

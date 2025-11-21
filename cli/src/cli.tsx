@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 /* eslint-env node */
-/* eslint-disable no-console */
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import process from 'node:process';
@@ -61,8 +60,8 @@ import {
   getCliBlueprintsRoot,
   resolveBlueprintSpecifier,
 } from './lib/config-assets.js';
+import { createCliLogger, type CliLogger } from './lib/logger.js';
 
-const console = globalThis.console;
 
 type ProviderListOutputEntry = Awaited<ReturnType<typeof runProvidersList>>['entries'][number];
 
@@ -76,7 +75,7 @@ const cli = meow(
       movieId: { type: 'string' },
       prompts: { type: 'boolean', default: true },
       inputs: { type: 'string' },
-      dryrun: { type: 'boolean' },
+      dryRun: { type: 'boolean', aliases: ['dryrun'] },
       nonInteractive: { type: 'boolean' },
       usingBlueprint: { type: 'string' },
       concurrency: { type: 'number' },
@@ -88,6 +87,7 @@ const cli = meow(
       blueprintsDir: { type: 'string' },
       defaultBlueprint: { type: 'string' },
       openViewer: { type: 'boolean' },
+      verbose: { type: 'boolean', default: false },
     },
   },
 );
@@ -103,7 +103,7 @@ async function main(): Promise<void> {
     movieId?: string;
     prompts?: boolean;
     inputs?: string;
-      dryrun?: boolean;
+      dryRun?: boolean;
       nonInteractive?: boolean;
       usingBlueprint?: string;
       concurrency?: number;
@@ -115,7 +115,9 @@ async function main(): Promise<void> {
     blueprintsDir?: string;
     defaultBlueprint?: string;
     openViewer?: boolean;
+    verbose?: boolean;
   };
+  const logger = createCliLogger({ verbose: Boolean(flags.verbose) });
 
   switch (command) {
     case 'install':
@@ -124,53 +126,54 @@ async function main(): Promise<void> {
         rootFolder: flags.rootFolder,
         configPath: flags.configPath,
       });
-      console.log(`Initialized Tutopanda CLI at ${result.rootFolder}`);
-      console.log(`Builds directory: ${result.buildsFolder}`);
+      logger.info(`Initialized Tutopanda CLI at ${result.rootFolder}`);
+      logger.info(`Builds directory: ${result.buildsFolder}`);
       return;
     }
     case 'query': {
       if (remaining.length > 0) {
-        console.error('Error: query accepts at most one positional argument for the inquiry prompt.');
+        logger.error('Error: query accepts at most one positional argument for the inquiry prompt.');
         process.exitCode = 1;
         return;
       }
       if (!flags.inputs) {
-        console.error('Error: --inputs is required for query.');
+        logger.error('Error: --inputs is required for query.');
         process.exitCode = 1;
         return;
       }
       if (!flags.usingBlueprint) {
-        console.error('Error: --usingBlueprint is required for query.');
+        logger.error('Error: --usingBlueprint is required for query.');
         process.exitCode = 1;
         return;
       }
       const result = await runQuery({
         inputsPath: flags.inputs,
         inquiryPrompt: positionalInquiry,
-        dryRun: Boolean(flags.dryrun),
+        dryRun: Boolean(flags.dryRun),
         nonInteractive: Boolean(flags.nonInteractive),
         usingBlueprint: flags.usingBlueprint,
         concurrency: flags.concurrency,
+        logger,
       });
-      console.log(`Movie created with id = ${result.movieId}`);
-      console.log(`Plan saved to ${result.planPath}`);
+      logger.info(`Movie created with id = ${result.movieId}`);
+      logger.info(`Plan saved to ${result.planPath}`);
       if (result.dryRun) {
-        printDryRunSummary(result.dryRun, result.storagePath);
+        printDryRunSummary(logger, result.dryRun, result.storagePath);
       } else if (result.build) {
-        printBuildSummary(result.build, result.manifestPath);
-        console.log(`Manifests and artefacts stored under: ${result.storagePath}`);
+        printBuildSummary(logger, result.build, result.manifestPath);
+        logger.info(`Manifests and artefacts stored under: ${result.storagePath}`);
       }
       return;
     }
     case 'providers:list': {
       if (!flags.usingBlueprint) {
-        console.error('Error: --usingBlueprint is required for providers:list.');
+        logger.error('Error: --usingBlueprint is required for providers:list.');
         process.exitCode = 1;
         return;
       }
       const cliConfig = await readCliConfig();
       if (!cliConfig) {
-        console.error('Tutopanda CLI is not initialized. Run "tutopanda init" first.');
+        logger.error('Tutopanda CLI is not initialized. Run "tutopanda init" first.');
         process.exitCode = 1;
         return;
       }
@@ -182,7 +185,7 @@ async function main(): Promise<void> {
       });
 
       if (result.entries.length === 0) {
-        console.log('No producer definitions found in the blueprint.');
+        logger.info('No producer definitions found in the blueprint.');
         return;
       }
 
@@ -193,12 +196,12 @@ async function main(): Promise<void> {
         byProducer.set(entry.producer, bucket);
       }
 
-      console.log('Provider configurations:');
+      logger.info('Provider configurations:');
       for (const [producer, entries] of byProducer) {
-        console.log(`- ${producer}`);
+        logger.info(`- ${producer}`);
         for (const entry of entries) {
           const statusLabel = entry.status === 'ready' ? 'ready' : `error: ${entry.message ?? 'unavailable'}`;
-          console.log(
+          logger.info(
             `    ${entry.provider}/${entry.model} (${entry.environment}) -> ${statusLabel}`,
           );
         }
@@ -213,30 +216,30 @@ async function main(): Promise<void> {
       const result = await runBlueprintsList(directory);
 
       if (result.blueprints.length === 0) {
-        console.log('No blueprint YAML files found.');
+        logger.info('No blueprint YAML files found.');
         return;
       }
 
-      console.log('Available Blueprints:\n');
+      logger.info('Available Blueprints:\n');
       for (const blueprint of result.blueprints) {
-        console.log(`  ${blueprint.name}`);
+        logger.info(`  ${blueprint.name}`);
         if (blueprint.description) {
-          console.log(`    ${blueprint.description}`);
+          logger.info(`    ${blueprint.description}`);
         }
         if (blueprint.version) {
-          console.log(`    Version: ${blueprint.version}`);
+          logger.info(`    Version: ${blueprint.version}`);
         }
-        console.log(`    Path: ${blueprint.path}`);
-        console.log(`    Inputs: ${blueprint.inputCount}, Outputs: ${blueprint.outputCount}`);
-        console.log('');
+        logger.info(`    Path: ${blueprint.path}`);
+        logger.info(`    Inputs: ${blueprint.inputCount}, Outputs: ${blueprint.outputCount}`);
+        logger.info('');
       }
       return;
     }
     case 'blueprints:describe': {
       const blueprintPath = rest[0];
       if (!blueprintPath) {
-        console.error('Error: blueprint path is required for blueprints:describe.');
-        console.error('Usage: tutopanda blueprints:describe <path-to-blueprint.yaml>');
+        logger.error('Error: blueprint path is required for blueprints:describe.');
+        logger.error('Usage: tutopanda blueprints:describe <path-to-blueprint.yaml>');
         process.exitCode = 1;
         return;
       }
@@ -248,18 +251,18 @@ async function main(): Promise<void> {
         });
         const result = await runBlueprintsDescribe({ blueprintPath: resolvedPath });
 
-        console.log(`Blueprint: ${result.name}`);
+        logger.info(`Blueprint: ${result.name}`);
         if (result.description) {
-          console.log(result.description);
+          logger.info(result.description);
         }
         if (result.version) {
-          console.log(`Version: ${result.version}`);
+          logger.info(`Version: ${result.version}`);
         }
-        console.log(`Path: ${result.path}\n`);
+        logger.info(`Path: ${result.path}\n`);
 
-        console.log('Inputs:');
+        logger.info('Inputs:');
         if (result.inputs.length === 0) {
-          console.log('  (none)');
+          logger.info('  (none)');
         } else {
           for (const input of result.inputs) {
             const details = [
@@ -269,19 +272,19 @@ async function main(): Promise<void> {
             if (input.defaultValue !== undefined) {
               details.push(`default=${JSON.stringify(input.defaultValue)}`);
             }
-            console.log(
+            logger.info(
               `  • ${input.name} (${details.join(', ')})`,
             );
             if (input.description) {
-              console.log(`    ${input.description}`);
+              logger.info(`    ${input.description}`);
             }
-            console.log('');
+            logger.info('');
           }
         }
 
-        console.log('Outputs:');
+        logger.info('Outputs:');
         if (result.outputs.length === 0) {
-          console.log('  (none)');
+          logger.info('  (none)');
         } else {
           for (const output of result.outputs) {
             const details = [
@@ -291,17 +294,17 @@ async function main(): Promise<void> {
             if (output.countInput) {
               details.push(`countInput=${output.countInput}`);
             }
-            console.log(
+            logger.info(
               `  • ${output.name} (${details.join(', ')})`,
             );
             if (output.description) {
-              console.log(`    ${output.description}`);
+              logger.info(`    ${output.description}`);
             }
-            console.log('');
+            logger.info('');
           }
         }
       } catch (error) {
-        console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
+        logger.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
         process.exitCode = 1;
       }
       return;
@@ -309,8 +312,8 @@ async function main(): Promise<void> {
     case 'blueprints:validate': {
       const blueprintPath = rest[0];
       if (!blueprintPath) {
-        console.error('Error: blueprint file path is required for blueprints:validate.');
-        console.error('Usage: tutopanda blueprints:validate <path-to-blueprint.yaml>');
+        logger.error('Error: blueprint file path is required for blueprints:validate.');
+        logger.error('Usage: tutopanda blueprints:validate <path-to-blueprint.yaml>');
         process.exitCode = 1;
         return;
       }
@@ -322,21 +325,21 @@ async function main(): Promise<void> {
       const result = await runBlueprintsValidate({ blueprintPath: resolvedPath });
 
       if (result.valid) {
-        console.log(`✓ Blueprint "${result.name ?? result.path}" is valid`);
-        console.log(`Path: ${result.path}`);
+        logger.info(`✓ Blueprint "${result.name ?? result.path}" is valid`);
+        logger.info(`Path: ${result.path}`);
         if (typeof result.nodeCount === 'number' && typeof result.edgeCount === 'number') {
-          console.log(`Nodes: ${result.nodeCount}, Edges: ${result.edgeCount}`);
+          logger.info(`Nodes: ${result.nodeCount}, Edges: ${result.edgeCount}`);
         }
       } else {
-        console.error(`✗ Blueprint validation failed\n`);
-        console.error(`Error: ${result.error}`);
+        logger.error(`✗ Blueprint validation failed\n`);
+        logger.error(`Error: ${result.error}`);
         process.exitCode = 1;
       }
       return;
     }
     case 'inspect': {
       if (!flags.movieId) {
-        console.error('Error: --movieId is required for inspect.');
+        logger.error('Error: --movieId is required for inspect.');
         process.exitCode = 1;
         return;
       }
@@ -345,9 +348,9 @@ async function main(): Promise<void> {
         prompts: flags.prompts,
       });
       if (result.promptsToml) {
-        console.log(result.promptsToml);
+        logger.info(result.promptsToml);
       } else {
-        console.log('No prompts found for the specified movie.');
+        logger.info('No prompts found for the specified movie.');
       }
       return;
     }
@@ -355,12 +358,12 @@ async function main(): Promise<void> {
       const interactiveEdit = Boolean(flags.interactiveEdit);
       const submitEdits = Boolean(flags.submitEdits);
       if (!flags.movieId) {
-        console.error('Error: --movieId is required for edit.');
+        logger.error('Error: --movieId is required for edit.');
         process.exitCode = 1;
         return;
       }
       if (interactiveEdit && submitEdits) {
-        console.error('Error: --interactive-edit and --submitEdits cannot be combined.');
+        logger.error('Error: --interactive-edit and --submitEdits cannot be combined.');
         process.exitCode = 1;
         return;
       }
@@ -369,54 +372,56 @@ async function main(): Promise<void> {
           movieId: flags.movieId,
           usingBlueprint: flags.usingBlueprint,
         });
-        console.log(`Workspace ready at: ${setup.workspaceDir}`);
-        console.log('Edit inputs/ or artefacts/ then run:');
-        console.log(`  tutopanda edit --movieId ${flags.movieId} --submitEdits`);
+        logger.info(`Workspace ready at: ${setup.workspaceDir}`);
+        logger.info('Edit inputs/ or artefacts/ then run:');
+        logger.info(`  tutopanda edit --movieId ${flags.movieId} --submitEdits`);
         return;
       }
       if (submitEdits) {
       const result = await runWorkspaceSubmit({
         movieId: flags.movieId,
-        dryRun: Boolean(flags.dryrun),
+        dryRun: Boolean(flags.dryRun),
         nonInteractive: Boolean(flags.nonInteractive),
         usingBlueprint: flags.usingBlueprint,
         concurrency: flags.concurrency,
+        logger,
       });
         if (!result.changesApplied) {
           return;
         }
         if (result.edit) {
-          console.log(`Updated movie ${flags.movieId}. New revision: ${result.edit.targetRevision}`);
-          console.log(`Plan saved to ${result.edit.planPath}`);
+          logger.info(`Updated movie ${flags.movieId}. New revision: ${result.edit.targetRevision}`);
+          logger.info(`Plan saved to ${result.edit.planPath}`);
         }
         if (result.edit?.dryRun) {
-          printDryRunSummary(result.edit.dryRun, result.edit.storagePath);
+          printDryRunSummary(logger, result.edit.dryRun, result.edit.storagePath);
         } else if (result.edit?.build) {
-          printBuildSummary(result.edit.build, result.edit.manifestPath);
-          console.log(`Manifests and artefacts stored under: ${result.edit.storagePath}`);
+          printBuildSummary(logger, result.edit.build, result.edit.manifestPath);
+          logger.info(`Manifests and artefacts stored under: ${result.edit.storagePath}`);
         }
         return;
       }
       if (!flags.inputs) {
-        console.error('Error: --inputs is required for edit.');
+        logger.error('Error: --inputs is required for edit.');
         process.exitCode = 1;
         return;
       }
       const result = await runEdit({
         movieId: flags.movieId,
         inputsPath: flags.inputs,
-        dryRun: Boolean(flags.dryrun),
+        dryRun: Boolean(flags.dryRun),
         nonInteractive: Boolean(flags.nonInteractive),
         usingBlueprint: flags.usingBlueprint,
         concurrency: flags.concurrency,
+        logger,
       });
-      console.log(`Updated prompts for movie ${flags.movieId}. New revision: ${result.targetRevision}`);
-      console.log(`Plan saved to ${result.planPath}`);
+      logger.info(`Updated prompts for movie ${flags.movieId}. New revision: ${result.targetRevision}`);
+      logger.info(`Plan saved to ${result.planPath}`);
       if (result.dryRun) {
-        printDryRunSummary(result.dryRun, result.storagePath);
+        printDryRunSummary(logger, result.dryRun, result.storagePath);
       } else if (result.build) {
-        printBuildSummary(result.build, result.manifestPath);
-        console.log(`Manifests and artefacts stored under: ${result.storagePath}`);
+        printBuildSummary(logger, result.build, result.manifestPath);
+        logger.info(`Manifests and artefacts stored under: ${result.storagePath}`);
       }
       return;
     }
@@ -424,6 +429,7 @@ async function main(): Promise<void> {
       await runViewerStart({
         host: flags.viewerHost,
         port: flags.viewerPort,
+        logger,
       });
       return;
     }
@@ -432,11 +438,12 @@ async function main(): Promise<void> {
         movieId: flags.movieId ?? flags.movie,
         host: flags.viewerHost,
         port: flags.viewerPort,
+        logger,
       });
       return;
     }
     case 'viewer:stop': {
-      await runViewerStop();
+      await runViewerStop({ logger });
       return;
     }
     case 'mcp': {
@@ -445,6 +452,7 @@ async function main(): Promise<void> {
         blueprintsDir: flags.blueprintsDir,
         defaultBlueprint: flags.defaultBlueprint,
         openViewer: flags.openViewer,
+        logger,
       });
       return;
     }
@@ -456,22 +464,22 @@ async function main(): Promise<void> {
 
 void main();
 
-function printDryRunSummary(summary: DryRunSummary, storagePath: string): void {
+function printDryRunSummary(logger: CliLogger, summary: DryRunSummary, storagePath: string): void {
   const counts = summary.statusCounts;
   const layersLabel = summary.layers === 1 ? 'layer' : 'layers';
   const jobsLabel = summary.jobCount === 1 ? 'job' : 'jobs';
-  console.log(
+  logger.info(
     `Dry run status: ${summary.status}. ${summary.layers} ${layersLabel}, ${summary.jobCount} ${jobsLabel} (succeeded ${counts.succeeded}, failed ${counts.failed}, skipped ${counts.skipped}).`,
   );
 
   const layerMap = buildLayerMap(summary.jobs);
   if (layerMap.size === 0) {
-    console.log('Layer breakdown: no jobs scheduled.');
-    console.log(`Mock artefacts and logs stored under: ${storagePath}`);
+    logger.info('Layer breakdown: no jobs scheduled.');
+    logger.info(`Mock artefacts and logs stored under: ${storagePath}`);
     return;
   }
 
-  console.log('Layer breakdown:');
+  logger.info('Layer breakdown:');
   const sortedLayers = Array.from(layerMap.entries()).sort((a, b) => a[0] - b[0]);
   for (const [layerIndex, jobs] of sortedLayers) {
     const layerCounts = { succeeded: 0, failed: 0, skipped: 0 };
@@ -486,25 +494,25 @@ function printDryRunSummary(summary: DryRunSummary, storagePath: string): void {
       layerCounts.skipped ? `skipped ${layerCounts.skipped}` : undefined,
     ].filter(Boolean);
     const statusText = statusParts.length > 0 ? ` (${statusParts.join(', ')})` : '';
-    console.log(`  Layer ${layerIndex}: ${jobs.length} job(s)${statusText}`);
+    logger.info(`  Layer ${layerIndex}: ${jobs.length} job(s)${statusText}`);
     const producerParts = Array.from(producerCounts.entries())
       .sort((a, b) => a[0].localeCompare(b[0]))
       .map(([producer, count]) => `${producer} ×${count}`);
     if (producerParts.length > 0) {
-      console.log(`    Producers: ${producerParts.join(', ')}`);
+      logger.info(`    Producers: ${producerParts.join(', ')}`);
     }
   }
 
   const failingJob = summary.jobs.find((job) => job.status === 'failed');
   if (failingJob) {
-    console.log('First failure:');
-    console.log(`  Layer ${failingJob.layerIndex} – ${failingJob.producer} (${failingJob.jobId})`);
+    logger.info('First failure:');
+    logger.info(`  Layer ${failingJob.layerIndex} – ${failingJob.producer} (${failingJob.jobId})`);
     if (failingJob.errorMessage) {
-      console.log(`  Error: ${failingJob.errorMessage}`);
+      logger.info(`  Error: ${failingJob.errorMessage}`);
     }
   }
 
-  console.log(`Mock artefacts and logs stored under: ${storagePath}`);
+  logger.info(`Mock artefacts and logs stored under: ${storagePath}`);
 }
 
 function buildLayerMap(jobs: DryRunJobSummary[]): Map<number, DryRunJobSummary[]> {
@@ -520,12 +528,12 @@ function buildLayerMap(jobs: DryRunJobSummary[]): Map<number, DryRunJobSummary[]
   return map;
 }
 
-function printBuildSummary(summary: BuildSummary, manifestPath?: string): void {
+function printBuildSummary(logger: CliLogger, summary: BuildSummary, manifestPath?: string): void {
   const counts = summary.counts;
-  console.log(
+  logger.info(
     `Build status: ${summary.status}. Jobs: ${summary.jobCount} (succeeded ${counts.succeeded}, failed ${counts.failed}, skipped ${counts.skipped}). Manifest revision: ${summary.manifestRevision}.`,
   );
   if (manifestPath) {
-    console.log(`Manifest saved to ${manifestPath}`);
+    logger.info(`Manifest saved to ${manifestPath}`);
   }
 }

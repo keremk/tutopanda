@@ -1,4 +1,3 @@
-/* eslint-disable no-console */
 import crypto from 'node:crypto';
 import { resolve } from 'node:path';
 import { getDefaultCliConfigPath, readCliConfig } from '../lib/cli-config.js';
@@ -16,8 +15,7 @@ import { confirmPlanExecution } from '../lib/interactive-confirm.js';
 import { cleanupPlanFiles } from '../lib/plan-cleanup.js';
 import { resolveBlueprintSpecifier } from '../lib/config-assets.js';
 import { resolveAndPersistConcurrency } from '../lib/concurrency.js';
-
-const console = globalThis.console;
+import type { Logger } from 'tutopanda-core';
 
 export interface QueryOptions {
   inputsPath?: string;
@@ -26,6 +24,7 @@ export interface QueryOptions {
   nonInteractive?: boolean;
   usingBlueprint: string;
   concurrency?: number;
+  logger?: Logger;
 }
 
 export interface QueryResult {
@@ -40,6 +39,7 @@ export interface QueryResult {
 }
 
 export async function runQuery(options: QueryOptions): Promise<QueryResult> {
+  const logger = options.logger ?? globalThis.console;
   const inputsPath = options.inputsPath ? expandPath(options.inputsPath) : undefined;
   if (!inputsPath) {
     throw new Error('Input YAML path is required. Provide --inputs=/path/to/inputs.yaml');
@@ -75,6 +75,7 @@ export async function runQuery(options: QueryOptions): Promise<QueryResult> {
     inputsPath,
     usingBlueprint: blueprintPath,
     inquiryPromptOverride: options.inquiryPrompt,
+    logger,
   });
 
   const movieDir = resolve(storageRoot, storageBasePath, storageMovieId);
@@ -84,11 +85,12 @@ export async function runQuery(options: QueryOptions): Promise<QueryResult> {
     const confirmed = await confirmPlanExecution(planResult.plan, {
       inputs: planResult.inputEvents,
       concurrency,
+      logger,
     });
     if (!confirmed) {
       await cleanupPlanFiles(movieDir);
-      console.log('\nExecution cancelled.');
-      console.log('Tip: Run with --dryrun to see what would happen without executing.');
+      logger.info('\nExecution cancelled.');
+      logger.info('Tip: Run with --dryrun to see what would happen without executing.');
       return {
         movieId,
         storageMovieId,
@@ -111,6 +113,7 @@ export async function runQuery(options: QueryOptions): Promise<QueryResult> {
         resolvedInputs: planResult.resolvedInputs,
         concurrency,
         storage: { rootDir: storageRoot, basePath: storageBasePath },
+        logger,
       })
     : undefined;
 
@@ -124,7 +127,7 @@ export async function runQuery(options: QueryOptions): Promise<QueryResult> {
         manifestHash: planResult.manifestHash,
         providerOptions: planResult.providerOptions,
         resolvedInputs: planResult.resolvedInputs,
-        logger: console,
+        logger,
         concurrency,
       });
 

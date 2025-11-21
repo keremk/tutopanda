@@ -62,14 +62,19 @@ describe('confirmPlanExecution', () => {
   });
 
   it('displays input summary before prompting for confirmation', async () => {
-    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
-    await confirmPlanExecution(createPlan(), { inputs: createInputs() });
-    const logs = logSpy.mock.calls.map((call) => call[0]);
+    const infoSpy = vi.fn();
+    const logger = {
+      info: infoSpy,
+      warn: vi.fn(),
+      error: vi.fn(),
+      debug: vi.fn(),
+    };
+    await confirmPlanExecution(createPlan(), { inputs: createInputs(), logger });
+    const logs = infoSpy.mock.calls.map((call) => call[0]);
     expect(logs.find((line) => typeof line === 'string' && line.includes('Input Summary'))).toBeDefined();
     expect(
       logs.find((line) => typeof line === 'string' && line.includes('InquiryPrompt: Tell me a story')),
     ).toBeDefined();
     expect(logs.find((line) => typeof line === 'string' && line.includes('NumOfSegments: 3'))).toBeDefined();
-    logSpy.mockRestore();
   });
 });

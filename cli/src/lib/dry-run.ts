@@ -1,4 +1,3 @@
-/* eslint-disable no-console */
 import {
   createEventLog,
   createManifestService,
@@ -9,14 +8,13 @@ import {
   type Manifest,
   type RunResult,
   type ProviderName,
+  type Logger,
 } from 'tutopanda-core';
 import { createProviderRegistry, SchemaRegistry } from 'tutopanda-providers';
 import { createProviderProduce, prepareProviderHandlers } from './build.js';
 import { executePlanWithConcurrency } from './plan-runner.js';
 import type { ProducerOptionsMap } from './producer-options.js';
 import { normalizeConcurrency } from './cli-config.js';
-
-const console = globalThis.console;
 
 export interface DryRunStatusCounts {
   succeeded: number;
@@ -51,9 +49,11 @@ interface ExecuteDryRunArgs {
     rootDir: string;
     basePath: string;
   };
+  logger?: Logger;
 }
 
 export async function executeDryRun(args: ExecuteDryRunArgs): Promise<DryRunSummary> {
+  const logger = args.logger ?? globalThis.console;
   const concurrency = normalizeConcurrency(args.concurrency);
   const storage = args.storage
     ? createStorageContext({ kind: 'local', rootDir: args.storage.rootDir, basePath: args.storage.basePath })
@@ -67,6 +67,7 @@ export async function executeDryRun(args: ExecuteDryRunArgs): Promise<DryRunSumm
 
   // Populate SchemaRegistry from provider options (blueprints)
   const schemaRegistry = new SchemaRegistry();
+  /* eslint-disable no-unused-vars */
   for (const [_, options] of args.providerOptions) {
     for (const option of options) {
       if (option.config) {
@@ -82,7 +83,7 @@ export async function executeDryRun(args: ExecuteDryRunArgs): Promise<DryRunSumm
     }
   }
 
-  const registry = createProviderRegistry({ mode: 'simulated', schemaRegistry });
+  const registry = createProviderRegistry({ mode: 'simulated', schemaRegistry, logger });
   const preResolved = prepareProviderHandlers(registry, args.plan, args.providerOptions);
   await registry.warmStart?.(preResolved);
   const produce = createProviderProduce(
@@ -90,7 +91,7 @@ export async function executeDryRun(args: ExecuteDryRunArgs): Promise<DryRunSumm
     args.providerOptions,
     args.resolvedInputs,
     preResolved,
-    console,
+    logger,
   );
 
   const runResult = await executePlanWithConcurrency(
@@ -102,6 +103,7 @@ export async function executeDryRun(args: ExecuteDryRunArgs): Promise<DryRunSumm
       eventLog,
       manifestService,
       produce,
+      logger,
     },
     { concurrency },
   );

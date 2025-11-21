@@ -3,7 +3,7 @@ import type {
   CanonicalNodeInstance,
 } from './canonical-expander.js';
 import type { EventLog } from './event-log.js';
-import { hashArtefactOutput, hashPayload } from './hashing.js';
+import { hashPayload } from './hashing.js';
 import {
   type Clock,
   type ExecutionPlan,
@@ -19,6 +19,7 @@ import {
   type RevisionId,
   type FanInDescriptor,
 } from './types.js';
+import type { Logger } from './logger.js';
 
 interface PlannerOptions {
   logger?: PlannerLogger;
@@ -26,12 +27,7 @@ interface PlannerOptions {
 }
 
 /* eslint-disable no-unused-vars */
-export interface PlannerLogger {
-  info?(message: string, meta?: Record<string, unknown>): void;
-  warn?(message: string, meta?: Record<string, unknown>): void;
-  error?(message: string, meta?: Record<string, unknown>): void;
-  debug?(message: string, meta?: Record<string, unknown>): void;
-}
+export interface PlannerLogger extends Partial<Logger> {}
 
 interface ComputePlanArgs {
   movieId: string;

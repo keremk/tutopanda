@@ -1,4 +1,3 @@
-/* eslint-disable no-console */
 import { Buffer } from 'node:buffer';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
@@ -30,8 +29,7 @@ import { readMovieMetadata } from '../lib/movie-metadata.js';
 import { resolveBlueprintSpecifier } from '../lib/config-assets.js';
 import { WORKSPACE_INPUTS_RELATIVE_PATH } from '../lib/input-files.js';
 import { resolveAndPersistConcurrency } from '../lib/concurrency.js';
-
-const console = globalThis.console;
+import type { Logger } from 'tutopanda-core';
 
 export interface EditOptions {
   movieId: string;
@@ -41,6 +39,7 @@ export interface EditOptions {
   usingBlueprint?: string;
   pendingArtefacts?: PendingArtefactDraft[];
   concurrency?: number;
+  logger?: Logger;
 }
 
 export interface EditResult {
@@ -54,6 +53,7 @@ export interface EditResult {
 }
 
 export async function runEdit(options: EditOptions): Promise<EditResult> {
+  const logger = options.logger ?? globalThis.console;
   const configPath = getDefaultCliConfigPath();
   const cliConfig = await readCliConfig(configPath);
   if (!cliConfig) {
@@ -95,6 +95,7 @@ export async function runEdit(options: EditOptions): Promise<EditResult> {
     inputsPath,
     usingBlueprint: blueprintPath,
     pendingArtefacts: options.pendingArtefacts,
+    logger,
   });
 
   const hasJobs = planResult.plan.layers.some((layer) => layer.length > 0);
@@ -104,11 +105,12 @@ export async function runEdit(options: EditOptions): Promise<EditResult> {
     const confirmed = await confirmPlanExecution(planResult.plan, {
       inputs: planResult.inputEvents,
       concurrency,
+      logger,
     });
     if (!confirmed) {
       await cleanupPlanFiles(movieDir);
-      console.log('\nExecution cancelled.');
-      console.log('Tip: Run with --dryrun to see what would happen without executing.');
+      logger.info('\nExecution cancelled.');
+      logger.info('Tip: Run with --dryrun to see what would happen without executing.');
       return {
         storageMovieId,
         planPath: planResult.planPath,
@@ -130,6 +132,7 @@ export async function runEdit(options: EditOptions): Promise<EditResult> {
         resolvedInputs: planResult.resolvedInputs,
         concurrency,
         storage: { rootDir: storageRoot, basePath },
+        logger,
       })
     : undefined;
   const buildResult = options.dryRun
@@ -142,7 +145,7 @@ export async function runEdit(options: EditOptions): Promise<EditResult> {
         manifestHash: planResult.manifestHash,
         providerOptions: planResult.providerOptions,
         resolvedInputs: planResult.resolvedInputs,
-        logger: console,
+        logger,
         concurrency,
       });
 
@@ -194,6 +197,7 @@ export interface WorkspaceSubmitOptions {
   nonInteractive?: boolean;
   usingBlueprint?: string;
   concurrency?: number;
+  logger?: Logger;
 }
 
 export interface WorkspaceSubmitResult {
@@ -204,6 +208,7 @@ export interface WorkspaceSubmitResult {
 }
 
 export async function runWorkspaceSubmit(options: WorkspaceSubmitOptions): Promise<WorkspaceSubmitResult> {
+  const logger = options.logger ?? globalThis.console;
   const cliConfig = await readCliConfig();
   if (!cliConfig) {
     throw new Error('Tutopanda CLI is not initialized. Run "tutopanda init" first.');
@@ -222,11 +227,11 @@ export async function runWorkspaceSubmit(options: WorkspaceSubmitOptions): Promi
 
   const diff = await diffWorkspace(state, workspaceDir);
   if (!diff.inputsChanged && diff.artefacts.length === 0) {
-    console.log('No edits detected in workspace. Nothing to submit.');
+    logger.info('No edits detected in workspace. Nothing to submit.');
     return { workspaceDir, state, changesApplied: false };
   }
 
-  printWorkspaceSummary(diff, workspaceDir);
+  printWorkspaceSummary(diff, workspaceDir, logger);
 
   const inputsPath = resolve(workspaceDir, state.inputs.file);
   const pendingArtefacts = await buildPendingArtefactDrafts({
@@ -252,6 +257,7 @@ export async function runWorkspaceSubmit(options: WorkspaceSubmitOptions): Promi
     usingBlueprint: blueprintPath,
     pendingArtefacts,
     concurrency: options.concurrency,
+    logger,
   });
 
   if (!options.dryRun) {
@@ -270,13 +276,13 @@ export async function runWorkspaceSubmit(options: WorkspaceSubmitOptions): Promi
   };
 }
 
-function printWorkspaceSummary(diff: WorkspaceDiffResult, workspaceDir: string): void {
-  console.log('Detected workspace edits:');
+function printWorkspaceSummary(diff: WorkspaceDiffResult, workspaceDir: string, logger: Logger): void {
+  logger.info('Detected workspace edits:');
   if (diff.inputsChanged) {
-    console.log(`- Inputs updated (${workspaceDir}/${WORKSPACE_INPUTS_RELATIVE_PATH})`);
+    logger.info(`- Inputs updated (${workspaceDir}/${WORKSPACE_INPUTS_RELATIVE_PATH})`);
   }
   for (const change of diff.artefacts) {
-    console.log(`- Artefact ${change.entry.id} (${resolve(workspaceDir, change.entry.file)})`);
+    logger.info(`- Artefact ${change.entry.id} (${resolve(workspaceDir, change.entry.file)})`);
   }
 }
 

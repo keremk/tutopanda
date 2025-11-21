@@ -3,6 +3,7 @@ import type {
   ProducedArtefact,
   ProviderName,
   RevisionId,
+  Logger,
 } from 'tutopanda-core';
 import type { SchemaRegistry } from './schema-registry.js';
 
@@ -57,12 +58,7 @@ export interface ProviderResult {
   diagnostics?: Record<string, unknown>;
 }
 
-export interface ProviderLogger {
-  info?(message: string, meta?: Record<string, unknown>): void;
-  warn?(message: string, meta?: Record<string, unknown>): void;
-  error?(message: string, meta?: Record<string, unknown>): void;
-  debug?(message: string, meta?: Record<string, unknown>): void;
-}
+export interface ProviderLogger extends Partial<Logger> {}
 
 export interface WarmStartContext {
   logger?: ProviderLogger;

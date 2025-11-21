@@ -46,7 +46,7 @@ The CLI never talks to provider SDKs directly. All interactions flow through the
    - It deduplicates those triples and calls `registry.resolveMany` once up front; this populates the handler cache and allows warm start to surface missing secrets before execution begins.
 
 4. **Runner Execution**
-  - CLI composes a `ProduceFn` via `createProviderProduce(registry, providerOptions, resolvedInputs, resolutionCache, observabilityHooks)` and injects it into `createRunner`.
+  - CLI composes a `ProduceFn` via `createProviderProduce(registry, providerOptions, resolvedInputs, resolutionCache, logger)` and injects it into `createRunner`.
    - During execution, the runner invokes the produce function per job; artefact persistence and manifest updates happen inside core.
 
 5. **Wrap-up**

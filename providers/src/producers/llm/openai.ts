@@ -20,7 +20,6 @@ export function createOpenAiLlmHandler(): HandlerFactory {
     const { descriptor, secretResolver, logger, schemaRegistry } = init;
     const clientManager = createOpenAiClientManager(secretResolver, logger, init.mode, schemaRegistry);
     const isSimulated = init.mode === 'simulated';
-    const consoleLogger = globalThis.console;
 
     const factory = createProducerHandlerFactory({
       domain: 'prompt',
@@ -59,11 +58,10 @@ export function createOpenAiLlmHandler(): HandlerFactory {
           ...schemaInfo,
         };
         logger?.debug?.('providers.openai.config', configLogPayload);
-        consoleLogger.log('[providers.openai.config]', configLogPayload);
 
         // 2. Render prompts with variable substitution
         const promptInputs = buildPromptVariablePayload(config.variables, runtime, request);
-        const prompts = renderPrompts(config, promptInputs);
+        const prompts = renderPrompts(config, promptInputs, logger);
         const prompt = buildPrompt(prompts);
         const promptPayload = {
           systemPrompt: prompts.system,
@@ -76,7 +74,6 @@ export function createOpenAiLlmHandler(): HandlerFactory {
           ...promptPayload,
         };
         logger?.debug?.('providers.openai.prompts', promptLogPayload);
-        consoleLogger.log('[providers.openai.prompts]', promptLogPayload);
 
         // 3. Call OpenAI via AI SDK or simulate the response
         let generation: GenerationResult;

@@ -56,7 +56,7 @@ export function createReplicateTextToImageHandler(): HandlerFactory {
           });
         }
 
-        console.debug('[providers.replicate.image.prompt]', {
+        logger?.debug?.('providers.replicate.image.prompt', {
           producer: request.jobId,
           prompt: promptValue,
           availableInputs: Object.keys(runtime.inputs.all()),

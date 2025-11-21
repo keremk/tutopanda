@@ -95,7 +95,7 @@
   8. Provider Invocation (cli/src/lib/build.ts → providers/)
 
   Functions:
-  - createProviderProduce() - Wraps provider calls
+  - createProviderProduce() - Wraps provider calls and pipes logging
   - buildProviderContext() - Packages configuration + resolvedInputs
   - Provider invoke() - Processes request
   - buildArtefactsFromResponse() - Maps JSON to artifacts

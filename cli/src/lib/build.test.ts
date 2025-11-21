@@ -49,7 +49,7 @@ describe('createProviderProduce', () => {
       warmStart: vi.fn(),
     };
 
-    const produce = createProviderProduce(registry, providerOptions, resolvedInputs);
+    const produce = createProviderProduce(registry, providerOptions, resolvedInputs, [], globalThis.console);
     const job: JobDescriptor = {
       jobId: 'Producer:ImagePromptGenerator.ImagePromptProducer[segment=0]',
       producer: 'ImagePromptProducer',
