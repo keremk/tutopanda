@@ -45,7 +45,7 @@ function silenceStdout(): () => void {
 import { runInit } from './commands/init.js';
 import { runQuery } from './commands/query.js';
 import { runInspect } from './commands/inspect.js';
-import { runEdit, runInteractiveEditSetup, runWorkspaceSubmit } from './commands/edit.js';
+import { runEditRun, runEditClean } from './commands/edit-run.js';
 import { runProvidersList } from './commands/providers-list.js';
 import { runBlueprintsList } from './commands/blueprints-list.js';
 import { runBlueprintsDescribe } from './commands/blueprints-describe.js';
@@ -61,6 +61,7 @@ import {
   resolveBlueprintSpecifier,
 } from './lib/config-assets.js';
 import { createCliLogger, type CliLogger } from './lib/logger.js';
+import { buildFriendlyView, loadCurrentManifest } from './lib/friendly-view.js';
 
 
 type ProviderListOutputEntry = Awaited<ReturnType<typeof runProvidersList>>['entries'][number];
@@ -79,8 +80,6 @@ const cli = meow(
       nonInteractive: { type: 'boolean' },
       usingBlueprint: { type: 'string' },
       concurrency: { type: 'number' },
-      interactiveEdit: { type: 'boolean' },
-      submitEdits: { type: 'boolean' },
       movie: { type: 'string' },
       viewerHost: { type: 'string' },
       viewerPort: { type: 'number' },
@@ -89,6 +88,7 @@ const cli = meow(
       openViewer: { type: 'boolean' },
       verbose: { type: 'boolean', default: false },
       upToLayer: { type: 'number' },
+      all: { type: 'boolean' },
     },
   },
 );
@@ -108,16 +108,15 @@ async function main(): Promise<void> {
       nonInteractive?: boolean;
       usingBlueprint?: string;
       concurrency?: number;
-      interactiveEdit?: boolean;
-      submitEdits?: boolean;
       movie?: string;
       viewerHost?: string;
       viewerPort?: number;
     blueprintsDir?: string;
-    defaultBlueprint?: string;
-    openViewer?: boolean;
-    verbose?: boolean;
-    upToLayer?: number;
+      defaultBlueprint?: string;
+      openViewer?: boolean;
+      verbose?: boolean;
+      upToLayer?: number;
+      all?: boolean;
   };
   const logger = createCliLogger({ verbose: Boolean(flags.verbose) });
 
@@ -165,6 +164,12 @@ async function main(): Promise<void> {
       } else if (result.build) {
         printBuildSummary(logger, result.build, result.manifestPath);
         logger.info(`Manifests and artefacts stored under: ${result.storagePath}`);
+        const cliConfig = await readCliConfig();
+        if (cliConfig) {
+          const { manifest } = await loadCurrentManifest(cliConfig, result.storageMovieId);
+          const friendly = await buildFriendlyView({ cliConfig, movieId: result.storageMovieId, manifest });
+          logger.info(`Friendly view: ${friendly.friendlyRoot}`);
+        }
       }
       return;
     }
@@ -357,61 +362,15 @@ async function main(): Promise<void> {
       }
       return;
     }
-    case 'edit': {
-      const interactiveEdit = Boolean(flags.interactiveEdit);
-      const submitEdits = Boolean(flags.submitEdits);
-      if (!flags.movieId) {
-        logger.error('Error: --movieId is required for edit.');
+    case 'edit:run': {
+      const movieId = rest[0] ?? flags.movieId;
+      if (!movieId) {
+        logger.error('Error: movieId is required for edit:run (pass as first argument).');
         process.exitCode = 1;
         return;
       }
-      if (interactiveEdit && submitEdits) {
-        logger.error('Error: --interactive-edit and --submitEdits cannot be combined.');
-        process.exitCode = 1;
-        return;
-      }
-      if (interactiveEdit) {
-        const setup = await runInteractiveEditSetup({
-          movieId: flags.movieId,
-          usingBlueprint: flags.usingBlueprint,
-        });
-        logger.info(`Workspace ready at: ${setup.workspaceDir}`);
-        logger.info('Edit inputs/ or artefacts/ then run:');
-        logger.info(`  tutopanda edit --movieId ${flags.movieId} --submitEdits`);
-        return;
-      }
-      if (submitEdits) {
-      const result = await runWorkspaceSubmit({
-        movieId: flags.movieId,
-        dryRun: Boolean(flags.dryRun),
-        nonInteractive: Boolean(flags.nonInteractive),
-        usingBlueprint: flags.usingBlueprint,
-        concurrency: flags.concurrency,
-        upToLayer: flags.upToLayer,
-        logger,
-      });
-        if (!result.changesApplied) {
-          return;
-        }
-        if (result.edit) {
-          logger.info(`Updated movie ${flags.movieId}. New revision: ${result.edit.targetRevision}`);
-          logger.info(`Plan saved to ${result.edit.planPath}`);
-        }
-        if (result.edit?.dryRun) {
-          printDryRunSummary(logger, result.edit.dryRun, result.edit.storagePath);
-        } else if (result.edit?.build) {
-          printBuildSummary(logger, result.edit.build, result.edit.manifestPath);
-          logger.info(`Manifests and artefacts stored under: ${result.edit.storagePath}`);
-        }
-        return;
-      }
-      if (!flags.inputs) {
-        logger.error('Error: --inputs is required for edit.');
-        process.exitCode = 1;
-        return;
-      }
-      const result = await runEdit({
-        movieId: flags.movieId,
+      const result = await runEditRun({
+        movieId,
         inputsPath: flags.inputs,
         dryRun: Boolean(flags.dryRun),
         nonInteractive: Boolean(flags.nonInteractive),
@@ -420,14 +379,25 @@ async function main(): Promise<void> {
         upToLayer: flags.upToLayer,
         logger,
       });
-      logger.info(`Updated prompts for movie ${flags.movieId}. New revision: ${result.targetRevision}`);
+      logger.info(`Updated prompts for movie ${movieId}. New revision: ${result.targetRevision}`);
       logger.info(`Plan saved to ${result.planPath}`);
       if (result.dryRun) {
         printDryRunSummary(logger, result.dryRun, result.storagePath);
       } else if (result.build) {
         printBuildSummary(logger, result.build, result.manifestPath);
         logger.info(`Manifests and artefacts stored under: ${result.storagePath}`);
+        logger.info(`Friendly view: ${result.friendlyRoot}`);
       }
+      return;
+    }
+    case 'edit:clean': {
+      const movieId = rest[0] ?? flags.movieId;
+      if (!movieId) {
+        logger.error('Error: movieId is required for edit:clean (pass as first argument).');
+        process.exitCode = 1;
+        return;
+      }
+      await runEditClean({ movieId, logger });
       return;
     }
     case 'viewer:start': {

@@ -1,5 +1,4 @@
 inputs:
-  InquiryPrompt: "Tell me about Battle of Waterloo"
   Duration: 30
   NumOfSegments: 2
   NumOfImagesPerNarrative: 2

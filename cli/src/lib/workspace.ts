@@ -371,7 +371,7 @@ function inferExtension(mimeType?: string): string | null {
   return null;
 }
 
-function formatBlobFileName(hash: string, mimeType?: string): string {
+export function formatBlobFileName(hash: string, mimeType?: string): string {
   const extension = inferExtension(mimeType);
   if (!extension) {
     return hash;
