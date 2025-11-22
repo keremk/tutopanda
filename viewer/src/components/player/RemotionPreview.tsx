@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef } from "react";
 import { Player, type PlayerRef, type CallbackListener } from "@remotion/player";
-import type { TimelineDocument } from "@/types/timeline";
-import { VideoComposition } from "@/remotion/VideoComposition";
+import type { TimelineDocument, AssetMap } from "tutopanda-compositions/browser";
+import { DocumentaryComposition } from "tutopanda-compositions/browser";
 import { buildAssetUrl } from "@/data/client";
 
 interface RemotionPreviewProps {
@@ -76,6 +76,14 @@ export const RemotionPreview = ({
     }
     return Array.from(ids);
   }, [timeline.tracks]);
+
+  const assetMap = useMemo<AssetMap>(() => {
+    const map: AssetMap = {};
+    for (const assetId of assetIds) {
+      map[assetId] = buildAssetUrl(movieId, assetId);
+    }
+    return map;
+  }, [assetIds, movieId]);
 
   // Prefetch media aggressively to reduce clip boundary stalls
   useEffect(() => {
@@ -175,8 +183,8 @@ export const RemotionPreview = ({
       <Player
         key={timeline.id}
         ref={playerRef}
-        component={VideoComposition as never}
-        inputProps={{ timeline, movieId }}
+        component={DocumentaryComposition as never}
+        inputProps={{ timeline, assets: assetMap, width, height, fps: FPS }}
         durationInFrames={durationInFrames}
         fps={FPS}
         compositionWidth={width}

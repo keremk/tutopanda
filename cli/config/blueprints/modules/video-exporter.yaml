@@ -1,0 +1,35 @@
+meta:
+  name: Video Exporter
+  description: Render the composed timeline into a final MP4.
+  id: VideoExporter
+  version: 0.1.0
+  author: Tutopanda
+  license: MIT
+
+inputs:
+  - name: Timeline
+    description: OrderedTimeline JSON manifest to render.
+    type: json
+    required: true
+
+artifacts:
+  - name: FinalVideo
+    description: Final rendered MP4 video.
+    type: video
+
+connections:
+  - from: Timeline
+    to: Mp4Exporter
+  - from: Mp4Exporter
+    to: FinalVideo
+
+producers:
+  - name: Mp4Exporter
+    provider: tutopanda
+    model: Mp4Exporter
+    config:
+      rootFolder: ~/tutopanda
+    outputs:
+      FinalVideo:
+        type: video
+        mimeType: video/mp4

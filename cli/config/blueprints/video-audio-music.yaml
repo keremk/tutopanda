@@ -78,6 +78,9 @@ artifacts:
   - name: Timeline
     description: OrderedTimeline JSON manifest for Remotion playback.
     type: json
+  - name: FinalVideo
+    description: Final rendered MP4 export.
+    type: video
 
 loops:
   - name: segment
@@ -102,6 +105,8 @@ modules:
     path: ./modules/music-generator.yaml
   - name: TimelineComposer
     path: ./modules/timeline-composer-video-audio-music.yaml
+  - name: VideoExporter
+    path: ./modules/video-exporter.yaml
 
 connections:
   - from: InquiryPrompt
@@ -176,6 +181,11 @@ connections:
     to: TimelineComposer.Music
   - from: TimelineComposer.Timeline
     to: Timeline
+    
+  - from: TimelineComposer.Timeline
+    to: VideoExporter.Timeline
+  - from: VideoExporter.FinalVideo
+    to: FinalVideo
 
 
 collectors:

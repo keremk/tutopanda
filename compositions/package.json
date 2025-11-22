@@ -1,0 +1,36 @@
+{
+  "name": "tutopanda-compositions",
+  "version": "1.0.0",
+  "description": "Shared Remotion compositions and renderers for Tutopanda",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./browser": {
+      "types": "./dist/browser.d.ts",
+      "default": "./dist/browser.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "type-check": "tsc --noEmit",
+    "dev": "tsc --watch"
+  },
+  "dependencies": {
+    "@remotion/bundler": "4.0.375",
+    "@remotion/renderer": "4.0.375",
+    "react": "19.2.0",
+    "react-dom": "19.2.0",
+    "remotion": "4.0.375"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.2",
+    "@types/react-dom": "^19.2.2",
+    "typescript": "~5.9.3"
+  }
+}

@@ -75,10 +75,16 @@ export async function executeBuild(options: ExecuteBuildOptions): Promise<Execut
   const registry = createProviderRegistry({ mode: 'live', logger });
   const preResolved = prepareProviderHandlers(registry, options.plan, options.providerOptions);
   await registry.warmStart?.(preResolved);
+  const resolvedInputsWithSystem = {
+    ...options.resolvedInputs,
+    ...(options.resolvedInputs.MovieId === undefined ? { MovieId: options.movieId } : {}),
+    ...(options.resolvedInputs.StorageRoot === undefined ? { StorageRoot: options.cliConfig.storage.root } : {}),
+    ...(options.resolvedInputs.StorageBasePath === undefined ? { StorageBasePath: options.cliConfig.storage.basePath } : {}),
+  };
   const produce = createProviderProduce(
     registry,
     options.providerOptions,
-    options.resolvedInputs,
+    resolvedInputsWithSystem,
     preResolved,
     logger,
   );

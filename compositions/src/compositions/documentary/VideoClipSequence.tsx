@@ -1,10 +1,9 @@
 import { AbsoluteFill, OffthreadVideo, Sequence, useCurrentFrame } from "remotion";
-import type { VideoClip } from "@/types/timeline";
-import { buildAssetUrl } from "@/data/client";
+import type { AssetMap, VideoClip } from "../../types/timeline.js";
 
 interface VideoClipSequenceProps {
   clip: VideoClip;
-  movieId: string;
+  assets: AssetMap;
   fps: number;
   from: number;
   durationInFrames: number;
@@ -15,7 +14,7 @@ const clamp = (value: number, min: number, max: number) => Math.min(Math.max(val
 
 export const VideoClipSequence = ({
   clip,
-  movieId,
+  assets,
   fps,
   from,
   durationInFrames,
@@ -26,7 +25,12 @@ export const VideoClipSequence = ({
     return null;
   }
 
-  const sourceUrl = `${buildAssetUrl(movieId, assetId)}#disable`;
+  const assetSrc = assets[assetId];
+  if (!assetSrc) {
+    return null;
+  }
+
+  const sourceUrl = `${assetSrc}#disable`;
   const fitStrategy = clip.properties.fitStrategy ?? "stretch";
   const volume = typeof clip.properties.volume === "number" ? clip.properties.volume : 0;
   const originalDuration = clip.properties.originalDuration ?? clip.duration;

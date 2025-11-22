@@ -3,5 +3,6 @@ packages:
   - 'server'
   - 'core'
   - 'cli'
+  - 'compositions'
   - 'providers'
   - 'viewer'

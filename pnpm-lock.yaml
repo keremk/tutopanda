@@ -396,6 +396,34 @@ importers:
         specifier: ^3.2.4
         version: 3.2.4(@types/debug@4.1.12)(@types/node@20.16.11)(@vitest/ui@3.2.4)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.0)(tsx@4.20.5)(yaml@2.8.1)
 
+  compositions:
+    dependencies:
+      '@remotion/bundler':
+        specifier: 4.0.375
+        version: 4.0.375(bufferutil@4.0.9)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
+      '@remotion/renderer':
+        specifier: 4.0.375
+        version: 4.0.375(bufferutil@4.0.9)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
+      react:
+        specifier: 19.2.0
+        version: 19.2.0
+      react-dom:
+        specifier: 19.2.0
+        version: 19.2.0(react@19.2.0)
+      remotion:
+        specifier: 4.0.375
+        version: 4.0.375(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
+    devDependencies:
+      '@types/react':
+        specifier: ^19.2.2
+        version: 19.2.5
+      '@types/react-dom':
+        specifier: ^19.2.2
+        version: 19.2.3(@types/react@19.2.5)
+      typescript:
+        specifier: ~5.9.3
+        version: 5.9.3
+
   core:
     dependencies:
       '@flystorage/file-storage':
@@ -459,6 +487,9 @@ importers:
       replicate:
         specifier: ^1.2.0
         version: 1.2.0
+      tutopanda-compositions:
+        specifier: workspace:*
+        version: link:../compositions
       tutopanda-core:
         specifier: workspace:*
         version: link:../core
@@ -569,6 +600,9 @@ importers:
       tailwindcss:
         specifier: ^4.1.13
         version: 4.1.13
+      tutopanda-compositions:
+        specifier: workspace:*
+        version: link:../compositions
     devDependencies:
       '@eslint/js':
         specifier: ^9.39.1
@@ -11152,14 +11186,14 @@ snapshots:
       '@remotion/media-parser': 4.0.375
       '@remotion/studio': 4.0.375(bufferutil@4.0.9)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
       '@remotion/studio-shared': 4.0.375(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
-      css-loader: 5.2.7(webpack@5.96.1(esbuild@0.25.0))
+      css-loader: 5.2.7(webpack@5.96.1)
       esbuild: 0.25.0
       react: 19.2.0
       react-dom: 19.2.0(react@19.2.0)
       react-refresh: 0.9.0
       remotion: 4.0.375(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
       source-map: 0.7.3
-      style-loader: 4.0.0(webpack@5.96.1(esbuild@0.25.0))
+      style-loader: 4.0.0(webpack@5.96.1)
       webpack: 5.96.1(esbuild@0.25.0)
     transitivePeerDependencies:
       - '@swc/core'
@@ -13110,8 +13144,22 @@ snapshots:
       postcss-modules-values: 4.0.0(postcss@8.5.6)
       postcss-value-parser: 4.2.0
       schema-utils: 3.3.0
-      semver: 7.7.2
+      semver: 7.7.3
       webpack: 5.96.1(esbuild@0.25.0)
+
+  css-loader@5.2.7(webpack@5.96.1):
+    dependencies:
+      icss-utils: 5.1.0(postcss@8.5.6)
+      loader-utils: 2.0.4
+      postcss: 8.5.6
+      postcss-modules-extract-imports: 3.1.0(postcss@8.5.6)
+      postcss-modules-local-by-default: 4.2.0(postcss@8.5.6)
+      postcss-modules-scope: 3.2.1(postcss@8.5.6)
+      postcss-modules-values: 4.0.0(postcss@8.5.6)
+      postcss-value-parser: 4.2.0
+      schema-utils: 3.3.0
+      semver: 7.7.3
+      webpack: 5.96.1
 
   cssesc@3.0.0: {}
 
@@ -16392,6 +16440,10 @@ snapshots:
     dependencies:
       webpack: 5.96.1(esbuild@0.25.0)
 
+  style-loader@4.0.0(webpack@5.96.1):
+    dependencies:
+      webpack: 5.96.1
+
   styled-jsx@5.1.6(react@19.1.1):
     dependencies:
       client-only: 0.0.1
@@ -16459,6 +16511,15 @@ snapshots:
       webpack: 5.96.1(esbuild@0.25.0)
     optionalDependencies:
       esbuild: 0.25.0
+
+  terser-webpack-plugin@5.3.14(webpack@5.96.1):
+    dependencies:
+      '@jridgewell/trace-mapping': 0.3.31
+      jest-worker: 27.5.1
+      schema-utils: 4.3.2
+      serialize-javascript: 6.0.2
+      terser: 5.44.0
+      webpack: 5.96.1
 
   terser@5.44.0:
     dependencies:
@@ -16945,6 +17006,36 @@ snapshots:
   webpack-sources@3.3.3: {}
 
   webpack-virtual-modules@0.6.2: {}
+
+  webpack@5.96.1:
+    dependencies:
+      '@types/eslint-scope': 3.7.7
+      '@types/estree': 1.0.8
+      '@webassemblyjs/ast': 1.14.1
+      '@webassemblyjs/wasm-edit': 1.14.1
+      '@webassemblyjs/wasm-parser': 1.14.1
+      acorn: 8.15.0
+      browserslist: 4.26.0
+      chrome-trace-event: 1.0.4
+      enhanced-resolve: 5.18.3
+      es-module-lexer: 1.7.0
+      eslint-scope: 5.1.1
+      events: 3.3.0
+      glob-to-regexp: 0.4.1
+      graceful-fs: 4.2.11
+      json-parse-even-better-errors: 2.3.1
+      loader-runner: 4.3.0
+      mime-types: 2.1.35
+      neo-async: 2.6.2
+      schema-utils: 3.3.0
+      tapable: 2.2.3
+      terser-webpack-plugin: 5.3.14(webpack@5.96.1)
+      watchpack: 2.4.4
+      webpack-sources: 3.3.3
+    transitivePeerDependencies:
+      - '@swc/core'
+      - esbuild
+      - uglify-js
 
   webpack@5.96.1(esbuild@0.25.0):
     dependencies:

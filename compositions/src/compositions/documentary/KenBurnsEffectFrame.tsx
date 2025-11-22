@@ -1,5 +1,5 @@
 import { AbsoluteFill, Img, interpolate, useCurrentFrame, useVideoConfig } from "remotion";
-import type { KenBurnsEffect } from "@/types/timeline";
+import type { KenBurnsEffect } from "../../types/timeline.js";
 
 interface KenBurnsEffectFrameProps {
   effect: KenBurnsEffect;

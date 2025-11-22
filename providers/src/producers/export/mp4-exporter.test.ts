@@ -1,0 +1,152 @@
+import { mkdtemp, mkdir, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { describe, expect, it, vi } from 'vitest';
+import { createMp4ExporterHandler, __test__ } from './mp4-exporter.js';
+import type { ProviderJobContext } from '../../types.js';
+
+vi.mock('tutopanda-compositions', () => {
+  return {
+    renderDocumentaryMp4: vi.fn(async (options: { outputFile: string }) => {
+      await writeFile(options.outputFile, Buffer.from('mock-mp4'));
+      return options.outputFile;
+    }),
+  };
+});
+
+describe('mp4-exporter', () => {
+  it('validates required config', () => {
+    expect(() => __test__.parseExporterConfig({})).not.toThrow();
+  });
+
+  it('resolves movieId from resolved inputs', () => {
+    const accessor = createInputAccessor({ 'Input:MovieId': 'movie-xyz', MovieId: 'movie-abc' });
+    expect(__test__.resolveMovieId(accessor)).toBe('movie-xyz');
+    const accessor2 = createInputAccessor({ MovieId: 'movie-abc' });
+    expect(__test__.resolveMovieId(accessor2)).toBe('movie-abc');
+    expect(() => __test__.resolveMovieId(createInputAccessor({}))).toThrowError(/movieId/);
+  });
+
+  it('resolves storage paths from config or inputs', () => {
+    const accessor = createInputAccessor({ StorageRoot: '/tmp/root', StorageBasePath: 'custom' });
+    expect(__test__.resolveStoragePaths({}, accessor)).toEqual({
+      storageRoot: '/tmp/root',
+      storageBasePath: 'custom',
+    });
+    const accessorDefault = createInputAccessor({ StorageRoot: '/tmp/root' });
+    expect(__test__.resolveStoragePaths({}, accessorDefault)).toEqual({
+      storageRoot: '/tmp/root',
+      storageBasePath: 'builds',
+    });
+    expect(__test__.resolveStoragePaths({ rootFolder: '/cfg' }, accessor)).toEqual({
+      storageRoot: '/cfg',
+      storageBasePath: 'custom',
+    });
+  });
+
+  it('exports mp4 using timeline + manifest blobs', async () => {
+    const tempRoot = await mkdtemp(path.join(tmpdir(), 'mp4-exporter-'));
+    const builds = path.join(tempRoot, 'builds');
+    const movieId = 'movie-123';
+    const movieDir = path.join(builds, movieId);
+    const manifestsDir = path.join(movieDir, 'manifests');
+    const blobsDir = path.join(movieDir, 'blobs', 'ab');
+
+    await mkdir(manifestsDir, { recursive: true });
+    await mkdir(blobsDir, { recursive: true });
+
+    const manifestPath = path.join(manifestsDir, 'manifest.json');
+    const timeline = {
+      id: 'timeline-1',
+      duration: 1,
+      tracks: [
+        {
+          id: 'track-1',
+          kind: 'Audio',
+          clips: [
+            {
+              id: 'clip-1',
+              kind: 'Audio',
+              startTime: 0,
+              duration: 1,
+              properties: {
+                assetId: 'Artifact:Audio[0]',
+                volume: 1,
+              },
+            },
+          ],
+        },
+      ],
+    };
+
+    const manifest = {
+      artefacts: {
+        'Artifact:TimelineComposer.Timeline': {
+          inline: JSON.stringify(timeline),
+        },
+        'Artifact:Audio[0]': {
+          blob: {
+            hash: 'ab123',
+            size: 3,
+            mimeType: 'audio/mpeg',
+          },
+        },
+      },
+    };
+
+    await writeFile(manifestPath, JSON.stringify(manifest));
+    await writeFile(path.join(movieDir, 'current.json'), JSON.stringify({ revision: '1', manifestPath: 'manifests/manifest.json' }));
+    await writeFile(path.join(blobsDir, 'ab123.mp3'), Buffer.from('mp3'));
+
+    const handler = createMp4ExporterHandler()({
+      descriptor: { provider: 'tutopanda', model: 'Mp4Exporter', environment: 'local' },
+      mode: 'live',
+      secretResolver: { async getSecret() { return null; } },
+    });
+
+    const response = await handler.invoke(createRequest({
+      providerConfig: {},
+      produces: ['Artifact:FinalVideo'],
+      resolvedInputs: { 'Input:MovieId': movieId, StorageRoot: tempRoot },
+    }));
+
+    expect(response.status).toBe('succeeded');
+    const artefact = response.artefacts[0];
+    expect(artefact?.artefactId).toBe('Artifact:FinalVideo');
+    expect(artefact?.blob?.mimeType).toBe('video/mp4');
+    expect(Buffer.isBuffer(artefact?.blob?.data)).toBe(true);
+  });
+});
+
+function createRequest(opts: { providerConfig: Record<string, unknown>; produces: string[]; resolvedInputs?: Record<string, unknown> }): ProviderJobContext {
+  return {
+    jobId: 'job-1',
+    provider: 'tutopanda',
+    model: 'Mp4Exporter',
+    revision: 'rev-1',
+    layerIndex: 0,
+    attempt: 1,
+    inputs: [],
+    produces: opts.produces,
+    context: {
+      providerConfig: opts.providerConfig,
+      rawAttachments: [],
+      environment: 'local',
+      extras: opts.resolvedInputs ? { resolvedInputs: opts.resolvedInputs } : {},
+    },
+  };
+}
+
+function createInputAccessor(map: Record<string, unknown>) {
+  return {
+    all() {
+      return map;
+    },
+    get<T = unknown>(key: string) {
+      return map[key] as T | undefined;
+    },
+    getByNodeId<T = unknown>(canonicalId: string) {
+      return map[canonicalId] as T | undefined;
+    },
+  };
+}

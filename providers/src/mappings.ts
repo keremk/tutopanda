@@ -3,6 +3,7 @@ import { createOpenAiLlmHandler } from './producers/llm/openai.js';
 import { createReplicateTextToImageHandler } from './producers/image/replicate-text-to-image.js';
 import { createReplicateAudioHandler } from './producers/audio/replicate-audio.js';
 import { createReplicateVideoHandler } from './producers/video/replicate-video.js';
+import { createMp4ExporterHandler } from './producers/export/mp4-exporter.js';
 import { createReplicateMusicHandler } from './producers/music/replicate-music.js';
 import { createTimelineProducerHandler } from './producers/timeline/ordered-timeline.js';
 import type { ProviderImplementationRegistry } from './types.js';
@@ -274,6 +275,24 @@ export const providerImplementations: ProviderImplementationRegistry = [
     },
     mode: 'simulated',
     factory: createTimelineProducerHandler(),
+  },
+  {
+    match: {
+      provider: 'tutopanda',
+      model: 'Mp4Exporter',
+      environment: wildcard,
+    },
+    mode: 'live',
+    factory: createMp4ExporterHandler(),
+  },
+  {
+    match: {
+      provider: 'tutopanda',
+      model: 'Mp4Exporter',
+      environment: wildcard,
+    },
+    mode: 'simulated',
+    factory: createMp4ExporterHandler(),
   },
   {
     match: {

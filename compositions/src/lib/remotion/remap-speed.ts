@@ -1,9 +1,6 @@
 /**
  * Maps a composition frame to the corresponding source frame when playing
  * a video at a constant speed multiplier.
- *
- * Remotion evaluates each frame independently, so we need to determine which
- * source frame should be displayed for the current composition frame.
  */
 export function remapSpeed(frame: number, playbackRate: number): number {
   if (!Number.isFinite(frame) || frame <= 0) {

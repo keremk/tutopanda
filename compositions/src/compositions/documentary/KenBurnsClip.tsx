@@ -1,11 +1,10 @@
 import { AbsoluteFill, Sequence, useVideoConfig } from "remotion";
-import type { ImageClip } from "@/types/timeline";
-import { buildAssetUrl } from "@/data/client";
-import { KenBurnsEffectFrame } from "./KenBurnsEffectFrame";
+import type { ImageClip, AssetMap } from "../../types/timeline.js";
+import { KenBurnsEffectFrame } from "./KenBurnsEffectFrame.js";
 
 interface KenBurnsClipProps {
   clip: ImageClip;
-  movieId: string;
+  assets: AssetMap;
 }
 
 const allocateFrames = (totalFrames: number, segments: number): number[] => {
@@ -17,7 +16,7 @@ const allocateFrames = (totalFrames: number, segments: number): number[] => {
   return Array.from({ length: segments }, (_, index) => base + (index < remainder ? 1 : 0));
 };
 
-export const KenBurnsClip = ({ clip, movieId }: KenBurnsClipProps) => {
+export const KenBurnsClip = ({ clip, assets }: KenBurnsClipProps) => {
   const { fps } = useVideoConfig();
   const effects = clip.properties.effects ?? [];
   if (effects.length === 0) {
@@ -36,7 +35,10 @@ export const KenBurnsClip = ({ clip, movieId }: KenBurnsClipProps) => {
       {effects.map((effect, index) => {
         const frames = segments[index] ?? 1;
         const from = offsets[index] ?? 0;
-        const assetUrl = buildAssetUrl(movieId, effect.assetId);
+        const assetUrl = assets[effect.assetId];
+        if (!assetUrl) {
+          return null;
+        }
         return (
           <Sequence
             key={`${clip.id}-${effect.assetId}-${index}`}
