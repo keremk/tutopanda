@@ -10,6 +10,7 @@ import {
   mergeInputs,
   isRecord,
   type PlannerContext,
+  runReplicateWithRetries,
 } from '../../sdk/replicate/index.js';
 
 interface ReplicateVideoConfig {
@@ -138,7 +139,17 @@ export function createReplicateVideoHandler(): HandlerFactory {
         });
 
         try {
-          predictionOutput = await replicate.run(modelIdentifier, { input });
+          predictionOutput = await runReplicateWithRetries({
+            replicate: {
+              run: (id, opts) => replicate.run(id as `${string}/${string}` | `${string}/${string}:${string}`, opts),
+            },
+            modelIdentifier,
+            input,
+            logger: init.logger,
+            jobId: request.jobId,
+            model: request.model,
+            plannerContext,
+          });
         } catch (error) {
           logger?.error?.('providers.replicate.video.invoke.error', {
             provider: descriptor.provider,

@@ -2,3 +2,4 @@ export { createReplicateClientManager, type ReplicateClientManager } from './cli
 export { normalizeReplicateOutput } from './output.js';
 export { buildArtefactsFromUrls, downloadBinary, type BuildArtefactsOptions } from './artefacts.js';
 export { extractPlannerContext, mergeInputs, isRecord, type PlannerContext } from './utils.js';
+export { runReplicateWithRetries } from './retry.js';

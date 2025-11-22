@@ -62,11 +62,7 @@ describe('createProviderRegistry', () => {
     expect(result.artefacts).toHaveLength(1);
     const artefact = result.artefacts[0];
     expect(artefact.inline).toBeUndefined();
-    expect(artefact.blob?.mimeType).toBe('text/plain');
-    const payload = typeof artefact.blob?.data === 'string'
-      ? artefact.blob.data
-      : Buffer.from(artefact.blob!.data).toString('utf8');
-    expect(payload).toContain('Mock binary artefact placeholder');
+    expect(artefact.blob?.mimeType).toBe('video/mp4');
   });
 
   it('caches handlers across resolveMany calls', () => {

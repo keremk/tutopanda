@@ -6,6 +6,7 @@ import {
   normalizeReplicateOutput,
   buildArtefactsFromUrls,
   extractPlannerContext,
+  runReplicateWithRetries,
   isRecord,
   type PlannerContext,
 } from '../../sdk/replicate/index.js';
@@ -76,7 +77,17 @@ export function createReplicateTextToImageHandler(): HandlerFactory {
         const modelIdentifier = request.model as `${string}/${string}` | `${string}/${string}:${string}`;
 
         try {
-          predictionOutput = await replicate.run(modelIdentifier, { input });
+          predictionOutput = await runReplicateWithRetries({
+            replicate: {
+              run: (id, opts) => replicate.run(id as `${string}/${string}` | `${string}/${string}:${string}`, opts),
+            },
+            modelIdentifier,
+            input,
+            logger: init.logger,
+            jobId: request.jobId,
+            model: request.model,
+            plannerContext,
+          });
         } catch (error) {
           throw createProviderError('Replicate prediction failed.', {
             code: 'replicate_prediction_failed',

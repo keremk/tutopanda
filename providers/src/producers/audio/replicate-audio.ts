@@ -1,5 +1,5 @@
 import { createProducerHandlerFactory } from '../../sdk/handler-factory.js';
-import type { HandlerFactory, ProviderJobContext, ProviderLogger } from '../../types.js';
+import type { HandlerFactory, ProviderJobContext } from '../../types.js';
 import { createProviderError } from '../../sdk/errors.js';
 import {
   createReplicateClientManager,
@@ -8,6 +8,7 @@ import {
   extractPlannerContext,
   mergeInputs,
   isRecord,
+  runReplicateWithRetries,
 } from '../../sdk/replicate/index.js';
 
 interface ReplicateAudioConfig {
@@ -78,14 +79,15 @@ export function createReplicateAudioHandler(): HandlerFactory {
         const modelIdentifier = request.model as `${string}/${string}` | `${string}/${string}:${string}`;
 
         try {
-          predictionOutput = await runWithRetries({
+          predictionOutput = await runReplicateWithRetries({
             replicate: {
               run: (id, opts) => replicate.run(id as `${string}/${string}` | `${string}/${string}:${string}`, opts),
             },
             modelIdentifier,
             input,
             logger: init.logger,
-            request,
+            jobId: request.jobId,
+            model: request.model,
             plannerContext,
           });
         } catch (error) {
@@ -175,111 +177,4 @@ function getVoiceFieldName(model: string): string {
   return 'voice_id';
 }
 
-async function runWithRetries(args: {
-  replicate: { run: (id: string, opts: { input: Record<string, unknown> }) => Promise<unknown> };
-  modelIdentifier: string;
-  input: Record<string, unknown>;
-  logger?: ProviderLogger;
-  request: { jobId: string; model: string };
-  plannerContext: Record<string, unknown>;
-  maxAttempts?: number;
-  defaultRetryMs?: number;
-}): Promise<unknown> {
-  const {
-    replicate,
-    modelIdentifier,
-    input,
-    logger,
-    request,
-    plannerContext,
-    maxAttempts = 3,
-    defaultRetryMs = 10_000,
-  } = args;
-
-  let attempt = 0;
-  let lastError: unknown;
-  while (attempt < maxAttempts) {
-    attempt += 1;
-    try {
-      return await replicate.run(modelIdentifier, { input });
-    } catch (error: unknown) {
-      lastError = error;
-      const status = parseStatus(error);
-      const retryAfterSec = parseRetryAfterSeconds(error);
-      const retryMs = retryAfterSec !== undefined ? (retryAfterSec + 1) * 1000 : defaultRetryMs;
-
-      const isThrottled = status === 429 || /429|Too Many Requests/i.test(String(error ?? ''));
-      const shouldRetry = isThrottled && attempt < maxAttempts;
-      if (shouldRetry) {
-        logger?.warn?.('providers.replicate.audio.retry', {
-          producer: request.jobId,
-          model: request.model,
-          plannerContext,
-          status,
-          attempt,
-          maxAttempts,
-          retryAfterMs: retryMs,
-          error: error instanceof Error ? error.message : String(error),
-        });
-        const before = Date.now();
-        await new Promise((resolve) => setTimeout(resolve, retryMs));
-        const waitedMs = Date.now() - before;
-        logger?.info?.('providers.replicate.audio.retry.waited', {
-          producer: request.jobId,
-          model: request.model,
-          plannerContext,
-          attempt,
-          waitedMs,
-        });
-        continue;
-      }
-
-      break;
-    }
-  }
-  const message =
-    'Replicate rate limit hit (429); retries exhausted. Lower concurrency, wait, or add credit.';
-  throw createProviderError(message, {
-    code: 'replicate_prediction_failed',
-    kind: 'transient',
-    retryable: true,
-    raw: lastError,
-  });
-}
-
-function parseStatus(error: unknown): number | undefined {
-  const candidate =
-    (error as any)?.status
-    ?? (error as any)?.httpStatus
-    ?? (error as any)?.response?.status
-    ?? (error as any)?.body?.status;
-  if (typeof candidate === 'number') {
-    return candidate;
-  }
-  const message = String((error as any)?.message ?? error ?? '');
-  const match = /status[:\s]+(\d{3})/i.exec(message) || /(\d{3})\s+Too Many Requests/i.exec(message);
-  if (match) {
-    return Number(match[1]);
-  }
-  if (/429/.test(message) || /Too Many Requests/i.test(message)) {
-    return 429;
-  }
-  return undefined;
-}
-
-function parseRetryAfterSeconds(error: unknown): number | undefined {
-  const bodyVal = (error as any)?.body?.retry_after;
-  if (typeof bodyVal === 'number') {
-    return bodyVal;
-  }
-  const message = (error as any)?.message ?? '';
-  let match = /retry[_-]after['"]?\s*[:=]\s*(\d+)/i.exec(String(message));
-  if (match) {
-    return Number(match[1]);
-  }
-  match = /resets in ~(\d+)s/i.exec(String(message));
-  if (match) {
-    return Number(match[1]);
-  }
-  return undefined;
-}
+// Retry logic shared across replicate producers lives in sdk/replicate/retry.ts.
