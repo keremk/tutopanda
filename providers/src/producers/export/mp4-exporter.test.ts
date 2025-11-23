@@ -20,28 +20,25 @@ describe('mp4-exporter', () => {
   });
 
   it('resolves movieId from resolved inputs', () => {
-    const accessor = createInputAccessor({ 'Input:MovieId': 'movie-xyz', MovieId: 'movie-abc' });
+    const accessor = createInputAccessor({ 'Input:MovieId': 'movie-xyz' });
     expect(__test__.resolveMovieId(accessor)).toBe('movie-xyz');
-    const accessor2 = createInputAccessor({ MovieId: 'movie-abc' });
-    expect(__test__.resolveMovieId(accessor2)).toBe('movie-abc');
+    expect(() => __test__.resolveMovieId(createInputAccessor({ MovieId: 'movie-abc' }))).toThrowError(/movieId/);
     expect(() => __test__.resolveMovieId(createInputAccessor({}))).toThrowError(/movieId/);
   });
 
   it('resolves storage paths from config or inputs', () => {
-    const accessor = createInputAccessor({ StorageRoot: '/tmp/root', StorageBasePath: 'custom' });
+    const accessor = createInputAccessor({ 'Input:StorageRoot': '/tmp/root', 'Input:StorageBasePath': 'custom' });
     expect(__test__.resolveStoragePaths({}, accessor)).toEqual({
       storageRoot: '/tmp/root',
       storageBasePath: 'custom',
-    });
-    const accessorDefault = createInputAccessor({ StorageRoot: '/tmp/root' });
-    expect(__test__.resolveStoragePaths({}, accessorDefault)).toEqual({
-      storageRoot: '/tmp/root',
-      storageBasePath: 'builds',
     });
     expect(__test__.resolveStoragePaths({ rootFolder: '/cfg' }, accessor)).toEqual({
       storageRoot: '/cfg',
       storageBasePath: 'custom',
     });
+    expect(() => __test__.resolveStoragePaths({}, createInputAccessor({ 'Input:StorageRoot': '/tmp/root' }))).toThrowError(
+      /StorageBasePath/,
+    );
   });
 
   it('exports mp4 using timeline + manifest blobs', async () => {
@@ -107,7 +104,11 @@ describe('mp4-exporter', () => {
     const response = await handler.invoke(createRequest({
       providerConfig: {},
       produces: ['Artifact:FinalVideo'],
-      resolvedInputs: { 'Input:MovieId': movieId, StorageRoot: tempRoot },
+      resolvedInputs: {
+        'Input:MovieId': movieId,
+        'Input:StorageRoot': tempRoot,
+        'Input:StorageBasePath': 'builds',
+      },
     }));
 
     expect(response.status).toBe('succeeded');

@@ -20,4 +20,3 @@ export type {
 export { remapSpeed } from "./lib/remotion/remap-speed.js";
 export { DocumentaryComposition, type DocumentaryCompositionProps } from "./compositions/documentary/VideoComposition.js";
 export { DOCUMENTARY_COMPOSITION_ID, DocumentaryRoot } from "./remotion/index.js";
-export { renderDocumentaryMp4, type DocumentaryMp4RenderOptions } from "./renderers/documentary/render-mp4.js";

@@ -1,14 +1,15 @@
-import os from 'node:os';
 import path from 'node:path';
-import { pathToFileURL } from 'node:url';
-import { readFile, mkdtemp, rm } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import { createProducerHandlerFactory } from '../../sdk/handler-factory.js';
 import { createProviderError } from '../../sdk/errors.js';
 import type { HandlerFactory } from '../../types.js';
-import { renderDocumentaryMp4 } from 'tutopanda-compositions';
-import type { TimelineDocument } from 'tutopanda-compositions';
 import type { ResolvedInputsAccessor } from '../../sdk/types.js';
-import { createStorageContext, type StorageContext } from 'tutopanda-core';
+import { createStorageContext } from 'tutopanda-core';
+
+const execFileAsync = promisify(execFile);
+const DEFAULT_DOCKER_IMAGE = process.env.REMOTION_DOCKER_IMAGE ?? 'tutopanda-remotion-export:latest';
 
 interface Mp4ExporterConfig {
   rootFolder?: string;
@@ -55,61 +56,49 @@ export function createMp4ExporterHandler(): HandlerFactory {
 
       const movieId = resolveMovieId(runtime.inputs);
       const { storageRoot, storageBasePath } = resolveStoragePaths(config, runtime.inputs);
-      const { timeline, manifest, storage } = await loadTimeline(storageRoot, storageBasePath, movieId);
-      const assetIds = collectAssetIds(timeline);
-      const assets = await buildAssetMap({
-        manifest,
-        storage,
-        storageRoot,
-        movieId,
-        assetIds,
+
+      const storage = createStorageContext({
+        kind: 'local',
+        rootDir: storageRoot,
+        basePath: storageBasePath,
       });
 
-      const tempDir = await mkdtemp(path.join(os.tmpdir(), 'tutopanda-mp4-exporter-'));
-      const outputPath = path.join(tempDir, 'output.mp4');
+      // Ensure timeline exists
+      await loadTimeline(storage, movieId);
 
-      try {
-        const renderedPath = await renderDocumentaryMp4({
-          timeline,
-          assets,
-          outputFile: outputPath,
-          width: config.width,
-          height: config.height,
-          fps: config.fps,
-          browserExecutable: process.env.REMOTION_BROWSER_EXECUTABLE ?? process.env.CHROME_PATH,
-        });
-        const finalPath = renderedPath ?? outputPath;
-        const buffer = await readFile(finalPath);
+      const outputPath = storage.resolve(movieId, 'FinalVideo.mp4');
 
-        return {
-          status: 'succeeded',
-          artefacts: [
-            {
-              artefactId: runtime.artefacts.expectBlob(produceId),
-              status: 'succeeded',
-              blob: {
-                data: buffer,
-                mimeType: 'video/mp4',
-              },
+      await runDockerExport({
+        storageRoot,
+        storageBasePath,
+        movieId,
+        width: config.width,
+        height: config.height,
+        fps: config.fps,
+        outputName: 'FinalVideo.mp4',
+      });
+
+      const buffer = await readFile(path.resolve(storageRoot, outputPath));
+
+      return {
+        status: 'succeeded',
+        artefacts: [
+          {
+            artefactId: runtime.artefacts.expectBlob(produceId),
+            status: 'succeeded',
+            blob: {
+              data: buffer,
+              mimeType: 'video/mp4',
             },
-          ],
-        };
-      } finally {
-        await rm(tempDir, { recursive: true, force: true });
-      }
+          },
+        ],
+      };
     },
   });
 }
 
 function parseExporterConfig(raw: unknown): Mp4ExporterConfig {
-  if (!raw || typeof raw !== 'object') {
-    throw createProviderError('MP4 exporter config must be an object.', {
-      code: 'invalid_config',
-      kind: 'user_input',
-      causedByUser: true,
-    });
-  }
-  const config = raw as Record<string, unknown>;
+  const config = typeof raw === 'object' && raw !== null ? (raw as Record<string, unknown>) : {};
   const rootFolder = typeof config.rootFolder === 'string' ? config.rootFolder : undefined;
   const width = typeof config.width === 'number' ? config.width : undefined;
   const height = typeof config.height === 'number' ? config.height : undefined;
@@ -118,41 +107,41 @@ function parseExporterConfig(raw: unknown): Mp4ExporterConfig {
 }
 
 function resolveMovieId(inputs: ResolvedInputsAccessor): string {
-  const canonical = inputs.getByNodeId<string>('Input:MovieId');
-  if (typeof canonical === 'string' && canonical.trim()) {
-    return canonical;
+  const movieId = inputs.getByNodeId<string>('Input:MovieId');
+  if (typeof movieId === 'string' && movieId.trim()) {
+    return movieId;
   }
-  const direct = inputs.get<string>('MovieId');
-  if (typeof direct === 'string' && direct.trim()) {
-    return direct;
-  }
-  throw createProviderError('MP4 exporter is missing movieId (config or resolved input).', {
+  throw createProviderError('MP4 exporter is missing movieId (Input:MovieId).', {
     code: 'invalid_config',
     kind: 'user_input',
     causedByUser: true,
   });
 }
 
-function resolveStoragePaths(config: Mp4ExporterConfig, inputs: ResolvedInputsAccessor): { storageRoot: string; storageBasePath: string } {
-  const root = config.rootFolder ?? inputs.get<string>('StorageRoot');
-  const basePath = inputs.get<string>('StorageBasePath');
+function resolveStoragePaths(config: Mp4ExporterConfig, inputs: ResolvedInputsAccessor): {
+  storageRoot: string;
+  storageBasePath: string;
+} {
+  const root = config.rootFolder ?? inputs.getByNodeId<string>('Input:StorageRoot');
+  const basePath = inputs.getByNodeId<string>('Input:StorageBasePath');
   if (!root || typeof root !== 'string') {
-    throw createProviderError('MP4 exporter is missing storage root (StorageRoot).', {
+    throw createProviderError('MP4 exporter is missing storage root (Input:StorageRoot).', {
       code: 'invalid_config',
       kind: 'user_input',
       causedByUser: true,
     });
   }
-  const base = typeof basePath === 'string' && basePath.trim() ? basePath : 'builds';
-  return { storageRoot: root, storageBasePath: base };
+  if (!basePath || typeof basePath !== 'string' || !basePath.trim()) {
+    throw createProviderError('MP4 exporter is missing storage base path (Input:StorageBasePath).', {
+      code: 'invalid_config',
+      kind: 'user_input',
+      causedByUser: true,
+    });
+  }
+  return { storageRoot: root, storageBasePath: basePath };
 }
 
-async function loadTimeline(
-  storageRoot: string,
-  storageBasePath: string,
-  movieId: string,
-): Promise<{ timeline: TimelineDocument; manifest: ManifestFile; storage: StorageContext }> {
-  const storage = createStorageContext({ kind: 'local', rootDir: storageRoot, basePath: storageBasePath });
+async function loadTimeline(storage: ReturnType<typeof createStorageContext>, movieId: string): Promise<void> {
   const pointerPath = storage.resolve(movieId, 'current.json');
   const pointerRaw = await storage.storage.readToString(pointerPath);
   const pointer = JSON.parse(pointerRaw) as ManifestPointer;
@@ -163,19 +152,9 @@ async function loadTimeline(
       causedByUser: true,
     });
   }
-
   const manifestPath = storage.resolve(movieId, pointer.manifestPath);
   const manifestRaw = await storage.storage.readToString(manifestPath);
   const manifest = JSON.parse(manifestRaw) as ManifestFile;
-  const timeline = await readTimelineFromManifest(manifest, storage, movieId);
-  return { timeline, manifest, storage };
-}
-
-async function readTimelineFromManifest(
-  manifest: ManifestFile,
-  storage: StorageContext,
-  movieId: string,
-): Promise<TimelineDocument> {
   const artefact = manifest.artefacts?.[TIMELINE_ARTEFACT_ID];
   if (!artefact) {
     throw createProviderError(`Timeline artefact not found for movie ${movieId}.`, {
@@ -184,153 +163,75 @@ async function readTimelineFromManifest(
       causedByUser: true,
     });
   }
-
-  if (artefact.inline) {
-    return JSON.parse(artefact.inline) as TimelineDocument;
-  }
-
-  if (artefact.blob?.hash) {
-    const timelinePath = await resolveExistingBlobPath(storage, movieId, artefact.blob.hash, artefact.blob.mimeType);
-    const contents = await storage.storage.readToString(timelinePath);
-    return JSON.parse(contents) as TimelineDocument;
-  }
-
-  throw createProviderError('Timeline artefact missing payload.', {
-    code: 'missing_timeline_payload',
-    kind: 'user_input',
-    causedByUser: true,
-  });
 }
 
-function collectAssetIds(timeline: TimelineDocument): string[] {
-  const ids = new Set<string>();
-  for (const track of timeline.tracks ?? []) {
-    for (const clip of track.clips ?? []) {
-      const props = (clip as { properties?: Record<string, unknown> }).properties;
-      const assetId = props?.assetId;
-      if (typeof assetId === 'string' && assetId.length > 0) {
-        ids.add(assetId);
-      }
-      const effects = props?.effects;
-      if (Array.isArray(effects)) {
-        for (const effect of effects) {
-          const effectAsset = (effect as { assetId?: string }).assetId;
-          if (typeof effectAsset === 'string' && effectAsset.length > 0) {
-            ids.add(effectAsset);
-          }
-        }
-      }
-    }
-  }
-  return Array.from(ids);
-}
-
-async function buildAssetMap(args: {
-  manifest: ManifestFile;
-  storage: StorageContext;
-  storageRoot: string;
-  movieId: string;
-  assetIds: string[];
-}): Promise<Record<string, string>> {
-  const { manifest, storage, storageRoot, movieId, assetIds } = args;
-  const assets: Record<string, string> = {};
-  for (const assetId of assetIds) {
-    const artefact = manifest.artefacts?.[assetId];
-    if (!artefact || !artefact.blob?.hash) {
-      throw createProviderError(`Asset ${assetId} is missing or does not contain a blob.`, {
-        code: 'missing_asset',
-        kind: 'user_input',
-        causedByUser: true,
-      });
-    }
-    const relativePath = await resolveExistingBlobPath(storage, movieId, artefact.blob.hash, artefact.blob.mimeType);
-    const absolutePath = path.resolve(storageRoot, relativePath);
-    assets[assetId] = pathToFileURL(absolutePath).toString();
-  }
-  return assets;
-}
-
-async function resolveExistingBlobPath(
-  storage: StorageContext,
-  movieId: string,
-  hash: string,
-  mimeType?: string,
-): Promise<string> {
-  const prefix = hash.slice(0, 2);
-  const fileName = formatBlobFileName(hash, mimeType);
-  const primary = storage.resolve(movieId, 'blobs', prefix, fileName);
-  if (await storage.storage.fileExists(primary)) {
-    return primary;
-  }
-
-  const legacy = storage.resolve(movieId, 'blobs', prefix, hash);
-  if (!(await storage.storage.fileExists(legacy))) {
-    throw createProviderError(`Blob not found for hash ${hash}.`, {
-      code: 'missing_blob',
-      kind: 'user_input',
-      causedByUser: true,
-    });
-  }
-  return legacy;
-}
-
-function formatBlobFileName(hash: string, mimeType?: string): string {
-  const safeHash = hash.replace(/[^a-f0-9]/gi, '');
-  const extension = inferExtension(mimeType);
-  if (!extension) {
-    return safeHash;
-  }
-  return safeHash.endsWith(`.${extension}`) ? safeHash : `${safeHash}.${extension}`;
-}
-
-function inferExtension(mimeType?: string): string | null {
-  if (!mimeType) {
-    return null;
-  }
-  const normalized = mimeType.toLowerCase();
-  const known: Record<string, string> = {
-    'audio/mpeg': 'mp3',
-    'audio/mp3': 'mp3',
-    'audio/wav': 'wav',
-    'audio/x-wav': 'wav',
-    'audio/webm': 'webm',
-    'audio/ogg': 'ogg',
-    'audio/flac': 'flac',
-    'audio/aac': 'aac',
-    'video/mp4': 'mp4',
-    'video/webm': 'webm',
-    'video/quicktime': 'mov',
-    'video/x-matroska': 'mkv',
-    'image/png': 'png',
-    'image/jpeg': 'jpg',
-    'image/jpg': 'jpg',
-    'image/webp': 'webp',
-    'application/json': 'json',
-    'text/plain': 'txt',
-  };
-  if (known[normalized]) {
-    return known[normalized];
-  }
-  if (normalized.startsWith('audio/')) {
-    return normalized.slice('audio/'.length);
-  }
-  if (normalized.startsWith('video/')) {
-    return normalized.slice('video/'.length);
-  }
-  if (normalized.startsWith('image/')) {
-    return normalized.slice('image/'.length);
-  }
-  if (normalized === 'application/octet-stream') {
-    return null;
-  }
-  return null;
-}
-
-// Export internals for targeted tests.
 export const __test__ = {
   parseExporterConfig,
   resolveMovieId,
   resolveStoragePaths,
-  collectAssetIds,
-  formatBlobFileName,
 };
+
+interface DockerRunOptions {
+  storageRoot: string;
+  storageBasePath: string;
+  movieId: string;
+  width?: number;
+  height?: number;
+  fps?: number;
+  outputName: string;
+}
+
+async function runDockerExport(options: DockerRunOptions): Promise<void> {
+  const {
+    storageRoot,
+    storageBasePath,
+    movieId,
+    width,
+    height,
+    fps,
+    outputName,
+  } = options;
+
+  const args = [
+    'run',
+    '--rm',
+    '-v',
+    `${storageRoot}:/data`,
+    DEFAULT_DOCKER_IMAGE,
+    'node',
+    '/app/compositions/src/render.mjs',
+    '--movieId',
+    movieId,
+    '--root',
+    '/data',
+    '--basePath',
+    storageBasePath,
+    '--output',
+    outputName,
+  ];
+  if (typeof width === 'number') {
+    args.push('--width', String(width));
+  }
+  if (typeof height === 'number') {
+    args.push('--height', String(height));
+  }
+  if (typeof fps === 'number') {
+    args.push('--fps', String(fps));
+  }
+
+  try {
+    await execFileAsync('docker', args, {
+      env: {
+        ...process.env,
+      },
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw createProviderError(`Docker render failed: ${message}`, {
+      code: 'render_failed',
+      kind: 'user_input',
+      causedByUser: true,
+      raw: error,
+    });
+  }
+}

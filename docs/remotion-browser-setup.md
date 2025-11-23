@@ -35,6 +35,12 @@ Remotion needs a runnable headless Chrome/Chromium. Set `REMOTION_BROWSER_EXECUT
    ```
 3. Run the exporter/CLI in the same shell.
 
-## Troubleshooting
-- If Remotion still downloads `chrome-headless-shell`, your browser path was not picked up or is not executable. Re-check `REMOTION_BROWSER_EXECUTABLE`.
-- If the downloaded shell runs instead and fails on missing libs (e.g., `libnss3`), install a native Chromium as above rather than relying on the shell.
+## Docker alternative (lean image)
+If host browser setup is painful (e.g., WSL), build the provided lean Docker image (Remotion + compositions only) and run the exporter inside it:
+```bash
+docker build -f Dockerfile.remotion -t tutopanda-remotion-export .
+# Render by running the exporter container and mounting your builds root:
+docker run --rm -v /home/keremk/tuto2:/data tutopanda-remotion-export \
+  node /app/render.mjs --movieId=<movieId> --root=/data --basePath=builds
+```
+This uses the Remotion headless shell and deps inside the image.
