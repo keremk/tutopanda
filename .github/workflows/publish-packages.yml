@@ -1,0 +1,189 @@
+name: Publish Tutopanda Packages
+
+on:
+  push:
+    tags:
+      - "cli-v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Optional tag/ref to publish (e.g., cli-v1.0.1). If empty, use the checked-out ref."
+        required: false
+        default: ""
+      dry_run:
+        description: "When true, run the full pipeline but skip npm publish."
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  id-token: write  # Required for npm provenance via OIDC
+  contents: write  # Required for creating GitHub releases
+
+jobs:
+  publish-packages:
+    name: Build and publish Tutopanda packages
+    runs-on: ubuntu-latest
+    env:
+      NODE_VERSION: "20"
+      PNPM_VERSION: "10.15.0"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+          run_install: false
+
+      - name: Verify tag commit is on main branch
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/cli-v')
+        run: |
+          git fetch origin main --depth=1
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "❌ Refusing to publish: tag commit is not on main branch"
+            exit 1
+          fi
+          echo "✅ Tag commit is on main branch"
+
+      - name: Setup Node.js with npm registry
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          registry-url: https://registry.npmjs.org
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Type check all packages
+        run: pnpm type-check
+
+      - name: Verify tag matches package versions
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/cli-v')
+        run: |
+          TAG="${GITHUB_REF##*/}"
+          TAG_VERSION="${TAG#cli-v}"
+
+          echo "Tag version: $TAG_VERSION"
+
+          # Check CLI version (this is the primary package)
+          CLI_VERSION=$(node -p "require('./cli/package.json').version")
+          echo "CLI package.json version: $CLI_VERSION"
+
+          if [ "$CLI_VERSION" != "$TAG_VERSION" ]; then
+            echo "❌ Tag cli-v$TAG_VERSION does not match CLI package.json version $CLI_VERSION"
+            exit 1
+          fi
+
+          # Optionally verify other packages are in sync (recommended)
+          CORE_VERSION=$(node -p "require('./core/package.json').version")
+          COMPOSITIONS_VERSION=$(node -p "require('./compositions/package.json').version")
+          PROVIDERS_VERSION=$(node -p "require('./providers/package.json').version")
+
+          echo "Package versions:"
+          echo "  - tutopanda-core: $CORE_VERSION"
+          echo "  - tutopanda-compositions: $COMPOSITIONS_VERSION"
+          echo "  - tutopanda-providers: $PROVIDERS_VERSION"
+          echo "  - tutopanda (CLI): $CLI_VERSION"
+
+          echo "✅ Tag matches CLI version"
+
+      - name: Build all publishable packages
+        run: |
+          pnpm --filter tutopanda-core build
+          pnpm --filter tutopanda-compositions build
+          pnpm --filter tutopanda-providers build
+          pnpm --filter tutopanda build
+
+      - name: Publish tutopanda-core
+        if: >
+          (github.event_name == 'workflow_dispatch' && inputs.dry_run == false) ||
+          (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/cli-v'))
+        run: npm publish ./core --provenance --access public
+
+      - name: Publish tutopanda-compositions
+        if: >
+          (github.event_name == 'workflow_dispatch' && inputs.dry_run == false) ||
+          (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/cli-v'))
+        run: npm publish ./compositions --provenance --access public
+
+      - name: Publish tutopanda-providers
+        if: >
+          (github.event_name == 'workflow_dispatch' && inputs.dry_run == false) ||
+          (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/cli-v'))
+        run: npm publish ./providers --provenance --access public
+
+      - name: Bundle viewer assets into CLI
+        run: pnpm bundle:viewer
+
+      - name: Pack CLI (includes bundled viewer)
+        run: pnpm --filter tutopanda pack --pack-destination release
+
+      - name: Locate packaged CLI tarball
+        id: tarball
+        run: |
+          TARBALL=$(ls release/tutopanda-*.tgz | head -n 1)
+          if [ -z "$TARBALL" ]; then
+            echo "No packaged tarball found in release/"; exit 1;
+          fi
+          echo "path=$TARBALL" >> "$GITHUB_OUTPUT"
+
+      - name: Verify viewer bundle inside CLI tarball
+        run: |
+          tar -tf "${{ steps.tarball.outputs.path }}" | grep -q "package/config/viewer/dist/index.html"
+          tar -tf "${{ steps.tarball.outputs.path }}" | grep -q "package/config/viewer/server-dist/bin.js"
+
+      - name: Smoke test CLI
+        run: node cli/dist/cli.js --help
+
+      - name: Publish tutopanda CLI
+        if: >
+          (github.event_name == 'workflow_dispatch' && inputs.dry_run == false) ||
+          (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/cli-v'))
+        run: npm publish "${{ steps.tarball.outputs.path }}" --provenance --access public
+
+      - name: Upload CLI tarball artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tutopanda-cli-tarball
+          path: ${{ steps.tarball.outputs.path }}
+
+      - name: Create GitHub Release
+        if: >
+          github.event_name == 'push' &&
+          startsWith(github.ref, 'refs/tags/cli-v') &&
+          (inputs.dry_run == false || inputs.dry_run == '')
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Release ${{ github.ref_name }}
+          generate_release_notes: true
+          draft: false
+          prerelease: false
+          files: |
+            release/tutopanda-*.tgz
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "## Publishing Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ inputs.dry_run }}" == "true" ]; then
+            echo "✅ Dry run completed - no packages were published" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "📦 Published packages:" >> $GITHUB_STEP_SUMMARY
+            echo "- tutopanda-core" >> $GITHUB_STEP_SUMMARY
+            echo "- tutopanda-compositions" >> $GITHUB_STEP_SUMMARY
+            echo "- tutopanda-providers" >> $GITHUB_STEP_SUMMARY
+            echo "- tutopanda (CLI with bundled viewer)" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            if [ "${{ github.event_name }}" == "push" ]; then
+              echo "🎉 GitHub Release created: https://github.com/${{ github.repository }}/releases/tag/${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+            fi
+          fi

@@ -1,7 +1,7 @@
 {
   "name": "tutopanda-core",
-  "version": "1.0.0",
-  "description": "Core library for building movie assets using AI generators",
+  "version": "0.1.1",
+  "description": "Core library for planning, managing and running the movie generation flows",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -16,6 +16,9 @@
     }
   },
   "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
