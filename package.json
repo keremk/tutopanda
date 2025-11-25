@@ -37,7 +37,14 @@
     "lint:all": "pnpm lint && pnpm format:check",
     "check": "pnpm type-check",
     "bundle:viewer": "pnpm --filter viewer build && node scripts/prepare-viewer-bundle.mjs",
-    "package:cli": "node scripts/package-cli.mjs"
+    "package:cli": "node scripts/package-cli.mjs",
+    "bump": "bash scripts/bump-versions.sh",
+    "bump:minor": "bash scripts/bump-versions.sh minor",
+    "bump:major": "bash scripts/bump-versions.sh major",
+    "release": "bash scripts/bump-n-push.sh",
+    "release:minor": "bash scripts/bump-n-push.sh minor",
+    "release:major": "bash scripts/bump-n-push.sh major",
+    "release:ci": "bash scripts/bump-n-push.sh patch --non-interactive"
   },
   "devDependencies": {
     "@typescript-eslint/eslint-plugin": "^8.46.2",
