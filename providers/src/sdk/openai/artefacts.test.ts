@@ -16,8 +16,8 @@ describe('buildArtefactsFromResponse', () => {
     });
 
     expect(artefacts).toHaveLength(2);
-    expect(artefacts[0]?.inline).toBe('first frame');
-    expect(artefacts[1]?.inline).toBe('second frame');
+    expect(artefacts[0]?.blob?.data).toBe('first frame');
+    expect(artefacts[1]?.blob?.data).toBe('second frame');
     expect(artefacts.every((artefact) => artefact.status === 'succeeded')).toBe(true);
   });
 
@@ -32,7 +32,7 @@ describe('buildArtefactsFromResponse', () => {
     });
 
     expect(artefacts).toHaveLength(1);
-    expect(artefacts[0]?.inline).toBe('concise summary');
+    expect(artefacts[0]?.blob?.data).toBe('concise summary');
     expect(artefacts[0]?.status).toBe('succeeded');
   });
 });

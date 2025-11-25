@@ -1,8 +1,9 @@
+import { TextEncoder } from 'node:util';
 import { describe, expect, it } from 'vitest';
 import { extractArtifactKind, resolveArtifactsFromEventLog } from './artifact-resolver.js';
 import type { EventLog } from './event-log.js';
 import type { StorageContext } from './storage.js';
-import type { ArtefactEvent, BlobRef } from './types.js';
+import type { ArtefactEvent, BlobRef, RevisionId } from './types.js';
 
 describe('extractArtifactKind', () => {
   it('extracts kind from artifact ID with dimensions', () => {
@@ -47,7 +48,7 @@ describe('resolveArtifactsFromEventLog', () => {
 
     const event: ArtefactEvent = {
       artefactId: 'Artifact:SegmentImage[segment=0]',
-      revision: 'rev-1' as any,
+      revision: 'rev-1' as RevisionId,
       inputsHash: 'hash-1',
       output: { blob: blobRef },
       status: 'succeeded',
@@ -84,7 +85,7 @@ describe('resolveArtifactsFromEventLog', () => {
 
     const event: ArtefactEvent = {
       artefactId: 'Artifact:NarrationScript',
-      revision: 'rev-1' as any,
+      revision: 'rev-1' as RevisionId,
       inputsHash: 'hash-1',
       output: { blob: blobRef },
       status: 'succeeded',
@@ -127,7 +128,7 @@ describe('resolveArtifactsFromEventLog', () => {
     const events: ArtefactEvent[] = [
       {
         artefactId: 'Artifact:SegmentAudio[segment=0]',
-        revision: 'rev-1' as any,
+        revision: 'rev-1' as RevisionId,
         inputsHash: 'hash-1',
         output: { blob: audioBlobRef },
         status: 'succeeded',
@@ -136,7 +137,7 @@ describe('resolveArtifactsFromEventLog', () => {
       },
       {
         artefactId: 'Artifact:MovieTitle',
-        revision: 'rev-1' as any,
+        revision: 'rev-1' as RevisionId,
         inputsHash: 'hash-2',
         output: { blob: titleBlobRef },
         status: 'succeeded',
@@ -220,13 +221,13 @@ describe('resolveArtifactsFromEventLog', () => {
   it('ignores failed artifacts', async () => {
     const events: ArtefactEvent[] = [
       {
-        artefactId: 'Artifact:SegmentImage[segment=0]',
-        revision: 'rev-1' as any,
-        inputsHash: 'hash-1',
-        output: {},
-        status: 'failed',
-        producedBy: 'job-1',
-        createdAt: '2025-01-01T00:00:00Z',
+      artefactId: 'Artifact:SegmentImage[segment=0]',
+      revision: 'rev-1' as RevisionId,
+      inputsHash: 'hash-1',
+      output: {},
+      status: 'failed',
+      producedBy: 'job-1',
+      createdAt: '2025-01-01T00:00:00Z',
       },
     ];
 
@@ -257,21 +258,21 @@ describe('resolveArtifactsFromEventLog', () => {
 
     const events: ArtefactEvent[] = [
       {
-        artefactId: 'Artifact:SegmentImage[segment=0]',
-        revision: 'rev-1' as any,
-        inputsHash: 'hash-1',
-        output: { blob: imageBlobRef },
-        status: 'succeeded',
-        producedBy: 'job-1',
+      artefactId: 'Artifact:SegmentImage[segment=0]',
+      revision: 'rev-1' as RevisionId,
+      inputsHash: 'hash-1',
+      output: { blob: imageBlobRef },
+      status: 'succeeded',
+      producedBy: 'job-1',
         createdAt: '2025-01-01T00:00:00Z',
       },
       {
-        artefactId: 'Artifact:SegmentAudio[segment=0]',
-        revision: 'rev-1' as any,
-        inputsHash: 'hash-2',
-        output: { blob: audioBlobRef },
-        status: 'succeeded',
-        producedBy: 'job-2',
+      artefactId: 'Artifact:SegmentAudio[segment=0]',
+      revision: 'rev-1' as RevisionId,
+      inputsHash: 'hash-2',
+      output: { blob: audioBlobRef },
+      status: 'succeeded',
+      producedBy: 'job-2',
         createdAt: '2025-01-01T00:01:00Z',
       },
     ];
@@ -326,8 +327,7 @@ function createMockStorage(blobs: Record<string, Uint8Array>): StorageContext {
         }
         return data;
       },
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } as any,
+    } as unknown as StorageContext['storage'],
     basePath: 'builds',
     resolve(movieId: string, ...segments: string[]): string {
       return [movieId, ...segments].join('/');

@@ -54,7 +54,6 @@ export interface RuntimeSdkHelpers {
 }
 
 export interface ArtefactRegistry {
-  expectInline(artefactId: string): string;
   expectBlob(artefactId: string): string;
 }
 

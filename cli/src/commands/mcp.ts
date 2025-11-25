@@ -226,22 +226,24 @@ async function readPackageMetadata(): Promise<{ name: string; version: string }>
 }
 
 function redirectConsoleOutput(): () => void {
-  const originalLog = console.log;
-  const originalInfo = console.info;
-  const originalDebug = console.debug;
-  const originalError = console.error;
+  const log = globalThis.console;
+  const originalLog = log.log;
+  const originalInfo = log.info;
+  const originalDebug = log.debug;
+  const originalError = log.error;
 
   const toStderr = (...args: unknown[]): void => {
     originalError(...args);
   };
 
-  console.log = toStderr;
-  console.info = toStderr;
-  console.debug = toStderr;
+  log.log = toStderr;
+  log.info = toStderr;
+  log.debug = toStderr;
 
   return () => {
-    console.log = originalLog;
-    console.info = originalInfo;
-    console.debug = originalDebug;
+    log.log = originalLog;
+    log.info = originalInfo;
+    log.debug = originalDebug;
   };
 }
+/* eslint-disable no-console */

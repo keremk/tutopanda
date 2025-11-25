@@ -12,7 +12,7 @@ import { formatBlobFileName } from './blob-utils.js';
  * as inputs to subsequent steps.
  *
  * @param args Configuration with artifact IDs to resolve, event log, storage, and movie ID
- * @returns Map of artifact kinds to their resolved data (Uint8Array for blobs, string for inline)
+ * @returns Map of artifact kinds to their resolved data (Uint8Array for binary blobs, string for decoded text blobs)
  *
  * @example
  * const resolved = await resolveArtifactsFromEventLog({

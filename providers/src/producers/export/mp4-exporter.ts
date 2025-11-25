@@ -27,8 +27,7 @@ interface ManifestFile {
   artefacts?: Record<
     string,
     {
-      inline?: string;
-      blob?: {
+      blob: {
         hash: string;
         size: number;
         mimeType?: string;
@@ -159,6 +158,13 @@ async function loadTimeline(storage: ReturnType<typeof createStorageContext>, mo
   if (!artefact) {
     throw createProviderError(`Timeline artefact not found for movie ${movieId}.`, {
       code: 'missing_timeline',
+      kind: 'user_input',
+      causedByUser: true,
+    });
+  }
+  if (!artefact.blob) {
+    throw createProviderError(`Timeline artefact for movie ${movieId} is missing blob metadata.`, {
+      code: 'missing_timeline_blob',
       kind: 'user_input',
       causedByUser: true,
     });

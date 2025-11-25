@@ -1,3 +1,4 @@
+import { Buffer } from 'node:buffer';
 import { createHash } from 'node:crypto';
 import { lstat, mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
@@ -9,6 +10,8 @@ import {
 } from '@tutopanda/core';
 import type { PendingArtefactDraft } from './planner.js';
 import type { CliConfig } from './cli-config.js';
+
+const log = globalThis.console;
 
 interface FriendlyArtefactInfo {
   artefactId: string;
@@ -65,7 +68,7 @@ export async function buildFriendlyView(args: {
 
     const shardedPath = shardedBlobPath(cliConfig, movieId, entry.blob.hash, entry.blob.mimeType);
     if (!(await pathExists(shardedPath))) {
-      console.warn(
+      log.warn(
         `Warning: blob missing for ${artefactId} at ${shardedPath}. Friendly link not created.`,
       );
       continue;
@@ -147,7 +150,7 @@ async function collectFriendlyContext(args: {
 
     const shardedPath = shardedBlobPath(cliConfig, movieId, entry.blob.hash, entry.blob.mimeType);
     if (!(await pathExists(shardedPath))) {
-      console.warn(
+      log.warn(
         `Warning: blob missing for ${artefactId} at ${shardedPath}. Friendly link not created.`,
       );
       continue;
@@ -193,7 +196,9 @@ function toFriendlyFileName(artefactId: string, mimeType?: string): string {
 }
 
 function inferExtension(mimeType?: string): string | null {
-  if (!mimeType) return null;
+  if (!mimeType) {
+    return null;
+  }
   const map: Record<string, string> = {
     'audio/mpeg': 'mp3',
     'audio/mp3': 'mp3',
@@ -214,10 +219,18 @@ function inferExtension(mimeType?: string): string | null {
     'image/gif': 'gif',
   };
   const normalized = mimeType.toLowerCase();
-  if (map[normalized]) return map[normalized];
-  if (normalized.startsWith('audio/')) return normalized.slice('audio/'.length);
-  if (normalized.startsWith('video/')) return normalized.slice('video/'.length);
-  if (normalized.startsWith('image/')) return normalized.slice('image/'.length);
+  if (map[normalized]) {
+    return map[normalized];
+  }
+  if (normalized.startsWith('audio/')) {
+    return normalized.slice('audio/'.length);
+  }
+  if (normalized.startsWith('video/')) {
+    return normalized.slice('video/'.length);
+  }
+  if (normalized.startsWith('image/')) {
+    return normalized.slice('image/'.length);
+  }
   return null;
 }
 
@@ -319,3 +332,4 @@ function inferBlobExtension(mimeType?: string): string | null {
   }
   return null;
 }
+/* eslint-disable no-console */

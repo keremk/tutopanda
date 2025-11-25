@@ -6,10 +6,8 @@ import {
   createManifestService,
   createStorageContext,
   ManifestNotFoundError,
-  type ArtefactEventOutput,
   type BlobRef,
 } from '@tutopanda/core';
-import { hashArtefactOutput } from '@tutopanda/core';
 import type { CliConfig } from './cli-config.js';
 import { mergeMovieMetadata, readMovieMetadata } from './movie-metadata.js';
 import { INPUT_FILE_NAME, WORKSPACE_INPUTS_RELATIVE_PATH } from './input-files.js';
@@ -34,7 +32,7 @@ export interface WorkspaceArtefactEntry {
   id: string;
   file: string;
   hash: string;
-  kind: 'inline' | 'blob';
+  kind: 'blob';
   mimeType?: string;
   producedBy: string;
   blob?: BlobRef;
@@ -54,7 +52,7 @@ export interface WorkspaceArtefactChange {
   entry: WorkspaceArtefactEntry;
   nextHash: string;
   absolutePath: string;
-  kind: 'inline' | 'blob';
+  kind: 'blob';
   mimeType?: string;
 }
 
@@ -213,43 +211,30 @@ async function copyArtefactsToWorkspace(args: {
     const friendlyName = toFriendlyFileName(artefactId, record.blob?.mimeType);
     const destination = resolve(artefactsDir, friendlyName);
 
-    if (typeof record.inline === 'string' && record.inline.length > 0) {
-      await mkdir(dirname(destination), { recursive: true });
-      await writeFile(destination, record.inline, 'utf8');
-      entries.push({
-        id: artefactId,
-        file: `artefacts/${friendlyName}`,
-        hash: record.hash,
-        kind: 'inline',
-        mimeType: 'text/plain',
-        producedBy: record.producedBy,
-        blob: record.blob,
-      });
-      continue;
+    if (!record.blob) {
+      throw new Error(`Artefact ${artefactId} is missing blob metadata; inline artefacts are not supported.`);
     }
 
-    if (record.blob) {
-      const prefix = record.blob.hash.slice(0, 2);
-      const blobAbsolute = resolve(
-        storageRoot,
-        storageBase,
-        movieId,
-        'blobs',
-        prefix,
-        formatBlobFileName(record.blob.hash, record.blob.mimeType),
-      );
-      await mkdir(dirname(destination), { recursive: true });
-      await copyFile(blobAbsolute, destination);
-      entries.push({
-        id: artefactId,
-        file: `artefacts/${friendlyName}`,
-        hash: record.hash,
-        kind: 'blob',
-        mimeType: record.blob.mimeType,
-        producedBy: record.producedBy,
-        blob: record.blob,
-      });
-    }
+    const prefix = record.blob.hash.slice(0, 2);
+    const blobAbsolute = resolve(
+      storageRoot,
+      storageBase,
+      movieId,
+      'blobs',
+      prefix,
+      formatBlobFileName(record.blob.hash, record.blob.mimeType),
+    );
+    await mkdir(dirname(destination), { recursive: true });
+    await copyFile(blobAbsolute, destination);
+    entries.push({
+      id: artefactId,
+      file: `artefacts/${friendlyName}`,
+      hash: record.hash,
+      kind: 'blob',
+      mimeType: record.blob.mimeType,
+      producedBy: record.producedBy,
+      blob: record.blob,
+    });
   }
 
   return entries;
@@ -261,23 +246,14 @@ async function hashFile(filePath: string): Promise<string> {
 }
 
 async function hashArtefactFile(entry: WorkspaceArtefactEntry, absolutePath: string): Promise<{ nextHash: string }> {
-  if (entry.blob) {
-    const buffer =
-      entry.mimeType && entry.mimeType.startsWith('text/')
-        ? Buffer.from(await readFile(absolutePath, 'utf8'), 'utf8')
-        : await readFile(absolutePath);
-    const nextHash = createHash('sha256').update(buffer).digest('hex');
-    return { nextHash };
+  if (!entry.blob) {
+    throw new Error(`Artefact ${entry.id} is missing blob metadata; inline artefacts are not supported.`);
   }
-
-  if (entry.kind === 'inline') {
-    const inlineValue = await readFile(absolutePath, 'utf8');
-    const output: ArtefactEventOutput = { inline: inlineValue };
-    return { nextHash: hashArtefactOutput(output) };
-  }
-
-  const data = await readFile(absolutePath);
-  const nextHash = createHash('sha256').update(data).digest('hex');
+  const buffer =
+    entry.mimeType && entry.mimeType.startsWith('text/')
+      ? Buffer.from(await readFile(absolutePath, 'utf8'), 'utf8')
+      : await readFile(absolutePath);
+  const nextHash = createHash('sha256').update(buffer).digest('hex');
   return { nextHash };
 }
 
@@ -384,7 +360,6 @@ export function formatBlobFileName(hash: string, mimeType?: string): string {
 
 interface ArtefactManifestEntry {
   hash: string;
-  blob?: BlobRef;
-  inline?: string;
+  blob: BlobRef;
   producedBy: string;
 }

@@ -1,8 +1,9 @@
+/* eslint-disable no-unused-vars */
 export type LogLevel = 'info' | 'debug';
 
 export type LogMeta = Record<string, unknown>;
 
-export type LogWriter = (message: string, meta?: LogMeta) => void;
+export type LogWriter = (_message: string, _meta?: LogMeta) => void;
 
 export interface Logger {
   info(message: string, meta?: LogMeta): void;
@@ -69,3 +70,4 @@ export function createLogger(options: CreateLoggerOptions = {}): Logger {
     },
   };
 }
+/* eslint-disable no-unused-vars */

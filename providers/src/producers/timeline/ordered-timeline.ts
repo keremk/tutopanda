@@ -236,14 +236,18 @@ export function createTimelineProducerHandler(): HandlerFactory {
         tracks,
       };
 
-      const artefactId = runtime.artefacts.expectInline(request.produces[0] ?? '');
+      const artefactId = runtime.artefacts.expectBlob(request.produces[0] ?? '');
+      const timelinePayload = JSON.stringify(timeline, null, 2);
       return {
         status: 'succeeded',
         artefacts: [
           {
             artefactId,
             status: 'succeeded',
-            inline: JSON.stringify(timeline, null, 2),
+            blob: {
+              data: timelinePayload,
+              mimeType: 'application/json',
+            },
           },
         ],
       };

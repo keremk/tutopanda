@@ -119,7 +119,13 @@ describe('ManifestService', () => {
       artefactId: 'segment_script_0',
       revision: 'rev-0002',
       inputsHash: 'inputs:hash',
-      output: { inline: 'Script v2' },
+      output: {
+        blob: {
+          hash: 'script-v2-hash',
+          size: 'Script v2'.length,
+          mimeType: 'text/plain',
+        },
+      },
       status: 'succeeded',
       producedBy: 'script_producer',
       createdAt: new Date('2024-12-31T01:00:00Z').toISOString(),

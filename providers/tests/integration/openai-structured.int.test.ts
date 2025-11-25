@@ -81,12 +81,12 @@ describeIfHasKey('OpenAI structured integration', () => {
             {
               field: 'summary',
               artefactId: 'Artifact:MovieSummary',
-              output: 'inline',
+              output: 'blob',
             },
             {
               field: 'title',
               artefactId: 'Artifact:MovieTitle',
-              output: 'inline',
+              output: 'blob',
             },
           ],
         },
@@ -114,8 +114,8 @@ describeIfHasKey('OpenAI structured integration', () => {
     const title = result.artefacts.find(
       (a) => a.artefactId === 'Artifact:MovieTitle'
     );
-    expect(summary?.inline && summary.inline.length).toBeTruthy();
-    expect(title?.inline && title.inline.length).toBeTruthy();
+    expect(typeof summary?.blob?.data === 'string' && summary.blob.data.length > 0).toBeTruthy();
+    expect(typeof title?.blob?.data === 'string' && title.blob.data.length > 0).toBeTruthy();
     });
   });
 });

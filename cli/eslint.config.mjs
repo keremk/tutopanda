@@ -1,5 +1,6 @@
 import { FlatCompat } from '@eslint/eslintrc';
 import js from '@eslint/js';
+import tseslint from '@typescript-eslint/eslint-plugin';
 import { dirname } from 'path';
 import { fileURLToPath } from 'url';
 
@@ -32,7 +33,10 @@ const eslintConfig = [
 				jsx: true,
 			},
 		},
-		plugins: ['react', 'react-hooks'],
+		plugins: ['react', 'react-hooks', '@typescript-eslint'],
+		settings: {
+			'@typescript-eslint/parser': '@typescript-eslint/parser',
+		},
 	}),
 	{
 		files: ['src/**/*.ts', 'src/**/*.tsx'],

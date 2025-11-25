@@ -223,12 +223,12 @@ describe('createOpenAiLlmHandler', () => {
     expect(result.artefacts).toHaveLength(2);
     expect(result.artefacts[0]).toMatchObject({
       artefactId: 'Artifact:MovieTitle',
-      inline: 'Journey to Mars',
+      blob: { data: 'Journey to Mars', mimeType: 'text/plain' },
       status: 'succeeded',
     });
     expect(result.artefacts[1]).toMatchObject({
       artefactId: 'Artifact:MovieSummary',
-      inline: 'A thrilling space adventure',
+      blob: { data: 'A thrilling space adventure', mimeType: 'text/plain' },
       status: 'succeeded',
     });
   });
@@ -287,16 +287,16 @@ describe('createOpenAiLlmHandler', () => {
     expect(result.artefacts).toHaveLength(4);
 
     const title = result.artefacts.find((a) => a.artefactId === 'Artifact:MovieTitle');
-    expect(title?.inline).toBe('The Great War');
+    expect(title?.blob?.data).toBe('The Great War');
 
     const seg0 = result.artefacts.find((a) => a.artefactId === 'Artifact:NarrationScript[segment=0]');
-    expect(seg0?.inline).toBe('Segment zero');
+    expect(seg0?.blob?.data).toBe('Segment zero');
 
     const seg1 = result.artefacts.find((a) => a.artefactId === 'Artifact:NarrationScript[segment=1]');
-    expect(seg1?.inline).toBe('Segment one');
+    expect(seg1?.blob?.data).toBe('Segment one');
 
     const seg2 = result.artefacts.find((a) => a.artefactId === 'Artifact:NarrationScript[segment=2]');
-    expect(seg2?.inline).toBe('Segment two');
+    expect(seg2?.blob?.data).toBe('Segment two');
   });
 
   it('formats fan-in resolved inputs into markdown bullet lists', async () => {
@@ -378,7 +378,7 @@ describe('createOpenAiLlmHandler', () => {
     expect(result.artefacts[1]?.diagnostics?.reason).toBe('missing_field');
   });
 
-  it('produces inline artefacts for text responses', async () => {
+  it('produces text blobs for text responses', async () => {
     mocks.generateText.mockResolvedValueOnce({
       text: 'Plain response text',
       usage: {
@@ -417,7 +417,7 @@ describe('createOpenAiLlmHandler', () => {
 
     const result = await handler.invoke(request);
     expect(result.status).toBe('succeeded');
-    expect(result.artefacts[0]?.inline).toBe('Plain response text');
+    expect(result.artefacts[0]?.blob?.data).toBe('Plain response text');
 
     const args = mocks.generateText.mock.calls[0]?.[0] as Record<string, unknown>;
     expect(args.prompt).toBe('Summarise the ocean');
@@ -531,12 +531,12 @@ describe('createOpenAiLlmHandler', () => {
     const title = result.artefacts.find(
       (artefact) => artefact.artefactId === 'Artifact:ScriptGenerator.MovieTitle',
     );
-    expect(title?.inline).toContain('Simulated MovieTitle');
+    expect(title?.blob?.data).toContain('Simulated MovieTitle');
 
     const segmentOne = result.artefacts.find(
       (artefact) => artefact.artefactId === 'Artifact:ScriptGenerator.NarrationScript[0]',
     );
-    expect(segmentOne?.inline).toContain('segment 1');
+    expect(segmentOne?.blob?.data).toContain('segment 1');
   });
 
   it('normalizes TOML config from [prompt_settings] section', async () => {
@@ -597,10 +597,10 @@ describe('createOpenAiLlmHandler', () => {
     expect(result.artefacts).toHaveLength(2);
 
     const title = result.artefacts.find((artefact) => artefact.artefactId === 'Artifact:MovieTitle');
-    expect(title?.inline).toBe('The Battle');
+    expect(title?.blob?.data).toBe('The Battle');
 
     const summary = result.artefacts.find((artefact) => artefact.artefactId === 'Artifact:MovieSummary');
-    expect(summary?.inline).toBe('A historic event');
+    expect(summary?.blob?.data).toBe('A historic event');
 
     const args = mocks.generateObject.mock.calls[0]?.[0] as Record<string, unknown>;
     expect(typeof args.system).toBe('string');

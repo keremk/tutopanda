@@ -16,7 +16,8 @@ import type {
 } from '../types.js';
 
 export interface BlueprintResourceReader {
-  readFile(path: string): Promise<string>;
+  // eslint-disable-next-line no-unused-vars
+  readFile(filePath: string): Promise<string>;
 }
 
 export interface BlueprintParseOptions {
@@ -26,8 +27,8 @@ export interface BlueprintParseOptions {
 export interface BlueprintLoadOptions extends BlueprintParseOptions {}
 
 class NodeFilesystemReader implements BlueprintResourceReader {
-  async readFile(path: string): Promise<string> {
-    return fs.readFile(path, 'utf8');
+  async readFile(filePath: string): Promise<string> {
+    return fs.readFile(filePath, 'utf8');
   }
 }
 

@@ -29,7 +29,10 @@ describe('createProviderRegistry', () => {
 
     expect(result.artefacts).toHaveLength(1);
     const artefact = result.artefacts[0];
-    expect(artefact.inline).toContain('Mock response');
+    const inlinePayload = typeof artefact.blob?.data === 'string'
+      ? artefact.blob.data
+      : Buffer.from(artefact.blob!.data).toString('utf8');
+    expect(inlinePayload).toContain('Mock response');
     expect(artefact.blob?.mimeType).toBe('text/plain');
     const payload = typeof artefact.blob?.data === 'string'
       ? artefact.blob.data
@@ -61,7 +64,6 @@ describe('createProviderRegistry', () => {
 
     expect(result.artefacts).toHaveLength(1);
     const artefact = result.artefacts[0];
-    expect(artefact.inline).toBeUndefined();
     expect(artefact.blob?.mimeType).toBe('video/mp4');
   });
 

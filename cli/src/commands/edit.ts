@@ -302,29 +302,9 @@ async function buildPendingArtefactDrafts(args: {
 }): Promise<PendingArtefactDraft[]> {
   const pending: PendingArtefactDraft[] = [];
   for (const change of args.changes) {
-    const treatAsInline =
-      change.kind === 'inline'
-      || (typeof change.mimeType === 'string' && change.mimeType.startsWith('text/'));
-    if (treatAsInline) {
-      const inlineValue = await readFile(change.absolutePath, 'utf8');
-      const blobRef = await persistWorkspaceBlob({
-        cliConfig: args.cliConfig,
-        movieId: args.movieId,
-        data: Buffer.from(inlineValue, 'utf8'),
-        mimeType: change.mimeType ?? 'text/plain',
-      });
-      pending.push({
-        artefactId: change.entry.id,
-        producedBy: 'workspace-edit',
-        output: {
-          inline: inlineValue,
-          blob: blobRef,
-        },
-        diagnostics: { source: 'workspace' },
-      });
-      continue;
-    }
-    const data = await readFile(change.absolutePath);
+    const data = change.mimeType?.startsWith('text/')
+      ? Buffer.from(await readFile(change.absolutePath, 'utf8'), 'utf8')
+      : await readFile(change.absolutePath);
     const blobRef = await persistWorkspaceBlob({
       cliConfig: args.cliConfig,
       movieId: args.movieId,

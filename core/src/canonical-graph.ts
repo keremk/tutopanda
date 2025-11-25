@@ -1,7 +1,6 @@
 import type {
   BlueprintArtefactDefinition,
   BlueprintDocument,
-  BlueprintEdgeDefinition,
   BlueprintInputDefinition,
   BlueprintTreeNode,
   NodeKind,

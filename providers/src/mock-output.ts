@@ -50,7 +50,6 @@ export function createMockArtefacts(request: ProviderJobContext): ProducedArtefa
     return {
       artefactId,
       status: 'succeeded',
-      inline: !baseKind || !blobKinds.has(baseKind) ? mockResponse : undefined,
       blob: {
         data: dataBuffer,
         mimeType: expectedMimeType ?? 'text/plain',

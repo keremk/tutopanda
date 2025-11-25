@@ -62,7 +62,10 @@ function buildSingleArtefact(
     return {
       artefactId,
       status: 'succeeded',
-      inline: response,
+      blob: {
+        data: response,
+        mimeType: 'text/plain',
+      },
       diagnostics: { responseType: 'text' },
     };
   }
@@ -132,7 +135,10 @@ function buildSingleArtefact(
   return {
     artefactId,
     status: 'succeeded',
-    inline: materialized.text,
+    blob: {
+      data: materialized.text,
+      mimeType: 'text/plain',
+    },
     diagnostics,
   };
 }

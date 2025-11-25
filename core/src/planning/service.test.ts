@@ -97,7 +97,13 @@ describe('planning service', () => {
       {
         artefactId: 'Artifact:NarrationScript',
         producedBy: 'workspace-edit',
-        output: { inline: 'patched value' },
+        output: {
+          blob: {
+            hash: 'patched-value-hash',
+            size: 'patched value'.length,
+            mimeType: 'text/plain',
+          },
+        },
         diagnostics: { source: 'test' },
       },
     ];

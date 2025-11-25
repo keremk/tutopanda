@@ -1,3 +1,4 @@
+/* eslint-env node */
 import { describe, expect, it } from 'vitest';
 import {
   createEventLog,
@@ -69,7 +70,7 @@ describe('executePlanWithConcurrency', () => {
       starts.push(job.jobId);
       active += 1;
       peak = Math.max(peak, active);
-      await new Promise((resolve) => setTimeout(resolve, duration));
+      await new Promise((resolve) => globalThis.setTimeout(resolve, duration));
       active -= 1;
       if (layerOne.some((entry) => entry.jobId === job.jobId)) {
         completedLayerOne += 1;

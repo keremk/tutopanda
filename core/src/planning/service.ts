@@ -57,6 +57,7 @@ export interface PlanningServiceOptions {
 }
 
 export interface PlanningService {
+  // eslint-disable-next-line no-unused-vars
   generatePlan(args: GeneratePlanArgs): Promise<GeneratePlanResult>;
 }
 

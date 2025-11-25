@@ -1,3 +1,4 @@
+import { Buffer } from 'node:buffer';
 import { describe, expect, it, vi } from 'vitest';
 import { TextEncoder } from 'util';
 import { createRunner } from './runner.js';
@@ -106,7 +107,7 @@ describe('createRunner', () => {
 
     const firstJob = result.jobs.find((job) => job.jobId === 'job-1');
     const firstBlob = firstJob?.artefacts[0].output.blob;
-    expect(firstJob?.artefacts[0].output.inline).toBeUndefined();
+    expect('inline' in (firstJob?.artefacts[0].output ?? {})).toBe(false);
     expect(firstBlob).toBeDefined();
     expect(firstBlob?.mimeType).toBe('text/plain');
     const narrationPath = storage.resolve(
@@ -172,7 +173,10 @@ describe('createRunner', () => {
         artefacts: [
           {
             artefactId: 'Artifact:NarrationScript',
-            inline: 'Hello world',
+            blob: {
+              data: 'Hello world',
+              mimeType: 'text/plain',
+            },
           },
         ],
       };

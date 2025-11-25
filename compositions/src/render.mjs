@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { bundle } from "@remotion/bundler";
 import { renderMedia, selectComposition } from "@remotion/renderer";
 import handler from "serve-handler";
-import { DOCUMENTARY_COMPOSITION_ID } from "tutopanda-compositions";
+import { DOCUMENTARY_COMPOSITION_ID } from "@tutopanda/compositions";
 
 function parseArgs() {
   const args = process.argv.slice(2);
@@ -109,13 +109,17 @@ async function main() {
     const manifest = await loadManifest(path.join(storageRoot, basePath, movieId, pointer.manifestPath));
 
     const timelineArtefact = manifest.artefacts?.["Artifact:TimelineComposer.Timeline"];
-    if (!timelineArtefact) {
-      throw new Error("Timeline artefact missing in manifest");
+    if (!timelineArtefact || !timelineArtefact.blob?.hash) {
+      throw new Error("Timeline artefact missing blob payload in manifest");
     }
-    const timeline =
-      timelineArtefact.inline !== undefined
-        ? JSON.parse(timelineArtefact.inline)
-        : JSON.parse(await readFile(resolveBlobPath(storageRoot, basePath, movieId, timelineArtefact.blob.hash, timelineArtefact.blob.mimeType), "utf8"));
+    const timelineBlobPath = resolveBlobPath(
+      storageRoot,
+      basePath,
+      movieId,
+      timelineArtefact.blob.hash,
+      timelineArtefact.blob.mimeType
+    );
+    const timeline = JSON.parse(await readFile(timelineBlobPath, "utf8"));
 
     const assets = {};
     for (const [artefactId, entry] of Object.entries(manifest.artefacts ?? {})) {

@@ -157,9 +157,6 @@ function createArtefactRegistry(produces: string[]): ArtefactRegistry {
     return id;
   }
   return {
-    expectInline(artefactId: string) {
-      return ensure(artefactId);
-    },
     expectBlob(artefactId: string) {
       return ensure(artefactId);
     },

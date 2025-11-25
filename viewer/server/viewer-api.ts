@@ -13,8 +13,7 @@ interface ManifestFile {
   artefacts?: Record<
     string,
     {
-      inline?: string;
-      blob?: {
+      blob: {
         hash: string;
         size: number;
         mimeType?: string;
@@ -145,10 +144,6 @@ async function readTimeline(manifest: ManifestFile, buildsRoot: string, movieId:
     throw new Error(`Timeline artefact not found for movie ${movieId}`);
   }
 
-  if (artefact.inline) {
-    return JSON.parse(artefact.inline);
-  }
-
   if (artefact.blob?.hash) {
     const timelinePath = await resolveExistingBlobPath(buildsRoot, movieId, artefact.blob.hash, artefact.blob.mimeType);
     const contents = await fs.readFile(timelinePath, "utf8");
@@ -174,18 +169,12 @@ async function streamAsset(
     return;
   }
 
-  if (artefact.inline !== undefined) {
-    res.setHeader("Content-Type", "text/plain; charset=utf-8");
-    res.end(artefact.inline);
+  if (artefact.blob?.hash) {
+    const filePath = await resolveExistingBlobPath(buildsRoot, movieId, artefact.blob.hash, artefact.blob.mimeType);
+    const mimeType = artefact.blob.mimeType ?? "application/octet-stream";
+    await streamFileWithRange(req, res, filePath, mimeType, artefact.blob.size);
     return;
   }
-
-    if (artefact.blob?.hash) {
-      const filePath = await resolveExistingBlobPath(buildsRoot, movieId, artefact.blob.hash, artefact.blob.mimeType);
-      const mimeType = artefact.blob.mimeType ?? "application/octet-stream";
-      await streamFileWithRange(req, res, filePath, mimeType, artefact.blob.size);
-      return;
-    }
 
   res.statusCode = 404;
   res.end("Asset missing data");

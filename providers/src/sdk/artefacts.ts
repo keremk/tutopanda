@@ -20,7 +20,10 @@ export function inline(options: InlineArtefactOptions): ProducedArtefact {
   return {
     artefactId,
     status,
-    inline: text,
+    blob: {
+      data: text,
+      mimeType: 'text/plain',
+    },
     diagnostics,
   };
 }

@@ -379,7 +379,6 @@ export type ArtefactEventStatus = 'succeeded' | 'failed' | 'skipped';
 
 export interface ArtefactEventOutput {
   blob?: BlobRef;
-  inline?: string;
 }
 
 export interface ArtefactEvent {
@@ -407,7 +406,6 @@ export interface ProducedBlobOutput {
 export interface ProducedArtefact {
   artefactId: Id;
   status?: ArtefactEventStatus;
-  inline?: string;
   blob?: ProducedBlobOutput;
   diagnostics?: Record<string, unknown>;
 }

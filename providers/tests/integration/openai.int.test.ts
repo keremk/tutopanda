@@ -65,7 +65,7 @@ describeIfKey('OpenAI integration', () => {
           artefactMapping: [
             {
               artefactId: 'Artifact:NarrationScript',
-              output: 'inline',
+              output: 'blob',
             },
           ],
         },
@@ -85,7 +85,7 @@ describeIfKey('OpenAI integration', () => {
     expect(result.status).toBe('succeeded');
     const artefact = result.artefacts[0];
     expect(artefact).toBeDefined();
-    expect(artefact?.inline).toContain('Northern');
+    expect(typeof artefact?.blob?.data === 'string' ? artefact.blob.data : '').toContain('Northern');
     });
   });
 });

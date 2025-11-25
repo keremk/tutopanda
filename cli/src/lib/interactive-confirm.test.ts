@@ -6,7 +6,7 @@ const mockClose = vi.fn();
 
 vi.mock('node:readline', () => ({
   createInterface: () => ({
-    question: (_prompt: string, callback: (answer: string) => void) => {
+    question: (_prompt, callback) => {
       callback('y');
     },
     close: mockClose,

@@ -1,4 +1,5 @@
 import readline from 'node:readline';
+import process from 'node:process';
 import { resolve } from 'node:path';
 import { rm } from 'node:fs/promises';
 import { getDefaultCliConfigPath, readCliConfig } from '../lib/cli-config.js';

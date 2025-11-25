@@ -5,6 +5,15 @@ import { describe, expect, it, vi } from 'vitest';
 import { createMp4ExporterHandler, __test__ } from './mp4-exporter.js';
 import type { ProviderJobContext } from '../../types.js';
 
+vi.mock('node:child_process', () => ({
+  execFile: (...args: unknown[]) => {
+    const callback = args.find((arg) => typeof arg === 'function') as
+      | ((err: Error | null, stdout?: unknown, stderr?: unknown) => void)
+      | undefined;
+    callback?.(null, { stdout: '', stderr: '' });
+  },
+}));
+
 vi.mock('@tutopanda/compositions', () => {
   return {
     renderDocumentaryMp4: vi.fn(async (options: { outputFile: string }) => {
@@ -47,10 +56,10 @@ describe('mp4-exporter', () => {
     const movieId = 'movie-123';
     const movieDir = path.join(builds, movieId);
     const manifestsDir = path.join(movieDir, 'manifests');
-    const blobsDir = path.join(movieDir, 'blobs', 'ab');
+    const audioBlobsDir = path.join(movieDir, 'blobs', 'ab');
 
     await mkdir(manifestsDir, { recursive: true });
-    await mkdir(blobsDir, { recursive: true });
+    await mkdir(audioBlobsDir, { recursive: true });
 
     const manifestPath = path.join(manifestsDir, 'manifest.json');
     const timeline = {
@@ -79,7 +88,11 @@ describe('mp4-exporter', () => {
     const manifest = {
       artefacts: {
         'Artifact:TimelineComposer.Timeline': {
-          inline: JSON.stringify(timeline),
+          blob: {
+            hash: 'cd999',
+            size: JSON.stringify(timeline).length,
+            mimeType: 'application/json',
+          },
         },
         'Artifact:Audio[0]': {
           blob: {
@@ -93,7 +106,12 @@ describe('mp4-exporter', () => {
 
     await writeFile(manifestPath, JSON.stringify(manifest));
     await writeFile(path.join(movieDir, 'current.json'), JSON.stringify({ revision: '1', manifestPath: 'manifests/manifest.json' }));
-    await writeFile(path.join(blobsDir, 'ab123.mp3'), Buffer.from('mp3'));
+    await writeFile(path.join(audioBlobsDir, 'ab123.mp3'), Buffer.from('mp3'));
+    const timelinePrefixDir = path.join(movieDir, 'blobs', 'cd');
+    await mkdir(timelinePrefixDir, { recursive: true });
+    await writeFile(path.join(timelinePrefixDir, 'cd999.json'), JSON.stringify(timeline));
+    const expectedOutput = path.join(movieDir, 'FinalVideo.mp4');
+    await writeFile(expectedOutput, Buffer.from('mp4'));
 
     const handler = createMp4ExporterHandler()({
       descriptor: { provider: 'tutopanda', model: 'Mp4Exporter', environment: 'local' },

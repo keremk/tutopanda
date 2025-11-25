@@ -8,99 +8,11 @@ import { nextRevisionId } from './revisions.js';
 import type {
   InputEvent,
   Manifest,
-  ProducerCatalog,
   ProducerGraph,
   ProducerGraphNode,
   ProducerGraphEdge,
   RevisionId,
 } from './types.js';
-
-const testCatalog: ProducerCatalog = {
-  ScriptProducer: {
-    provider: 'openai',
-    providerModel: 'openai/GPT-5',
-    rateKey: 'llm:script',
-    costClass: 'high',
-    medianLatencySec: 45,
-  },
-  TextToMusicPromptProducer: {
-    provider: 'openai',
-    providerModel: 'openai/GPT-5-mini',
-    rateKey: 'llm:music-prompt',
-    costClass: 'mid',
-    medianLatencySec: 12,
-  },
-  TextToMusicProducer: {
-    provider: 'replicate',
-    providerModel: 'stability-ai/stable-audio-2.5',
-    rateKey: 'music:stable-audio-2.5',
-    costClass: 'high',
-    medianLatencySec: 30,
-  },
-  AudioProducer: {
-    provider: 'replicate',
-    providerModel: 'elevenlabs/turbo-v2.5',
-    rateKey: 'audio:elevenlabs-turbo',
-    costClass: 'mid',
-    medianLatencySec: 22,
-  },
-  TextToImagePromptProducer: {
-    provider: 'openai',
-    providerModel: 'openai/GPT-5-mini',
-    rateKey: 'llm:image-prompt',
-    costClass: 'mid',
-    medianLatencySec: 10,
-  },
-  TextToImageProducer: {
-    provider: 'replicate',
-    providerModel: 'bytedance/seedream-4',
-    rateKey: 'image:seedream-4',
-    costClass: 'high',
-    medianLatencySec: 35,
-  },
-  TextToVideoPromptProducer: {
-    provider: 'openai',
-    providerModel: 'openai/GPT-5-mini',
-    rateKey: 'llm:video-prompt',
-    costClass: 'mid',
-    medianLatencySec: 10,
-  },
-  TextToVideoProducer: {
-    provider: 'replicate',
-    providerModel: 'google/veo-3-fast',
-    rateKey: 'video:veo-3-fast',
-    costClass: 'high',
-    medianLatencySec: 90,
-  },
-  ImageToVideoPromptProducer: {
-    provider: 'openai',
-    providerModel: 'openai/GPT-5-mini',
-    rateKey: 'llm:image-video-prompt',
-    costClass: 'mid',
-    medianLatencySec: 10,
-  },
-  StartImageProducer: {
-    provider: 'replicate',
-    providerModel: 'google/imagen-4',
-    rateKey: 'image:start-imagen-4',
-    costClass: 'high',
-    medianLatencySec: 30,
-  },
-  ImageToVideoProducer: {
-    provider: 'replicate',
-    providerModel: 'bytedance/seedance-1-lite',
-    rateKey: 'video:seedance-1-lite',
-    costClass: 'high',
-    medianLatencySec: 120,
-  },
-  TimelineAssembler: {
-    provider: 'internal',
-    providerModel: 'workflow/timeline-assembler',
-    rateKey: 'internal:timeline',
-    costClass: 'low',
-    medianLatencySec: 5,
-  },
-};
 
 function memoryContext(basePath = 'builds') {
   return createStorageContext({ kind: 'memory', basePath });
@@ -375,9 +287,13 @@ describe('planner', () => {
 
     const scriptArtefactId = 'Artifact:NarrationScript[0]';
     const originalScript = 'Segment 0: original narration';
-    const originalHash = hashArtefactOutput({ inline: originalScript });
+    const originalHash = hashArtefactOutput({
+      blob: { hash: 'script-0-hash', size: originalScript.length, mimeType: 'text/plain' },
+    });
     const originalScriptOne = 'Segment 1: original narration';
-    const originalScriptOneHash = hashArtefactOutput({ inline: originalScriptOne });
+    const originalScriptOneHash = hashArtefactOutput({
+      blob: { hash: 'script-1-hash', size: originalScriptOne.length, mimeType: 'text/plain' },
+    });
     const baselineArtefactTimestamp = new Date().toISOString();
 
     const manifest: Manifest = {
@@ -433,7 +349,13 @@ describe('planner', () => {
       artefactId: scriptArtefactId,
       revision: 'rev-manual',
       inputsHash: 'manual',
-      output: { inline: 'Segment 0: edited narration' },
+      output: {
+        blob: {
+          hash: 'edited-script-0-hash',
+          size: 'Segment 0: edited narration'.length,
+          mimeType: 'text/plain',
+        },
+      },
       status: 'succeeded',
       producedBy: 'manual-edit',
       createdAt: new Date().toISOString(),

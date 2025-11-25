@@ -80,7 +80,7 @@ describe('EventLog', () => {
       inputsHash: hashInputs(['input:script_prompt', 'input:audience']),
       output: {
         blob: {
-          hash: hashArtefactOutput({ inline: 'narration content' }),
+          hash: hashArtefactOutput({ blob: { hash: 'narration-hash', size: 48, mimeType: 'text/plain' } }),
           size: 48,
           mimeType: 'text/plain',
         },
@@ -108,12 +108,10 @@ describe('EventLog', () => {
     expect(first).toBe(second);
 
     const outputHash = hashArtefactOutput({
-      inline: 'hello',
       blob: { hash: 'sha', size: 1, mimeType: 'text/plain' },
     });
     const outputHashPermuted = hashArtefactOutput({
       blob: { mimeType: 'text/plain', size: 1, hash: 'sha' },
-      inline: 'hello',
     });
     expect(outputHash).toBe(outputHashPermuted);
   });
@@ -133,7 +131,13 @@ describe('EventLog', () => {
         artefactId: `segment_script_${index}`,
         revision: `rev-${String(index + 1).padStart(4, '0')}`,
         inputsHash: hashInputs([`input:${index}`]),
-        output: { inline: `payload-${index}` },
+        output: {
+          blob: {
+            hash: `payload-${index}-hash`,
+            size: `payload-${index}`.length,
+            mimeType: 'text/plain',
+          },
+        },
         status: 'succeeded',
         producedBy: 'script_producer',
         createdAt: new Date(Date.now() + index).toISOString(),

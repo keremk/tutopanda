@@ -12,7 +12,7 @@ import type {
   ManifestInputEntry,
   RevisionId,
 } from './types.js';
-import { hashArtefactOutput, hashPayload } from './hashing.js';
+import { hashPayload } from './hashing.js';
 
 export class ManifestNotFoundError extends Error {
   constructor(movieId: string) {

@@ -140,9 +140,9 @@ describe('TimelineProducer', () => {
 
     expect(result.status).toBe('succeeded');
     expect(result.artefacts).toHaveLength(1);
-    const payload = result.artefacts[0]?.inline;
+    const payload = result.artefacts[0]?.blob?.data;
     expect(payload).toBeDefined();
-    const timeline = JSON.parse(payload ?? '{}') as {
+    const timeline = JSON.parse(typeof payload === 'string' ? payload : '{}') as {
       duration: number;
       movieTitle?: string;
       tracks: Array<{ kind: string; clips: Array<{ startTime: number; duration: number; properties: Record<string, any> }> }>;
@@ -189,7 +189,8 @@ describe('TimelineProducer', () => {
     resolvedInputs['Artifact:Music[0]'] = createAssetPayload(5);
 
     const result = await handler.invoke(request);
-    const timeline = JSON.parse(result.artefacts[0]?.inline ?? '{}') as { tracks: Array<{ kind: string; clips: Array<{ startTime: number; duration: number }> }> };
+    const timelinePayload = result.artefacts[0]?.blob?.data;
+    const timeline = JSON.parse(typeof timelinePayload === 'string' ? timelinePayload : '{}') as { tracks: Array<{ kind: string; clips: Array<{ startTime: number; duration: number }> }> };
     const musicTrack = timeline.tracks.find((track) => track.kind === 'Music');
     expect(musicTrack).toBeDefined();
     expect(musicTrack?.clips).toHaveLength(4);
@@ -214,7 +215,8 @@ describe('TimelineProducer', () => {
     resolvedInputs['Artifact:Music[0]'] = createAssetPayload(6);
 
     const result = await handler.invoke(request);
-    const timeline = JSON.parse(result.artefacts[0]?.inline ?? '{}') as { tracks: Array<{ kind: string; clips: Array<{ startTime: number; duration: number }> }> };
+    const timelinePayload = result.artefacts[0]?.blob?.data;
+    const timeline = JSON.parse(typeof timelinePayload === 'string' ? timelinePayload : '') as { tracks: Array<{ kind: string; clips: Array<{ startTime: number; duration: number }> }> };
     const musicTrack = timeline.tracks.find((track) => track.kind === 'Music');
     expect(musicTrack).toBeDefined();
     expect(musicTrack?.clips).toHaveLength(1);
@@ -245,7 +247,8 @@ describe('TimelineProducer', () => {
     resolvedInputs['Artifact:Video[1]'] = createAssetPayload(8);
 
     const result = await handler.invoke(request);
-    const timeline = JSON.parse(result.artefacts[0]?.inline ?? '{}') as {
+    const timelinePayload = result.artefacts[0]?.blob?.data;
+    const timeline = JSON.parse(typeof timelinePayload === 'string' ? timelinePayload : '{}') as {
       tracks: Array<{ kind: string; clips: Array<{ duration: number; properties: Record<string, unknown> }> }>;
     };
     const videoTrack = timeline.tracks.find((track) => track.kind === 'Video');
