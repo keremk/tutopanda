@@ -4,6 +4,7 @@ import { createRunner } from './runner.js';
 import { createEventLog } from './event-log.js';
 import { createManifestService } from './manifest.js';
 import { createStorageContext, initializeMovieStorage } from './storage.js';
+import { formatBlobFileName } from './blob-utils.js';
 import type {
   ArtefactEvent,
   ExecutionPlan,
@@ -66,7 +67,10 @@ describe('createRunner', () => {
           artefacts: [
             {
               artefactId: 'Artifact:NarrationScript',
-              inline: 'Once upon a time',
+              blob: {
+                data: 'Once upon a time',
+                mimeType: 'text/plain',
+              },
             },
           ],
         };
@@ -101,9 +105,31 @@ describe('createRunner', () => {
     expect(result.jobs).toHaveLength(2);
 
     const firstJob = result.jobs.find((job) => job.jobId === 'job-1');
-    expect(firstJob?.artefacts[0].output.inline).toBe('Once upon a time');
-    expect(firstJob?.artefacts[0].output.blob).toBeDefined();
-    expect(firstJob?.artefacts[0].output.blob?.mimeType).toBe('text/plain');
+    const firstBlob = firstJob?.artefacts[0].output.blob;
+    expect(firstJob?.artefacts[0].output.inline).toBeUndefined();
+    expect(firstBlob).toBeDefined();
+    expect(firstBlob?.mimeType).toBe('text/plain');
+    const narrationPath = storage.resolve(
+      'movie-123',
+      'blobs',
+      firstBlob!.hash.slice(0, 2),
+      formatBlobFileName(firstBlob!.hash, firstBlob!.mimeType),
+    );
+    const narration = await storage.storage.readToString(narrationPath);
+    expect(narration).toBe('Once upon a time');
+
+    const audioJob = result.jobs.find((job) => job.jobId === 'job-2');
+    const audioBlob = audioJob?.artefacts[0].output.blob;
+    expect(audioBlob).toBeDefined();
+    expect(audioBlob?.mimeType).toBe('audio/wav');
+    const audioPath = storage.resolve(
+      'movie-123',
+      'blobs',
+      audioBlob!.hash.slice(0, 2),
+      formatBlobFileName(audioBlob!.hash, audioBlob!.mimeType),
+    );
+    const storedAudio = await storage.storage.readToUint8Array(audioPath);
+    expect(Array.from(storedAudio)).toEqual(Array.from(new TextEncoder().encode('AUDIO_DATA')));
 
     const manifest = await result.buildManifest();
     expect(manifest.revision).toBe('rev-0001');
@@ -173,12 +199,28 @@ describe('createRunner', () => {
     await initializeMovieStorage(storage, 'movie-alias');
     const eventLog = createEventLog(storage);
     const manifestService = createManifestService(storage);
+    const aliasText = 'aliased text';
+    const aliasBlobHash = 'aliastext123';
+    const aliasBlobRef: ArtefactEvent['output']['blob'] = {
+      hash: aliasBlobHash,
+      size: aliasText.length,
+      mimeType: 'text/plain',
+    };
+    const aliasDir = storage.resolve('movie-alias', 'blobs', aliasBlobHash.slice(0, 2));
+    await storage.storage.createDirectory(aliasDir, {});
+    const aliasPath = storage.resolve(
+      'movie-alias',
+      'blobs',
+      aliasBlobHash.slice(0, 2),
+      formatBlobFileName(aliasBlobHash, aliasBlobRef.mimeType),
+    );
+    await storage.storage.write(aliasPath, Buffer.from(aliasText), { mimeType: 'text/plain' });
 
     const artefactEvent: ArtefactEvent = {
       artefactId: 'Artifact:ScriptGeneration.NarrationScript[segment=0]',
       revision: 'rev-0001',
       inputsHash: 'hash',
-      output: { inline: 'aliased text' },
+      output: { blob: aliasBlobRef },
       status: 'succeeded',
       producedBy: 'Producer:ScriptGeneration.ScriptProducer[segment=0]',
       createdAt: new Date().toISOString(),

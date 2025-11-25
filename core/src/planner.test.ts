@@ -249,10 +249,11 @@ describe('planner', () => {
       await eventLog.appendInput('demo', event);
     }
 
+    const artefactCreatedAt = new Date().toISOString();
     const manifest: Manifest = {
       revision: 'rev-0001',
       baseRevision: null,
-      createdAt: new Date().toISOString(),
+      createdAt: artefactCreatedAt,
       inputs: Object.fromEntries(
         baseline.map((event) => [
           event.id,
@@ -263,7 +264,38 @@ describe('planner', () => {
           },
         ]),
       ),
-      artefacts: {},
+      artefacts: {
+        'Artifact:NarrationScript[0]': {
+          hash: 'hash-script-0',
+          producedBy: 'Producer:ScriptProducer',
+          status: 'succeeded',
+          createdAt: artefactCreatedAt,
+        },
+        'Artifact:NarrationScript[1]': {
+          hash: 'hash-script-1',
+          producedBy: 'Producer:ScriptProducer',
+          status: 'succeeded',
+          createdAt: artefactCreatedAt,
+        },
+        'Artifact:SegmentAudio[0]': {
+          hash: 'hash-audio-0',
+          producedBy: 'Producer:AudioProducer[0]',
+          status: 'succeeded',
+          createdAt: artefactCreatedAt,
+        },
+        'Artifact:SegmentAudio[1]': {
+          hash: 'hash-audio-1',
+          producedBy: 'Producer:AudioProducer[1]',
+          status: 'succeeded',
+          createdAt: artefactCreatedAt,
+        },
+        'Artifact:FinalVideo': {
+          hash: 'hash-final-video',
+          producedBy: 'Producer:TimelineAssembler',
+          status: 'succeeded',
+          createdAt: artefactCreatedAt,
+        },
+      },
       timeline: {},
     };
 
@@ -276,7 +308,8 @@ describe('planner', () => {
       pendingEdits: [],
     });
 
-    expect(plan.layers).toHaveLength(0);
+    expect(plan.layers.flat()).toHaveLength(0);
+    expect(plan.layers.every((layer) => layer.length === 0)).toBe(true);
   });
 
   it('propagates dirtiness downstream when inputs change', async () => {
@@ -343,11 +376,14 @@ describe('planner', () => {
     const scriptArtefactId = 'Artifact:NarrationScript[0]';
     const originalScript = 'Segment 0: original narration';
     const originalHash = hashArtefactOutput({ inline: originalScript });
+    const originalScriptOne = 'Segment 1: original narration';
+    const originalScriptOneHash = hashArtefactOutput({ inline: originalScriptOne });
+    const baselineArtefactTimestamp = new Date().toISOString();
 
     const manifest: Manifest = {
       revision: baseRevision,
       baseRevision: null,
-      createdAt: new Date().toISOString(),
+      createdAt: baselineArtefactTimestamp,
       inputs: Object.fromEntries(
         baseline.map((event) => [
           event.id,
@@ -363,7 +399,31 @@ describe('planner', () => {
           hash: originalHash,
           producedBy: 'Producer:ScriptProducer',
           status: 'succeeded',
-          createdAt: new Date().toISOString(),
+          createdAt: baselineArtefactTimestamp,
+        },
+        'Artifact:NarrationScript[1]': {
+          hash: originalScriptOneHash,
+          producedBy: 'Producer:ScriptProducer',
+          status: 'succeeded',
+          createdAt: baselineArtefactTimestamp,
+        },
+        'Artifact:SegmentAudio[0]': {
+          hash: 'hash-audio-0',
+          producedBy: 'Producer:AudioProducer[0]',
+          status: 'succeeded',
+          createdAt: baselineArtefactTimestamp,
+        },
+        'Artifact:SegmentAudio[1]': {
+          hash: 'hash-audio-1',
+          producedBy: 'Producer:AudioProducer[1]',
+          status: 'succeeded',
+          createdAt: baselineArtefactTimestamp,
+        },
+        'Artifact:FinalVideo': {
+          hash: 'hash-final-video',
+          producedBy: 'Producer:TimelineAssembler',
+          status: 'succeeded',
+          createdAt: baselineArtefactTimestamp,
         },
       },
       timeline: {},

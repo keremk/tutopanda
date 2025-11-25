@@ -57,7 +57,7 @@ describe('resolveArtifactsFromEventLog', () => {
 
     const mockEventLog = createMockEventLog([event]);
     const mockStorage = createMockStorage({
-      'test-movie/blobs/ab/abc123def456': blobData,
+      'test-movie/blobs/ab/abc123def456.png': blobData,
     });
 
     const result = await resolveArtifactsFromEventLog({
@@ -75,18 +75,27 @@ describe('resolveArtifactsFromEventLog', () => {
   });
 
   it('resolves inline artifact from event log', async () => {
+    const scriptText = 'This is a narration script';
+    const blobRef: BlobRef = {
+      hash: 'narrationhash1234567890',
+      size: scriptText.length,
+      mimeType: 'text/plain',
+    };
+
     const event: ArtefactEvent = {
       artefactId: 'Artifact:NarrationScript',
       revision: 'rev-1' as any,
       inputsHash: 'hash-1',
-      output: { inline: 'This is a narration script' },
+      output: { blob: blobRef },
       status: 'succeeded',
       producedBy: 'job-1',
       createdAt: '2025-01-01T00:00:00Z',
     };
 
     const mockEventLog = createMockEventLog([event]);
-    const mockStorage = createMockStorage({});
+    const mockStorage = createMockStorage({
+      'test-movie/blobs/na/narrationhash1234567890.txt': new TextEncoder().encode(scriptText),
+    });
 
     const result = await resolveArtifactsFromEventLog({
       artifactIds: ['Artifact:NarrationScript'],
@@ -96,17 +105,23 @@ describe('resolveArtifactsFromEventLog', () => {
     });
 
     expect(result).toEqual({
-      NarrationScript: 'This is a narration script',
-      'Artifact:NarrationScript': 'This is a narration script',
+      NarrationScript: scriptText,
+      'Artifact:NarrationScript': scriptText,
     });
   });
 
   it('resolves multiple artifacts', async () => {
     const blobData = new Uint8Array([5, 6, 7, 8]);
-    const blobRef: BlobRef = {
+    const audioBlobRef: BlobRef = {
       hash: 'def456abc789',
       size: 4,
       mimeType: 'audio/mpeg',
+    };
+    const titleText = 'Amazing Documentary';
+    const titleBlobRef: BlobRef = {
+      hash: 'movietitlehash123',
+      size: titleText.length,
+      mimeType: 'text/plain',
     };
 
     const events: ArtefactEvent[] = [
@@ -114,7 +129,7 @@ describe('resolveArtifactsFromEventLog', () => {
         artefactId: 'Artifact:SegmentAudio[segment=0]',
         revision: 'rev-1' as any,
         inputsHash: 'hash-1',
-        output: { blob: blobRef },
+        output: { blob: audioBlobRef },
         status: 'succeeded',
         producedBy: 'job-1',
         createdAt: '2025-01-01T00:00:00Z',
@@ -123,7 +138,7 @@ describe('resolveArtifactsFromEventLog', () => {
         artefactId: 'Artifact:MovieTitle',
         revision: 'rev-1' as any,
         inputsHash: 'hash-2',
-        output: { inline: 'Amazing Documentary' },
+        output: { blob: titleBlobRef },
         status: 'succeeded',
         producedBy: 'job-2',
         createdAt: '2025-01-01T00:01:00Z',
@@ -132,7 +147,8 @@ describe('resolveArtifactsFromEventLog', () => {
 
     const mockEventLog = createMockEventLog(events);
     const mockStorage = createMockStorage({
-      'test-movie/blobs/de/def456abc789': blobData,
+      'test-movie/blobs/de/def456abc789.mp3': blobData,
+      'test-movie/blobs/mo/movietitlehash123.txt': new TextEncoder().encode(titleText),
     });
 
     const result = await resolveArtifactsFromEventLog({
@@ -146,8 +162,8 @@ describe('resolveArtifactsFromEventLog', () => {
       SegmentAudio: blobData,
       'SegmentAudio[segment=0]': blobData,
       'Artifact:SegmentAudio[segment=0]': blobData,
-      MovieTitle: 'Amazing Documentary',
-      'Artifact:MovieTitle': 'Amazing Documentary',
+      MovieTitle: titleText,
+      'Artifact:MovieTitle': titleText,
     });
   });
 
@@ -228,12 +244,23 @@ describe('resolveArtifactsFromEventLog', () => {
   });
 
   it('only resolves requested artifacts', async () => {
+    const imageBlobRef: BlobRef = {
+      hash: 'imagehash123',
+      size: 'image-url'.length,
+      mimeType: 'text/plain',
+    };
+    const audioBlobRef: BlobRef = {
+      hash: 'audiohash123',
+      size: 'audio-url'.length,
+      mimeType: 'text/plain',
+    };
+
     const events: ArtefactEvent[] = [
       {
         artefactId: 'Artifact:SegmentImage[segment=0]',
         revision: 'rev-1' as any,
         inputsHash: 'hash-1',
-        output: { inline: 'image-url' },
+        output: { blob: imageBlobRef },
         status: 'succeeded',
         producedBy: 'job-1',
         createdAt: '2025-01-01T00:00:00Z',
@@ -242,7 +269,7 @@ describe('resolveArtifactsFromEventLog', () => {
         artefactId: 'Artifact:SegmentAudio[segment=0]',
         revision: 'rev-1' as any,
         inputsHash: 'hash-2',
-        output: { inline: 'audio-url' },
+        output: { blob: audioBlobRef },
         status: 'succeeded',
         producedBy: 'job-2',
         createdAt: '2025-01-01T00:01:00Z',
@@ -250,7 +277,10 @@ describe('resolveArtifactsFromEventLog', () => {
     ];
 
     const mockEventLog = createMockEventLog(events);
-    const mockStorage = createMockStorage({});
+    const mockStorage = createMockStorage({
+      'test-movie/blobs/im/imagehash123.txt': new TextEncoder().encode('image-url'),
+      'test-movie/blobs/au/audiohash123.txt': new TextEncoder().encode('audio-url'),
+    });
 
     const result = await resolveArtifactsFromEventLog({
       artifactIds: ['Artifact:SegmentImage[segment=0]'], // Only request image
