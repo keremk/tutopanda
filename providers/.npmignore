@@ -1,0 +1,24 @@
+# Ignore everything by default
+*
+
+# Include only what's needed
+!dist/
+!README.md
+!LICENSE
+!package.json
+
+# Explicitly exclude sensitive files
+.env*
+*.pem
+*.key
+*secret*
+*credential*
+node_modules/
+src/
+tests/
+*.test.*
+*.spec.*
+tsconfig*.json
+vitest.config.*
+vitest.integration.config.*
+.DS_Store
