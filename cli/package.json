@@ -6,7 +6,9 @@
   "publishConfig": {
     "access": "public"
   },
-  "bin": "dist/cli.js",
+  "bin": {
+    "tutopanda": "dist/cli.js"
+  },
   "type": "module",
   "engines": {
     "node": ">=16"
