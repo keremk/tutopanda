@@ -1,5 +1,5 @@
 {
-  "name": "tutopanda-providers",
+  "name": "@tutopanda/providers",
   "version": "0.1.3",
   "description": "AI provider integrations for Tutopanda",
   "type": "module",
@@ -38,8 +38,8 @@
     "ai": "^5.0.44",
     "mediabunny": "^1.24.5",
     "replicate": "^1.2.0",
-    "tutopanda-core": "workspace:*",
-    "tutopanda-compositions": "workspace:*"
+    "@tutopanda/core": "workspace:*",
+    "@tutopanda/compositions": "workspace:*"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.3.1",

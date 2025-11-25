@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createProviderProduce } from './build.js';
 import type { LoadedProducerOption } from './producer-options.js';
-import type { ProviderRegistry, ProducerHandler, ProviderJobContext } from 'tutopanda-providers';
-import type { ProduceRequest, JobDescriptor } from 'tutopanda-core';
+import type { ProviderRegistry, ProducerHandler, ProviderJobContext } from '@tutopanda/providers';
+import type { ProduceRequest, JobDescriptor } from '@tutopanda/core';
 
 describe('createProviderProduce', () => {
   it('passes user overrides for NumOfImagesPerNarrative through resolved inputs and bindings', async () => {

@@ -8,8 +8,8 @@ import {
   ManifestNotFoundError,
   type ArtefactEventOutput,
   type BlobRef,
-} from 'tutopanda-core';
-import { hashArtefactOutput } from 'tutopanda-core';
+} from '@tutopanda/core';
+import { hashArtefactOutput } from '@tutopanda/core';
 import type { CliConfig } from './cli-config.js';
 import { mergeMovieMetadata, readMovieMetadata } from './movie-metadata.js';
 import { INPUT_FILE_NAME, WORKSPACE_INPUTS_RELATIVE_PATH } from './input-files.js';

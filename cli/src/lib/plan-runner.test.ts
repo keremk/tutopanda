@@ -9,7 +9,7 @@ import {
   type ProduceFn,
   type JobDescriptor,
   type ProviderName,
-} from 'tutopanda-core';
+} from '@tutopanda/core';
 import { executePlanWithConcurrency } from './plan-runner.js';
 
 async function createRunnerContext() {

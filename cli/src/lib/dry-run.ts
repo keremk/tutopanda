@@ -9,8 +9,8 @@ import {
   type RunResult,
   type ProviderName,
   type Logger,
-} from 'tutopanda-core';
-import { createProviderRegistry, SchemaRegistry } from 'tutopanda-providers';
+} from '@tutopanda/core';
+import { createProviderRegistry, SchemaRegistry } from '@tutopanda/providers';
 import { createProviderProduce, prepareProviderHandlers } from './build.js';
 import { executePlanWithConcurrency } from './plan-runner.js';
 import type { ProducerOptionsMap } from './producer-options.js';

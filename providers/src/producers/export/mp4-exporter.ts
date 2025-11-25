@@ -6,7 +6,7 @@ import { createProducerHandlerFactory } from '../../sdk/handler-factory.js';
 import { createProviderError } from '../../sdk/errors.js';
 import type { HandlerFactory } from '../../types.js';
 import type { ResolvedInputsAccessor } from '../../sdk/types.js';
-import { createStorageContext } from 'tutopanda-core';
+import { createStorageContext } from '@tutopanda/core';
 
 const execFileAsync = promisify(execFile);
 const DEFAULT_DOCKER_IMAGE = process.env.REMOTION_DOCKER_IMAGE ?? 'tutopanda-remotion-export:latest';

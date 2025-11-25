@@ -8,8 +8,8 @@ import type {
   RunResult,
   RunnerExecutionContext,
   RunnerLogger,
-} from 'tutopanda-core';
-import { createRunner } from 'tutopanda-core';
+} from '@tutopanda/core';
+import { createRunner } from '@tutopanda/core';
 
 interface PlanExecutionContext extends RunnerExecutionContext {
   manifestService: ManifestService;

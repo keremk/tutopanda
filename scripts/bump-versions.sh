@@ -24,7 +24,7 @@ fi
 echo -e "${BLUE}Bumping all package versions: $BUMP_TYPE${NC}"
 echo ""
 
-# Array of packages to bump
+# Array of packages to bump (directory names)
 PACKAGES=("core" "compositions" "providers" "cli")
 
 # Function to bump version
@@ -73,10 +73,10 @@ echo ""
 echo -e "${GREEN}✅ All packages bumped to $BUMP_TYPE version${NC}"
 echo ""
 echo "Package versions:"
-echo "  - tutopanda-core@$(node -p "require('./core/package.json').version")"
-echo "  - tutopanda-compositions@$(node -p "require('./compositions/package.json').version")"
-echo "  - tutopanda-providers@$(node -p "require('./providers/package.json').version")"
-echo "  - tutopanda (CLI)@$CLI_VERSION"
+echo "  - @tutopanda/core@$(node -p "require('./core/package.json').version")"
+echo "  - @tutopanda/compositions@$(node -p "require('./compositions/package.json').version")"
+echo "  - @tutopanda/providers@$(node -p "require('./providers/package.json').version")"
+echo "  - @tutopanda/cli@$CLI_VERSION"
 echo ""
 echo -e "${YELLOW}Next steps:${NC}"
 echo -e "  1. Review changes: ${BLUE}git diff */package.json${NC}"

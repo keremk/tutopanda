@@ -36,6 +36,12 @@ importers:
       '@modelcontextprotocol/sdk':
         specifier: ^1.22.0
         version: 1.22.0
+      '@tutopanda/core':
+        specifier: workspace:*
+        version: link:../core
+      '@tutopanda/providers':
+        specifier: workspace:*
+        version: link:../providers
       dotenv:
         specifier: ^17.2.3
         version: 17.2.3
@@ -54,12 +60,6 @@ importers:
       smol-toml:
         specifier: ^1.4.2
         version: 1.4.2
-      tutopanda-core:
-        specifier: workspace:*
-        version: link:../core
-      tutopanda-providers:
-        specifier: workspace:*
-        version: link:../providers
       yaml:
         specifier: ^2.8.1
         version: 2.8.1
@@ -484,6 +484,12 @@ importers:
       '@ai-sdk/openai':
         specifier: ^2.0.39
         version: 2.0.39(zod@4.1.12)
+      '@tutopanda/compositions':
+        specifier: workspace:*
+        version: link:../compositions
+      '@tutopanda/core':
+        specifier: workspace:*
+        version: link:../core
       ai:
         specifier: ^5.0.44
         version: 5.0.44(zod@4.1.12)
@@ -493,12 +499,6 @@ importers:
       replicate:
         specifier: ^1.2.0
         version: 1.2.0
-      tutopanda-compositions:
-        specifier: workspace:*
-        version: link:../compositions
-      tutopanda-core:
-        specifier: workspace:*
-        version: link:../core
     devDependencies:
       '@eslint/eslintrc':
         specifier: ^3.3.1
@@ -582,6 +582,9 @@ importers:
       '@tailwindcss/vite':
         specifier: ^4.1.17
         version: 4.1.17(vite@7.2.2(@types/node@24.10.1)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.0)(tsx@4.20.5)(yaml@2.8.1))
+      '@tutopanda/compositions':
+        specifier: workspace:*
+        version: link:../compositions
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1
@@ -606,9 +609,6 @@ importers:
       tailwindcss:
         specifier: ^4.1.13
         version: 4.1.13
-      tutopanda-compositions:
-        specifier: workspace:*
-        version: link:../compositions
     devDependencies:
       '@eslint/js':
         specifier: ^9.39.1

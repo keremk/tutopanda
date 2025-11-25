@@ -12,7 +12,7 @@ import {
   type RunResult,
   type ProducerJobContext,
   type Logger,
-} from 'tutopanda-core';
+} from '@tutopanda/core';
 import {
   createProviderRegistry,
   type ProviderContextPayload,
@@ -20,7 +20,7 @@ import {
   type ProducerHandler,
   type ResolvedProviderHandler,
   type ProviderDescriptor,
-} from 'tutopanda-providers';
+} from '@tutopanda/providers';
 import type { CliConfig } from './cli-config.js';
 import { normalizeConcurrency } from './cli-config.js';
 import type { ProducerOptionsMap, LoadedProducerOption } from './producer-options.js';

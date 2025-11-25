@@ -1,6 +1,6 @@
 import process from 'node:process';
 import * as readline from 'node:readline';
-import type { ExecutionPlan, InputEvent, Logger } from 'tutopanda-core';
+import type { ExecutionPlan, InputEvent, Logger } from '@tutopanda/core';
 
 const ANSI_COLORS = {
   run: '\u001B[32m',

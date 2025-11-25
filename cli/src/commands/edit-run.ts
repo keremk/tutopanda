@@ -5,7 +5,7 @@ import { getDefaultCliConfigPath, readCliConfig } from '../lib/cli-config.js';
 import { formatMovieId } from './query.js';
 import { runEdit, type EditResult } from './edit.js';
 import { loadCurrentManifest, prepareFriendlyPreflight, buildFriendlyView } from '../lib/friendly-view.js';
-import type { Logger } from 'tutopanda-core';
+import type { Logger } from '@tutopanda/core';
 
 export interface EditRunOptions {
   movieId: string;

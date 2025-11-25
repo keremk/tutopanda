@@ -6,7 +6,7 @@ import type {
   ProviderDescriptor,
   ProviderLogger,
 } from '../types.js';
-import type { BlueprintProducerSdkMappingField } from 'tutopanda-core';
+import type { BlueprintProducerSdkMappingField } from '@tutopanda/core';
 
 export type ProducerDomain = 'prompt' | 'media';
 

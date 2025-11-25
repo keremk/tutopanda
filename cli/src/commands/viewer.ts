@@ -12,7 +12,7 @@ import {
   removeViewerState,
   writeViewerState,
 } from '../lib/viewer-state.js';
-import type { Logger } from 'tutopanda-core';
+import type { Logger } from '@tutopanda/core';
 
 export interface ViewerStartOptions {
   host?: string;

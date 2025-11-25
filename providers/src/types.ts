@@ -4,7 +4,7 @@ import type {
   ProviderName,
   RevisionId,
   Logger,
-} from 'tutopanda-core';
+} from '@tutopanda/core';
 import type { SchemaRegistry } from './schema-registry.js';
 
 export type ProviderMode = 'mock' | 'live' | 'simulated';

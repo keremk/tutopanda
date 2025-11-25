@@ -8,11 +8,11 @@ export default defineConfig({
   resolve: {
     alias: [
       {
-        find: 'tutopanda-core/blueprint-loader',
+        find: '@tutopanda/core/blueprint-loader',
         replacement: new URL('../core/src/blueprint-loader/index.ts', import.meta.url).pathname,
       },
       {
-        find: 'tutopanda-core',
+        find: '@tutopanda/core',
         replacement: new URL('../core/src/index.ts', import.meta.url).pathname,
       },
     ],

@@ -1,1 +1,1 @@
-export * from "tutopanda-compositions/browser";
+export * from "@tutopanda/compositions/browser";

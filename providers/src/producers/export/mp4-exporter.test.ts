@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { createMp4ExporterHandler, __test__ } from './mp4-exporter.js';
 import type { ProviderJobContext } from '../../types.js';
 
-vi.mock('tutopanda-compositions', () => {
+vi.mock('@tutopanda/compositions', () => {
   return {
     renderDocumentaryMp4: vi.fn(async (options: { outputFile: string }) => {
       await writeFile(options.outputFile, Buffer.from('mock-mp4'));

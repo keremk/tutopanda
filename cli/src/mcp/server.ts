@@ -8,7 +8,7 @@ import type { Variables } from '@modelcontextprotocol/sdk/shared/uriTemplate.js'
 import type { ReadResourceResult, ListResourcesResult, Resource } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
 import { stringify as stringifyYaml } from 'yaml';
-import type { Manifest } from 'tutopanda-core';
+import type { Manifest } from '@tutopanda/core';
 import { runQuery, type QueryResult } from '../commands/query.js';
 import { runViewerView } from '../commands/viewer.js';
 import { readCliConfig } from '../lib/cli-config.js';

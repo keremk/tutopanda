@@ -18,9 +18,9 @@ This guide walks you through publishing the Tutopanda CLI and its dependencies t
 
 Tutopanda uses a **monorepo** with multiple packages. We publish 4 packages to npm:
 
-- `tutopanda-core` - Core functionality (can be used independently)
-- `tutopanda-compositions` - Remotion compositions (can be used independently)
-- `tutopanda-providers` - AI provider integrations (depends on core & compositions)
+- `@tutopanda/core` - Core functionality (can be used independently)
+- `@tutopanda/compositions` - Remotion compositions (can be used independently)
+- `@tutopanda/providers` - AI provider integrations (depends on core & compositions)
 - `tutopanda` - CLI with bundled viewer (depends on core & providers)
 
 **Key architectural decisions:**
@@ -36,10 +36,10 @@ Tutopanda uses a **monorepo** with multiple packages. We publish 4 packages to n
 ### Package Dependencies
 
 ```
-tutopanda-core (1.0.0)          <- Independent
-tutopanda-compositions (1.0.0)  <- Independent
+@tutopanda/core (1.0.0)          <- Independent
+@tutopanda/compositions (1.0.0)  <- Independent
    ↓
-tutopanda-providers (1.0.0)     <- Depends on core & compositions
+@tutopanda/providers (1.0.0)     <- Depends on core & compositions
    ↓
 tutopanda (CLI) (1.0.0)         <- Depends on core & providers
    └─ Bundled: viewer assets    <- Not published separately
@@ -91,9 +91,9 @@ Before manual publishing, verify the package names are available:
 1. Go to [npmjs.com/package/tutopanda](https://www.npmjs.com/package/tutopanda)
 2. If it shows "404 - Not Found", the name is available ✅
 3. Repeat for:
-   - [npmjs.com/package/tutopanda-core](https://www.npmjs.com/package/tutopanda-core)
-   - [npmjs.com/package/tutopanda-providers](https://www.npmjs.com/package/tutopanda-providers)
-   - [npmjs.com/package/tutopanda-compositions](https://www.npmjs.com/package/tutopanda-compositions)
+   - [npmjs.com/package/@tutopanda/core](https://www.npmjs.com/package/@tutopanda/core)
+   - [npmjs.com/package/@tutopanda/providers](https://www.npmjs.com/package/@tutopanda/providers)
+   - [npmjs.com/package/@tutopanda/compositions](https://www.npmjs.com/package/@tutopanda/compositions)
 
 If any name is taken, you'll need to choose a different name (like `@your-username/tutopanda`).
 
@@ -131,9 +131,9 @@ cd /path/to/tutopanda
 
 # Build all packages
 pnpm install
-pnpm --filter tutopanda-core build
-pnpm --filter tutopanda-compositions build
-pnpm --filter tutopanda-providers build
+pnpm --filter @tutopanda/core build
+pnpm --filter @tutopanda/compositions build
+pnpm --filter @tutopanda/providers build
 pnpm --filter tutopanda build
 ```
 
@@ -163,7 +163,7 @@ npm publish release/tutopanda-*.tgz --access public
 **What to expect:**
 - You'll be prompted for an OTP (from authenticator app) for each publish
 - Each publish takes ~5-10 seconds
-- You'll see output like: `+ tutopanda-core@1.0.0`
+- You'll see output like: `+ @tutopanda/core@1.0.0`
 
 **Verify on npm:**
 1. Visit [npmjs.com/package/tutopanda](https://www.npmjs.com/package/tutopanda)
@@ -176,9 +176,9 @@ Now that packages exist, configure GitHub Actions to publish automatically.
 
 **For EACH package, repeat these steps:**
 
-#### For tutopanda-core:
+#### For @tutopanda/core:
 
-1. Go to [npmjs.com/package/tutopanda-core/access](https://www.npmjs.com/package/tutopanda-core/access)
+1. Go to [npmjs.com/package/@tutopanda/core/access](https://www.npmjs.com/package/@tutopanda/core/access)
 2. Scroll to "Publishing access" section
 3. You'll see "Require two-factor authentication or automation tokens"
 4. Click the dropdown and select "Automation tokens and granular access tokens only"
@@ -192,8 +192,8 @@ Now that packages exist, configure GitHub Actions to publish automatically.
 
 #### Repeat for the other 3 packages:
 
-- [npmjs.com/package/tutopanda-compositions/access](https://www.npmjs.com/package/tutopanda-compositions/access)
-- [npmjs.com/package/tutopanda-providers/access](https://www.npmjs.com/package/tutopanda-providers/access)
+- [npmjs.com/package/@tutopanda/compositions/access](https://www.npmjs.com/package/@tutopanda/compositions/access)
+- [npmjs.com/package/@tutopanda/providers/access](https://www.npmjs.com/package/@tutopanda/providers/access)
 - [npmjs.com/package/tutopanda/access](https://www.npmjs.com/package/tutopanda/access)
 
 **What does this do?**
@@ -264,9 +264,9 @@ git push origin cli-v1.0.1
 
 **Check npm packages:**
 - [npmjs.com/package/tutopanda](https://www.npmjs.com/package/tutopanda)
-- [npmjs.com/package/tutopanda-core](https://www.npmjs.com/package/tutopanda-core)
-- [npmjs.com/package/tutopanda-providers](https://www.npmjs.com/package/tutopanda-providers)
-- [npmjs.com/package/tutopanda-compositions](https://www.npmjs.com/package/tutopanda-compositions)
+- [npmjs.com/package/@tutopanda/core](https://www.npmjs.com/package/@tutopanda/core)
+- [npmjs.com/package/@tutopanda/providers](https://www.npmjs.com/package/@tutopanda/providers)
+- [npmjs.com/package/@tutopanda/compositions](https://www.npmjs.com/package/@tutopanda/compositions)
 
 You should see:
 - ✅ New version number
@@ -424,14 +424,14 @@ This ensures dependencies are always available.
 
 ### Workspace dependencies not resolved
 
-**Symptom:** `tutopanda` package has `"tutopanda-core": "workspace:*"` on npm
+**Symptom:** `tutopanda` package has `"@tutopanda/core": "workspace:*"` on npm
 
 **Cause:** pnpm didn't convert workspace protocol to version.
 
 **Solution:**
 Our workflow uses `pnpm pack` which automatically converts:
-- Before: `"tutopanda-core": "workspace:*"`
-- After: `"tutopanda-core": "1.0.1"`
+- Before: `"@tutopanda/core": "workspace:*"`
+- After: `"@tutopanda/core": "1.0.1"`
 
 If this happens, check `pnpm` version matches `package.json` (`10.15.0`).
 
@@ -473,8 +473,8 @@ npm install -g tutopanda
 ```json
 {
   "dependencies": {
-    "tutopanda-core": "^1.0.0",
-    "tutopanda-providers": "^1.0.0"
+    "@tutopanda/core": "^1.0.0",
+    "@tutopanda/providers": "^1.0.0"
   }
 }
 ```
@@ -484,7 +484,7 @@ No need to install CLI!
 ```json
 {
   "dependencies": {
-    "tutopanda-compositions": "^1.0.0"
+    "@tutopanda/compositions": "^1.0.0"
   }
 }
 ```
@@ -545,9 +545,9 @@ Keep all packages in sync for simplicity:
 
 | Package               | Version |
 |-----------------------|---------|
-| tutopanda-core        | 1.0.1   |
-| tutopanda-compositions| 1.0.1   |
-| tutopanda-providers   | 1.0.1   |
+| @tutopanda/core        | 1.0.1   |
+| @tutopanda/compositions| 1.0.1   |
+| @tutopanda/providers   | 1.0.1   |
 | tutopanda (CLI)       | 1.0.1   |
 
 ### GitHub Actions Workflow

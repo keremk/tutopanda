@@ -1,4 +1,4 @@
-import { createLogger, type Logger } from 'tutopanda-core';
+import { createLogger, type Logger } from '@tutopanda/core';
 
 export interface CliLoggerOptions {
   verbose?: boolean;

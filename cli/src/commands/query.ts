@@ -15,7 +15,7 @@ import { confirmPlanExecution } from '../lib/interactive-confirm.js';
 import { cleanupPlanFiles } from '../lib/plan-cleanup.js';
 import { resolveBlueprintSpecifier } from '../lib/config-assets.js';
 import { resolveAndPersistConcurrency } from '../lib/concurrency.js';
-import type { Logger } from 'tutopanda-core';
+import type { Logger } from '@tutopanda/core';
 
 export interface QueryOptions {
   inputsPath?: string;

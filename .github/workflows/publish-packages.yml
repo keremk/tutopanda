@@ -87,19 +87,19 @@ jobs:
           PROVIDERS_VERSION=$(node -p "require('./providers/package.json').version")
 
           echo "Package versions:"
-          echo "  - tutopanda-core: $CORE_VERSION"
-          echo "  - tutopanda-compositions: $COMPOSITIONS_VERSION"
-          echo "  - tutopanda-providers: $PROVIDERS_VERSION"
-          echo "  - tutopanda (CLI): $CLI_VERSION"
+          echo "  - @tutopanda/core: $CORE_VERSION"
+          echo "  - @tutopanda/compositions: $COMPOSITIONS_VERSION"
+          echo "  - @tutopanda/providers: $PROVIDERS_VERSION"
+          echo "  - @tutopanda/cli: $CLI_VERSION"
 
           echo "✅ Tag matches CLI version"
 
       - name: Build all publishable packages
         run: |
-          pnpm --filter tutopanda-core build
-          pnpm --filter tutopanda-compositions build
-          pnpm --filter tutopanda-providers build
-          pnpm --filter tutopanda build
+          pnpm --filter @tutopanda/core build
+          pnpm --filter @tutopanda/compositions build
+          pnpm --filter @tutopanda/providers build
+          pnpm --filter @tutopanda/cli build
 
       - name: Publish tutopanda-core
         if: >
@@ -123,12 +123,12 @@ jobs:
         run: pnpm bundle:viewer
 
       - name: Pack CLI (includes bundled viewer)
-        run: pnpm --filter tutopanda pack --pack-destination release
+        run: pnpm --filter @tutopanda/cli pack --pack-destination release
 
       - name: Locate packaged CLI tarball
         id: tarball
         run: |
-          TARBALL=$(ls release/tutopanda-*.tgz | head -n 1)
+          TARBALL=$(ls release/tutopanda-cli-*.tgz | head -n 1)
           if [ -z "$TARBALL" ]; then
             echo "No packaged tarball found in release/"; exit 1;
           fi
@@ -167,7 +167,7 @@ jobs:
           draft: false
           prerelease: false
           files: |
-            release/tutopanda-*.tgz
+            release/tutopanda-cli-*.tgz
 
       - name: Summary
         if: always()
@@ -178,10 +178,10 @@ jobs:
             echo "✅ Dry run completed - no packages were published" >> $GITHUB_STEP_SUMMARY
           else
             echo "📦 Published packages:" >> $GITHUB_STEP_SUMMARY
-            echo "- tutopanda-core" >> $GITHUB_STEP_SUMMARY
-            echo "- tutopanda-compositions" >> $GITHUB_STEP_SUMMARY
-            echo "- tutopanda-providers" >> $GITHUB_STEP_SUMMARY
-            echo "- tutopanda (CLI with bundled viewer)" >> $GITHUB_STEP_SUMMARY
+            echo "- @tutopanda/core" >> $GITHUB_STEP_SUMMARY
+            echo "- @tutopanda/compositions" >> $GITHUB_STEP_SUMMARY
+            echo "- @tutopanda/providers" >> $GITHUB_STEP_SUMMARY
+            echo "- @tutopanda/cli (with bundled viewer)" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
             if [ "${{ github.event_name }}" == "push" ]; then
               echo "🎉 GitHub Release created: https://github.com/${{ github.repository }}/releases/tag/${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY

@@ -12,8 +12,8 @@ import {
   type ExecutionPlan,
   type PendingArtefactDraft,
   type Logger,
-} from 'tutopanda-core';
-export type { PendingArtefactDraft } from 'tutopanda-core';
+} from '@tutopanda/core';
+export type { PendingArtefactDraft } from '@tutopanda/core';
 import type { CliConfig } from './cli-config.js';
 import { writePromptFile } from './prompts.js';
 import { loadBlueprintBundle } from './blueprint-loader/index.js';

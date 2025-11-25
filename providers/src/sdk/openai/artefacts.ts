@@ -1,5 +1,5 @@
 import { Buffer } from 'node:buffer';
-import type { ProducedArtefact, ArtefactEventStatus } from 'tutopanda-core';
+import type { ProducedArtefact, ArtefactEventStatus } from '@tutopanda/core';
 
 type JsonObject = Record<string, unknown>;
 

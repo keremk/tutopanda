@@ -5,7 +5,7 @@ The providers package exposes a compact TypeScript surface so the CLI (and later
 ## Registry Entry Point
 
 ```ts
-import { createProviderRegistry } from 'tutopanda-providers';
+import { createProviderRegistry } from '@tutopanda/providers';
 
 const registry = createProviderRegistry({
   mode: 'mock',              // or 'live'

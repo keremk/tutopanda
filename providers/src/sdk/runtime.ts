@@ -13,7 +13,7 @@ import type {
   RuntimeSdkHelpers,
   ArtefactRegistry,
 } from './types.js';
-import type { BlueprintProducerSdkMappingField } from 'tutopanda-core';
+import type { BlueprintProducerSdkMappingField } from '@tutopanda/core';
 
 interface SerializedJobContext {
   inputBindings?: Record<string, string>;

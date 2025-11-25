@@ -1,5 +1,6 @@
 import { resolve } from 'node:path';
 import { parseBlueprintDocument } from '../lib/blueprint-loader/index.js';
+import type { BlueprintInputDefinition, BlueprintArtefactDefinition } from '@tutopanda/core';
 
 export interface BlueprintsDescribeOptions {
   blueprintPath: string;
@@ -39,14 +40,14 @@ export async function runBlueprintsDescribe(
     name: blueprint.meta.name,
     description: blueprint.meta.description,
     version: blueprint.meta.version,
-    inputs: blueprint.inputs.map((input) => ({
+    inputs: blueprint.inputs.map((input: BlueprintInputDefinition) => ({
       name: input.name,
       type: input.type,
       required: input.required,
       description: input.description,
       defaultValue: input.defaultValue,
     })),
-    outputs: blueprint.artefacts.map((output) => ({
+    outputs: blueprint.artefacts.map((output: BlueprintArtefactDefinition) => ({
       name: output.name,
       type: output.type,
       required: output.required !== false,

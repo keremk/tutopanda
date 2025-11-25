@@ -3,11 +3,11 @@ import type {
   ProducerCatalog,
   ProducerCatalogEntry,
   ProducerConfig,
-} from 'tutopanda-core';
+} from '@tutopanda/core';
 import type {
   ProviderAttachment,
   ProviderEnvironment,
-} from 'tutopanda-providers';
+} from '@tutopanda/providers';
 
 export interface LoadedProducerOption {
   priority: 'main';

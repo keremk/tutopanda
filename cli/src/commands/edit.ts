@@ -29,7 +29,7 @@ import { readMovieMetadata } from '../lib/movie-metadata.js';
 import { resolveBlueprintSpecifier } from '../lib/config-assets.js';
 import { WORKSPACE_INPUTS_RELATIVE_PATH } from '../lib/input-files.js';
 import { resolveAndPersistConcurrency } from '../lib/concurrency.js';
-import type { Logger } from 'tutopanda-core';
+import type { Logger } from '@tutopanda/core';
 
 export interface EditOptions {
   movieId: string;

@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { extname } from 'node:path';
 import { parse as parseYaml } from 'yaml';
-import type { BlueprintTreeNode } from 'tutopanda-core';
+import type { BlueprintTreeNode } from '@tutopanda/core';
 
 export type InputMap = Record<string, unknown>;
 

@@ -77,7 +77,7 @@ That script performs the full pipeline:
 
 1. Builds the viewer and copies `viewer/dist` + `viewer/server-dist` into `cli/config/viewer`.
 2. Builds the CLI TypeScript sources into `cli/dist`.
-3. Runs `pnpm --filter tutopanda-cli pack --pack-destination release` to produce `release/tutopanda-cli-<version>.tgz`.
+3. Runs `pnpm --filter @tutopanda/cli pack --pack-destination release` to produce `release/@tutopanda/cli-<version>.tgz`.
 
 To publish to npm after packaging:
 
