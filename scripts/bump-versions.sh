@@ -27,14 +27,43 @@ echo ""
 # Array of packages to bump
 PACKAGES=("core" "compositions" "providers" "cli")
 
+# Function to bump version
+bump_version() {
+  local current=$1
+  local type=$2
+
+  IFS='.' read -r major minor patch <<< "$current"
+
+  case $type in
+    major)
+      echo "$((major + 1)).0.0"
+      ;;
+    minor)
+      echo "$major.$((minor + 1)).0"
+      ;;
+    patch)
+      echo "$major.$minor.$((patch + 1))"
+      ;;
+  esac
+}
+
 # Bump each package
 for pkg in "${PACKAGES[@]}"; do
   echo -e "${GREEN}Bumping $pkg...${NC}"
-  cd "$pkg"
-  npm version "$BUMP_TYPE" --no-git-tag-version
-  NEW_VERSION=$(node -p "require('./package.json').version")
+
+  CURRENT_VERSION=$(node -p "require('./$pkg/package.json').version")
+  NEW_VERSION=$(bump_version "$CURRENT_VERSION" "$BUMP_TYPE")
+
+  # Update version in package.json using node
+  node -e "
+    const fs = require('fs');
+    const path = './$pkg/package.json';
+    const pkg = JSON.parse(fs.readFileSync(path, 'utf8'));
+    pkg.version = '$NEW_VERSION';
+    fs.writeFileSync(path, JSON.stringify(pkg, null, 2) + '\n');
+  "
+
   echo -e "  → $pkg@$NEW_VERSION"
-  cd ..
 done
 
 # Get CLI version for reference
@@ -50,10 +79,10 @@ echo "  - tutopanda-providers@$(node -p "require('./providers/package.json').ver
 echo "  - tutopanda (CLI)@$CLI_VERSION"
 echo ""
 echo -e "${YELLOW}Next steps:${NC}"
-echo "  1. Review changes: ${BLUE}git diff */package.json${NC}"
-echo "  2. Commit: ${BLUE}git add */package.json && git commit -m 'release: bump to $CLI_VERSION'${NC}"
-echo "  3. Tag: ${BLUE}git tag cli-v$CLI_VERSION${NC}"
-echo "  4. Push: ${BLUE}git push origin main cli-v$CLI_VERSION${NC}"
+echo -e "  1. Review changes: ${BLUE}git diff */package.json${NC}"
+echo -e "  2. Commit: ${BLUE}git add */package.json && git commit -m 'release: bump to $CLI_VERSION'${NC}"
+echo -e "  3. Tag: ${BLUE}git tag cli-v$CLI_VERSION${NC}"
+echo -e "  4. Push: ${BLUE}git push origin main cli-v$CLI_VERSION${NC}"
 echo ""
 echo -e "${YELLOW}Or use the automated script:${NC}"
-echo "  ${BLUE}./scripts/bump-n-push.sh${NC}"
+echo -e "  ${BLUE}./scripts/bump-n-push.sh${NC}"
