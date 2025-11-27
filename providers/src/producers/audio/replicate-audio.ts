@@ -1,5 +1,5 @@
 import { createProducerHandlerFactory } from '../../sdk/handler-factory.js';
-import type { HandlerFactory, ProviderJobContext } from '../../types.js';
+import type { HandlerFactory } from '../../types.js';
 import { createProviderError } from '../../sdk/errors.js';
 import {
   createReplicateClientManager,

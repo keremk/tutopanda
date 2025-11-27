@@ -24,7 +24,7 @@ inputs:
     type: int
     required: false
     default: 1
-  - name: ImageStyle
+  - name: Style
     description: Text describing the desired image style.
     type: string
     required: true
@@ -77,8 +77,8 @@ connections:
     to: ScriptGenerator.Audience
   - from: Duration
     to: ScriptGenerator.Duration
-  - from: ImageStyle
-    to: ScriptGenerator.ImageStyle
+  - from: Style
+    to: ScriptGenerator.Style
   - from: NumOfSegments
     to: ScriptGenerator.NumOfSegments
 
@@ -86,8 +86,8 @@ connections:
     to: ImagePromptGenerator[segment].NarrativeText
   - from: ScriptGenerator.MovieSummary
     to: ImagePromptGenerator[segment].OverallSummary
-  - from: ImageStyle
-    to: ImagePromptGenerator[segment].ImageStyle
+  - from: Style
+    to: ImagePromptGenerator[segment].Style
   - from: Audience
     to: ImagePromptGenerator[segment].Audience
   - from: NumOfImagesPerNarrative

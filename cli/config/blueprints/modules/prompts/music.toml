@@ -1,10 +1,4 @@
-model = "gpt-5-mini"
-textFormat = "text"
 variables = ["MovieSummary","NarrationScript","MusicalStyle", "Audience", "Duration", "NumOfSegments"]
-
-[settings]
-temperature = 0.7
-max_tokens = 1500
 
 systemPrompt = """
 - You are well-renowned composer specialized in film scores, especially for documentaries.

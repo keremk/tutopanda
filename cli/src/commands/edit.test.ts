@@ -97,7 +97,7 @@ describe('runEdit', () => {
     });
 
     const editInputsPath = await createInputsFixture(root, 'Describe oceans with drama', 'edit-inputs.yaml', {
-      ImageStyle: 'storybook',
+      Style: 'storybook',
     });
 
     const editResult = await runEdit({

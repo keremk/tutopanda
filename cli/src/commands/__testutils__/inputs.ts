@@ -13,7 +13,7 @@ const DEFAULT_INPUT_VALUES: Record<string, string | number> = {
   Duration: 60,
   NumOfSegments: 3,
   NumOfImagesPerNarrative: 1,
-  ImageStyle: 'cinematic',
+  Style: 'cinematic',
   Audience: 'Adult',
   VoiceId: 'default-voice',
   Language: 'en',

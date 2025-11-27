@@ -13,7 +13,7 @@ export const InputIdList = [
   'SegmentDuration',
   'ImagesPerSegment',
   'SegmentImagePromptInput',
-  'ImageStyle',
+  'Style',
   'Size',
   'AspectRatio',
   'StartingImagePromptInput',
@@ -36,7 +36,7 @@ type InputValueTypeMap = {
   SegmentDuration: number;
   ImagesPerSegment: number;
   SegmentImagePromptInput: string[];
-  ImageStyle: string;
+  Style: string;
   Size: string;
   AspectRatio: string;
   StartingImagePromptInput: string;
@@ -58,7 +58,7 @@ const InputValueShape = z
     SegmentDuration: z.number().positive(),
     ImagesPerSegment: z.number().int().nonnegative(),
     SegmentImagePromptInput: z.array(z.string()),
-    ImageStyle: z.string(),
+    Style: z.string(),
     Size: z.string(),
     AspectRatio: z.string(),
     StartingImagePromptInput: z.string(),

@@ -1,7 +1,7 @@
 meta:
   name: Video Prompt Generation
   description: Generate video generation prompt.
-  id: VideoPromptGenerator
+  id: VideoPromptProducer
   version: 0.1.0
   author: Tutopanda
   license: MIT
@@ -15,7 +15,7 @@ inputs:
     description: The movie summary to help generate prompt for a video that best reflects the given segment.
     type: string
     required: true
-  - name: VideoStyle
+  - name: Style
     description: Desired musical style to feed into prompt.
     type: string
     required: true
@@ -35,22 +35,10 @@ artifacts:
     description: Generated video prompts for the downstream video generation.
     type: string
 
-connections:
-  - from: NarrativeText
-    to: VideoPromptProducer
-  - from: MovieSummary
-    to: VideoPromptProducer
-  - from: VideoStyle
-    to: VideoPromptProducer
-  - from: Audience
-    to: VideoPromptProducer
-  - from: SegmentDuration
-    to: VideoPromptProducer
-
-  - from: VideoPromptProducer
-    to: VideoPrompt
-
-producers:
-  - name: VideoPromptProducer
-    provider: openai
-    promptFile: ./prompts/video-prompt-producer.toml
+models:
+  - provider: openai
+    model: gpt-5-mini
+    promptFile: ../prompts/video.toml
+    inputSchema: ../schemas/openai-input.json
+    config:
+      text_format: text

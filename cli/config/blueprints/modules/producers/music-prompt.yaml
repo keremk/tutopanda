@@ -1,7 +1,7 @@
 meta:
   name: Music Prompt Generation
   description: Generate music generation prompt using the summary of a movie script.
-  id: MusicPromptGenerator
+  id: MusicPromptProducer
   version: 0.1.0
   author: Tutopanda
   license: MIT
@@ -40,25 +40,12 @@ artifacts:
     description: Generated music prompts for downstream music synthesis.
     type: string
 
-connections:
-  - from: MovieSummary
-    to: MusicPromptProducer
-  - from: MusicalStyle
-    to: MusicPromptProducer
-  - from: Audience
-    to: MusicPromptProducer
-  - from: NumOfSegments
-    to: MusicPromptProducer
-  - from: NarrationScript
-    to: MusicPromptProducer
-  - from: Duration
-    to: MusicPromptProducer
+models:
+  - provider: openai
+    model: gpt-5-mini
+    promptFile: ../prompts/music.toml
+    inputSchema: ../schemas/openai-input.json
+    config:
+      text_format: text
 
-  - from: MusicPromptProducer
-    to: MusicPrompt
-
-producers:
-  - name: MusicPromptProducer
-    provider: openai
-    promptFile: ./prompts/music-prompt-producer.toml
 

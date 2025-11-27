@@ -1,7 +1,7 @@
 meta:
   name: Image Prompt Generation
   description: Generate image prompts that capture each narration segment.
-  id: ImagePromptGenerator
+  id: ImagePromptProducer
   version: 0.1.0
   author: Tutopanda
   license: MIT
@@ -20,7 +20,7 @@ inputs:
     description: Overall story summary for additional context.
     type: string
     required: true
-  - name: ImageStyle
+  - name: Style
     description: Desired visual style to feed into prompt.
     type: string
     required: true
@@ -42,22 +42,11 @@ loops:
     description: Iterates over prompts per segment.
     countInput: NumOfImagesPerNarrative
 
-connections:
-  - from: NarrativeText
-    to: ImagePromptProducer
-  - from: ImageStyle
-    to: ImagePromptProducer
-  - from: OverallSummary
-    to: ImagePromptProducer
-  - from: Audience
-    to: ImagePromptProducer
-  - from: NumOfImagesPerNarrative
-    to: ImagePromptProducer
-  - from: ImagePromptProducer
-    to: ImagePrompt[image]
-
-producers:
-  - name: ImagePromptProducer
-    provider: openai
-    promptFile: ./prompts/image-prompt-producer.toml
-    jsonSchema: ./schemas/image-prompt-producer.json
+models:
+  - provider: openai
+    model: gpt-5-mini
+    promptFile: ../prompts/image.toml
+    inputSchema: ../schemas/openai-input.json
+    outputSchema: ../schemas/image-prompt-producer.json
+    config:
+      text_format: json_schema

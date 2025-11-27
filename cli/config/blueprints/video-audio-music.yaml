@@ -34,7 +34,7 @@ inputs:
     type: string
     required: false
     default: en
-  - name: VideoStyle
+  - name: Style
     description: Style hint fed into the video prompt generator.
     type: string
     required: true
@@ -89,7 +89,7 @@ loops:
 
 modules:
   - name: ScriptGenerator
-    path: ./modules/script-generator.yaml
+    path: ./modules/producers/script.yaml
   - name: VideoPromptGenerator
     path: ./modules/video-prompt-generator.yaml
     loop: segment
@@ -124,8 +124,8 @@ connections:
     to: VideoPromptGenerator[segment].NarrativeText
   - from: ScriptGenerator.MovieSummary
     to: VideoPromptGenerator[segment].MovieSummary
-  - from: VideoStyle
-    to: VideoPromptGenerator[segment].VideoStyle
+  - from: Style
+    to: VideoPromptGenerator[segment].Style
   - from: SegmentDuration
     to: VideoPromptGenerator[segment].SegmentDuration
   - from: Audience

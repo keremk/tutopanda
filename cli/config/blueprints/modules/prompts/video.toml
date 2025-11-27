@@ -1,10 +1,4 @@
-model = "gpt-5-mini"
-textFormat = "text"
-variables = ["NarrativeText", "MovieStyle", "Audience", "MovieSummary", "SegmentDuration"]
-
-[settings]
-temperature = 0.7
-max_tokens = 1500
+variables = ["NarrativeText", "Style", "Audience", "MovieSummary", "SegmentDuration"]
 
 systemPrompt = """
 You are a well-renowned documentary filmmaker. You will be given a narrative for a short {{SegmentDuration}} second segment in the documentary,
@@ -37,7 +31,7 @@ The audience is specified as:
 The overall summary of the movie is:
 {{MovieSummary}}
 The movie style is:
-{{MovieStyle}}
+{{Style}}
 The duration of the video segment is {{SegmentDuration}} seconds.
 Generate a video that best reflects the above. 
 """

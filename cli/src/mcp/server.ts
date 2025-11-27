@@ -23,7 +23,7 @@ const generateStorySchema = z.object({
   inquiryPrompt: z.string().min(1, 'Inquiry prompt is required.'),
   durationSeconds: z.coerce.number().int().min(1, 'Duration must be a positive number.'),
   numSegments: z.coerce.number().int().min(1, 'NumOfSegments must be a positive integer.'),
-  imageStyle: z.string().min(1, 'Image style is required.'),
+  style: z.string().min(1, 'Image style is required.'),
   voiceId: z.string().min(1, 'Voice ID is required.'),
   numImagesPerNarrative: z.coerce.number().int().min(1).optional(),
   size: z.string().optional(),
@@ -321,7 +321,7 @@ async function writeInputsFile(args: z.infer<typeof generateStorySchema>): Promi
     InquiryPrompt: args.inquiryPrompt,
     Duration: args.durationSeconds,
     NumOfSegments: args.numSegments,
-    ImageStyle: args.imageStyle,
+    Style: args.style,
     VoiceId: args.voiceId,
   };
   if (args.numImagesPerNarrative !== undefined) {

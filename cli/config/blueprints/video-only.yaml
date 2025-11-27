@@ -34,7 +34,7 @@ inputs:
     type: string
     required: false
     default: en
-  - name: MovieStyle
+  - name: Style
     description: Desired movie style to feed into prompt.
     type: string
     required: true
@@ -84,8 +84,8 @@ connections:
     to: VideoPromptGenerator[segment].NarrativeText
   - from: ScriptGenerator.MovieSummary
     to: VideoPromptGenerator[segment].MovieSummary
-  - from: MovieStyle
-    to: VideoPromptGenerator[segment].VideoStyle
+  - from: Style
+    to: VideoPromptGenerator[segment].Style
   - from: SegmentDuration
     to: VideoPromptGenerator[segment].SegmentDuration
   - from: Audience
