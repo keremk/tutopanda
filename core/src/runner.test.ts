@@ -290,7 +290,9 @@ describe('createRunner', () => {
       revision: 'rev-0002',
     });
 
-    expect(observedResolvedInputs?.NarrativeText).toBe('aliased text');
+    expect(
+      observedResolvedInputs?.['Artifact:ScriptGeneration.NarrationScript[segment=0]'],
+    ).toBe('aliased text');
   });
 
   it('injects fan-in groupings even when no upstream artefacts are resolved', async () => {
@@ -381,7 +383,6 @@ describe('createRunner', () => {
       ['Artifact:ImageGenerator.SegmentImage[0][0]'],
       ['Artifact:ImageGenerator.SegmentImage[1][0]'],
     ]);
-    expect(observedResolvedInputs?.['TimelineComposer.ImageSegments']).toEqual(imageSegments);
 
     const audioSegments = observedResolvedInputs?.['Input:TimelineComposer.AudioSegments'] as
       | { groupBy: string; groups: string[][] }

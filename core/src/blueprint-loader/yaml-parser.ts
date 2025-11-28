@@ -11,6 +11,7 @@ import type {
   BlueprintProducerOutputDefinition,
   BlueprintProducerSdkMappingField,
   BlueprintTreeNode,
+  ProducerModelVariant,
   ProducerConfig,
   SubBlueprintDefinition,
 } from '../types.js';
@@ -65,6 +66,7 @@ export async function parseYamlBlueprintFile(
     throw new Error(`Blueprint YAML at ${filePath} must be a YAML document.`);
   }
   const baseDir = dirname(absolute);
+  const meta = parseMeta(raw.meta, filePath);
 
   const inputs = Array.isArray(raw.inputs) ? raw.inputs.map((entry) => parseInput(entry)) : [];
   const loops = Array.isArray(raw.loops) ? parseLoops(raw.loops) : [];
@@ -81,18 +83,37 @@ export async function parseYamlBlueprintFile(
   const modules = Array.isArray(raw.modules)
     ? raw.modules.map((entry) => parseModule(entry))
     : [];
-  const edges = Array.isArray(raw.connections)
+  let edges = Array.isArray(raw.connections)
     ? raw.connections.map((entry) => parseEdge(entry, loopSymbols))
     : [];
-  const producers = Array.isArray(raw.producers)
-    ? await parseProducers(raw.producers, baseDir, reader)
-    : [];
+  let producers: ProducerConfig[] = [];
+  if (Array.isArray(raw.models) && (!Array.isArray(raw.producers) || raw.producers.length === 0)) {
+    const modelVariants = await parseModelVariants(raw.models, baseDir, reader);
+    const primary = modelVariants[0];
+    producers = [
+      {
+        name: meta.id,
+        provider: primary?.provider,
+        model: primary?.model,
+        models: modelVariants,
+        sdkMapping: primary?.inputs,
+        outputs: primary?.outputs,
+      },
+    ];
+    if (edges.length === 0) {
+      edges = inferProducerEdges(inputs, artefacts, meta.id);
+    }
+  } else {
+    producers = Array.isArray(raw.producers)
+      ? await parseProducers(raw.producers, baseDir, reader)
+      : [];
+  }
   const collectors = Array.isArray(raw.collectors)
     ? parseCollectors(raw.collectors, loopSymbols)
     : [];
 
   return {
-    meta: parseMeta(raw.meta, filePath),
+    meta,
     inputs,
     artefacts,
     producers,
@@ -166,6 +187,7 @@ interface RawBlueprint {
   connections?: unknown[];
   collectors?: unknown[];
   producers?: unknown[];
+  models?: unknown[];
 }
 
 function parseMeta(raw: unknown, filePath: string): BlueprintDocument['meta'] {
@@ -329,62 +351,94 @@ async function parseProducers(
     }
     const entry = raw as Record<string, unknown>;
     const name = readString(entry, 'name');
-    const provider = readString(entry, 'provider').toLowerCase();
-    const promptFile = typeof entry.promptFile === 'string' ? entry.promptFile : undefined;
-    const promptConfig = promptFile
-      ? await loadPromptConfig(resolve(baseDir, promptFile), reader)
-      : {};
-
-    const model = typeof entry.model === 'string' ? entry.model : promptConfig.model;
-    if (!model) {
-      throw new Error(`Producer "${name}" must specify a model (directly or in promptFile).`);
-    }
-
-    const settings = mergeRecords(promptConfig.settings, entry.settings);
-    const textFormat = typeof entry.textFormat === 'string' ? entry.textFormat : promptConfig.textFormat;
-    const variables = Array.isArray(entry.variables)
-      ? entry.variables.map(String)
-      : promptConfig.variables;
-
-    const jsonSchemaSource = entry.jsonSchema ?? promptConfig.jsonSchema;
-    const jsonSchema = await loadJsonSchema(jsonSchemaSource, baseDir, reader);
-
+    const variants = Array.isArray(entry.models)
+      ? await parseModelVariants(entry.models, baseDir, reader)
+      : [await parseModelVariant(entry, baseDir, reader)];
+    const primary = variants[0];
     const producer: ProducerConfig = {
       name,
-      provider: provider as ProducerConfig['provider'],
-      model,
-      settings,
-      systemPrompt: typeof entry.systemPrompt === 'string'
-        ? entry.systemPrompt
-        : promptConfig.systemPrompt,
-      userPrompt: typeof entry.userPrompt === 'string' ? entry.userPrompt : promptConfig.userPrompt,
-      textFormat,
-      variables,
+      provider: primary?.provider,
+      model: primary?.model,
+      models: variants,
+      sdkMapping: primary?.inputs,
+      outputs: primary?.outputs,
+      settings: primary?.settings,
+      systemPrompt: primary?.systemPrompt,
+      userPrompt: primary?.userPrompt,
+      textFormat: primary?.textFormat,
+      variables: primary?.variables,
+      config: primary?.config,
     };
-
-    if (jsonSchema) {
-      producer.jsonSchema = jsonSchema;
-    }
-
-    const sdkMapping = parseSdkMapping(entry.sdkMapping ?? promptConfig.sdkMapping);
-    if (sdkMapping) {
-      producer.sdkMapping = sdkMapping;
-    }
-
-    const outputs = parseOutputs(entry.outputs ?? promptConfig.outputs);
-    if (outputs) {
-      producer.outputs = outputs;
-    }
-
-    if (entry.config && typeof entry.config === 'object') {
-      producer.config = entry.config as Record<string, unknown>;
-    } else if (promptConfig.config) {
-      producer.config = promptConfig.config;
-    }
-
     producers.push(producer);
   }
   return producers;
+}
+
+async function parseModelVariants(
+  rawModels: unknown[],
+  baseDir: string,
+  reader: BlueprintResourceReader,
+): Promise<ProducerModelVariant[]> {
+  const variants: ProducerModelVariant[] = [];
+  for (const raw of rawModels) {
+    variants.push(await parseModelVariant(raw, baseDir, reader));
+  }
+  return variants;
+}
+
+async function parseModelVariant(
+  raw: unknown,
+  baseDir: string,
+  reader: BlueprintResourceReader,
+): Promise<ProducerModelVariant> {
+  if (!raw || typeof raw !== 'object') {
+    throw new Error(`Invalid model entry: ${JSON.stringify(raw)}`);
+  }
+  const entry = raw as Record<string, unknown>;
+  const provider = readString(entry, 'provider').toLowerCase();
+  const promptFile = typeof entry.promptFile === 'string' ? entry.promptFile : undefined;
+  const promptConfig = promptFile
+    ? await loadPromptConfig(resolve(baseDir, promptFile), reader)
+    : {};
+  const model = typeof entry.model === 'string' ? entry.model : promptConfig.model;
+  if (!model) {
+    throw new Error('Model entry must specify a model (directly or in promptFile).');
+  }
+  const settings = mergeRecords(promptConfig.settings, entry.settings);
+  const textFormat = typeof entry.textFormat === 'string' ? entry.textFormat : promptConfig.textFormat;
+  const variables = Array.isArray(entry.variables)
+    ? entry.variables.map(String)
+    : promptConfig.variables;
+  const systemPrompt = typeof entry.systemPrompt === 'string'
+    ? entry.systemPrompt
+    : promptConfig.systemPrompt;
+  const userPrompt = typeof entry.userPrompt === 'string' ? entry.userPrompt : promptConfig.userPrompt;
+  const inputSchemaSource = entry.inputSchema;
+  const outputSchemaSource = entry.outputSchema;
+  const inputSchema = await loadJsonSchema(inputSchemaSource, baseDir, reader);
+  const outputSchema = await loadJsonSchema(outputSchemaSource, baseDir, reader);
+  const inputs = parseSdkMapping(entry.inputs);
+  const outputs = parseOutputs(entry.outputs ?? promptConfig.outputs);
+  const config =
+    entry.config && typeof entry.config === 'object'
+      ? (entry.config as Record<string, unknown>)
+      : promptConfig.config;
+
+  return {
+    provider: provider as ProducerModelVariant['provider'],
+    model,
+    promptFile,
+    inputSchema,
+    outputSchema,
+    inputs,
+    outputs,
+    config,
+    settings: settings ?? undefined,
+    systemPrompt,
+    userPrompt,
+    textFormat,
+    variables,
+  };
 }
 
 function parseSdkMapping(raw: unknown): Record<string, BlueprintProducerSdkMappingField> | undefined {
@@ -397,12 +451,25 @@ function parseSdkMapping(raw: unknown): Record<string, BlueprintProducerSdkMappi
   const table = raw as Record<string, unknown>;
   const mapping: Record<string, BlueprintProducerSdkMappingField> = {};
   for (const [key, value] of Object.entries(table)) {
+    if (typeof value === 'string') {
+      mapping[key] = { field: value };
+      continue;
+    }
     if (!value || typeof value !== 'object') {
       throw new Error(`Invalid sdkMapping field for ${key}.`);
     }
     const fieldConfig = value as Record<string, unknown>;
+    const field =
+      typeof fieldConfig.field === 'string' && fieldConfig.field.trim().length > 0
+        ? fieldConfig.field
+        : typeof fieldConfig.name === 'string'
+          ? fieldConfig.name
+          : undefined;
+    if (!field) {
+      throw new Error(`Invalid sdkMapping field for ${key}.`);
+    }
     mapping[key] = {
-      field: readString(fieldConfig, 'field'),
+      field,
       type: typeof fieldConfig.type === 'string' ? fieldConfig.type : undefined,
       required: fieldConfig.required === true ? true : fieldConfig.required === false ? false : undefined,
     };
@@ -560,6 +627,21 @@ function readString(source: Record<string, unknown>, key: string): string {
     return value.trim();
   }
   throw new Error(`Expected string for "${key}"`);
+}
+
+function inferProducerEdges(
+  inputs: BlueprintInputDefinition[],
+  artefacts: BlueprintArtefactDefinition[],
+  producerName: string,
+): BlueprintEdgeDefinition[] {
+  const edges: BlueprintEdgeDefinition[] = [];
+  for (const input of inputs) {
+    edges.push({ from: input.name, to: producerName });
+  }
+  for (const artefact of artefacts) {
+    edges.push({ from: producerName, to: artefact.name });
+  }
+  return edges;
 }
 
 function relativePosix(root: string, target: string): string {

@@ -12,6 +12,7 @@ import {
   type PlannerContext,
   runReplicateWithRetries,
 } from '../../sdk/replicate/index.js';
+import { validatePayload } from '../../sdk/schema-validator.js';
 
 interface ReplicateVideoConfig {
   promptKey: string;
@@ -49,6 +50,8 @@ export function createReplicateVideoHandler(): HandlerFactory {
         const resolvedInputs = runtime.inputs.all();
         const plannerContext = extractPlannerContext(request);
         const sdkPayload = runtime.sdk.buildPayload();
+        const inputSchema = readInputSchema(request);
+        validatePayload(inputSchema, sdkPayload, 'input');
 
         const providerConfig = request.context.providerConfig;
         const customAttributes =
@@ -397,4 +400,17 @@ function getResolutionFieldName(model: string): string {
 function getAspectRatioFieldName(model: string): string {
   // All current video models use 'aspect_ratio'
   return 'aspect_ratio';
+}
+
+function readInputSchema(request: ProviderJobContext): string | undefined {
+  const extras = request.context.extras;
+  if (!extras || typeof extras !== 'object') {
+    return undefined;
+  }
+  const schema = (extras as Record<string, unknown>).schema;
+  if (!schema || typeof schema !== 'object') {
+    return undefined;
+  }
+  const input = (schema as Record<string, unknown>).input;
+  return typeof input === 'string' ? input : undefined;
 }

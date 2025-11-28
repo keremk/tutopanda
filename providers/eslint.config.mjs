@@ -30,6 +30,17 @@ const eslintConfig = [
       ecmaVersion: 'latest',
       sourceType: 'module',
     },
+    env: {
+      node: true,
+      es2022: true,
+    },
+    globals: {
+      fetch: 'readonly',
+      URL: 'readonly',
+      TextEncoder: 'readonly',
+      Buffer: 'readonly',
+      setTimeout: 'readonly',
+    },
   }),
   {
     files: ['src/**/*.ts'],

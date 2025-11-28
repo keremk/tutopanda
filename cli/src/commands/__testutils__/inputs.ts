@@ -1,5 +1,6 @@
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { stringify as stringifyYaml } from 'yaml';
 import { INPUT_FILE_NAME } from '../../lib/input-files.js';
 
 export interface CreateInputsFileOptions {
@@ -12,7 +13,9 @@ export interface CreateInputsFileOptions {
 const DEFAULT_INPUT_VALUES: Record<string, string | number> = {
   Duration: 60,
   NumOfSegments: 3,
-  NumOfImagesPerNarrative: 1,
+  AspectRatio: '16:9',
+  Resolution: '480p',
+  SegmentDuration: 10,
   Style: 'cinematic',
   Audience: 'Adult',
   VoiceId: 'default-voice',
@@ -27,19 +30,30 @@ export async function createInputsFile(options: CreateInputsFileOptions): Promis
     ...(overrides ?? {}),
   };
 
-  const contents = [
-    'inputs:',
-    ...Object.entries(values).map(([key, value]) => `  ${key}: ${formatYamlValue(value)}`),
-  ].join('\n');
+  const models = [
+    { producerId: 'ScriptProducer', provider: 'openai', model: 'gpt-5-mini' },
+    { producerId: 'VideoPromptProducer', provider: 'openai', model: 'gpt-5-mini' },
+    { producerId: 'VideoProducer', provider: 'replicate', model: 'bytedance/seedance-1-pro-fast' },
+    { producerId: 'AudioProducer', provider: 'replicate', model: 'minimax/speech-2.6-hd' },
+    { producerId: 'MusicPromptProducer', provider: 'openai', model: 'gpt-5-mini' },
+    { producerId: 'MusicProducer', provider: 'replicate', model: 'stability-ai/stable-audio-2.5' },
+    {
+      producerId: 'TimelineComposer',
+      provider: 'tutopanda',
+      model: 'OrderedTimeline',
+      config: {
+        tracks: ['Video', 'Audio', 'Music'],
+      },
+    },
+    { producerId: 'VideoExporter', provider: 'tutopanda', model: 'Mp4Exporter' },
+  ];
+
+  const contents = stringifyYaml({
+    inputs: values,
+    models,
+  });
 
   const filePath = join(root, fileName);
   await writeFile(filePath, contents, 'utf8');
   return filePath;
-}
-
-function formatYamlValue(value: string | number): string {
-  if (typeof value === 'string') {
-    return `"${value.replace(/"/g, '\\"')}"`;
-  }
-  return `${value}`;
 }

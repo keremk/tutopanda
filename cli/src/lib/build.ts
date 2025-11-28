@@ -77,9 +77,11 @@ export async function executeBuild(options: ExecuteBuildOptions): Promise<Execut
   await registry.warmStart?.(preResolved);
   const resolvedInputsWithSystem = {
     ...options.resolvedInputs,
-    ...(options.resolvedInputs.MovieId === undefined ? { MovieId: options.movieId } : {}),
-    ...(options.resolvedInputs.StorageRoot === undefined ? { StorageRoot: options.cliConfig.storage.root } : {}),
-    ...(options.resolvedInputs.StorageBasePath === undefined ? { StorageBasePath: options.cliConfig.storage.basePath } : {}),
+    ...(options.resolvedInputs['Input:MovieId'] === undefined ? { 'Input:MovieId': options.movieId } : {}),
+    ...(options.resolvedInputs['Input:StorageRoot'] === undefined ? { 'Input:StorageRoot': options.cliConfig.storage.root } : {}),
+    ...(options.resolvedInputs['Input:StorageBasePath'] === undefined
+      ? { 'Input:StorageBasePath': options.cliConfig.storage.basePath }
+      : {}),
   };
   const produce = createProviderProduce(
     registry,

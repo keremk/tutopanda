@@ -34,7 +34,7 @@ artifacts:
 models:
   - model: bytedance/seedance-1-pro-fast
     provider: replicate
-    jsonSchema: ./schemas/bytedance-seedance-1-pro-fast.json
+    inputSchema: ../schemas/bytedance-seedance-1-pro-fast.json
     inputs:
       Prompt: prompt
       AspectRatio: aspect_ratio
@@ -46,7 +46,7 @@ models:
         mimeType: video/mp4
   - model: bytedance/seedance-1-lite
     provider: replicate
-    jsonSchema: ./schemas/bytedance-seedance-1-lite.json
+    inputSchema: ../schemas/bytedance-seedance-1-lite.json
     inputs:
       Prompt: prompt
       AspectRatio: aspect_ratio
@@ -58,7 +58,7 @@ models:
         mimeType: video/mp4
   - model: google/veo-3.1-fast
     provider: replicate
-    jsonSchema: ./schemas/google-veo-3-1-fast.json
+    inputSchema: ../schemas/google-veo-3-1-fast.json
     inputs:
       Prompt: prompt
       AspectRatio: aspect_ratio

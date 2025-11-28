@@ -2,7 +2,8 @@ import { Buffer } from 'node:buffer';
 import { Input, ALL_FORMATS, BufferSource as MediaBufferSource } from 'mediabunny';
 import { createProducerHandlerFactory } from '../../sdk/handler-factory.js';
 import { createProviderError } from '../../sdk/errors.js';
-import type { HandlerFactory } from '../../types.js';
+import { canonicalizeAuthoredInputId } from '../../sdk/config-utils.js';
+import type { HandlerFactory, ProviderJobContext } from '../../types.js';
 import type { ResolvedInputsAccessor } from '../../sdk/types.js';
 
 interface FanInValue {
@@ -26,13 +27,12 @@ interface TimelineClipConfig {
 }
 
 interface TimelineProducerConfig {
-  rootFolder?: string;
-  source?: string;
   numTracks?: number;
   masterTrack?: {
     kind: ClipKind;
   };
   clips: TimelineClipConfig[];
+  tracks?: ClipKind[];
 }
 
 interface TimelineTrack {
@@ -133,13 +133,69 @@ const KEN_BURNS_PRESETS: KenBurnsPreset[] = [
 const TRACK_KINDS_WITH_NATIVE_DURATION = new Set<ClipKind>(['Audio', 'Music', 'Video']);
 const SIMULATED_OUTPUT_PREFIX = 'simulated-output:';
 
+function canonicalizeClips(
+  config: TimelineProducerConfig,
+  availableInputs: string[],
+  inputs: ResolvedInputsAccessor,
+): TimelineClipConfig[] {
+  const allowedKinds = resolveAllowedTracks(config, inputs);
+  const filtered = allowedKinds
+    ? config.clips.filter((clip) => allowedKinds.has(clip.kind))
+    : config.clips;
+  if (filtered.length === 0) {
+    return [];
+  }
+  return filtered.map((clip) => ({
+    ...clip,
+    inputs: canonicalizeAuthoredInputId(parseInputReference(clip.inputs), availableInputs),
+  }));
+}
+
+function resolveAllowedTracks(
+  config: TimelineProducerConfig,
+  inputs: ResolvedInputsAccessor,
+): Set<ClipKind> | undefined {
+  if (config.tracks && config.tracks.length > 0) {
+    return new Set(config.tracks);
+  }
+  const fromInputs =
+    inputs.getByNodeId<ClipKind[] | ClipKind>('Input:TimelineComposer.tracks');
+  if (Array.isArray(fromInputs) && fromInputs.length > 0) {
+    return new Set(fromInputs);
+  }
+  if (typeof fromInputs === 'string' && fromInputs.length > 0) {
+    return new Set([fromInputs as ClipKind]);
+  }
+  return undefined;
+}
+
+function resolveMasterClip(
+  clips: TimelineClipConfig[],
+  masterKind: ClipKind,
+  fanInByInput: Map<string, FanInValue>,
+): TimelineClipConfig | undefined {
+  const candidates = clips.filter((clip) => clip.kind === masterKind);
+  if (candidates.length === 0) {
+    return undefined;
+  }
+  const withFanIn = candidates.find((candidate) => {
+    const fanIn = fanInByInput.get(candidate.inputs);
+    return Boolean(fanIn && fanIn.groups.length > 0);
+  });
+  return withFanIn ?? candidates[0];
+}
+
 export function createTimelineProducerHandler(): HandlerFactory {
   return createProducerHandlerFactory({
     domain: 'media',
     configValidator: parseTimelineConfig,
     invoke: async ({ request, runtime }) => {
-      const config = runtime.config.parse<TimelineProducerConfig>(parseTimelineConfig);
-      if (config.clips.length === 0) {
+      const baseConfig = runtime.config.parse<TimelineProducerConfig>(parseTimelineConfig);
+      const overrides = readConfigOverrides(runtime.inputs, request);
+      const config = mergeConfig(baseConfig, overrides);
+      const canonicalInputs = request.inputs.filter((input) => input.startsWith('Input:'));
+      const clips = canonicalizeClips(config, canonicalInputs, runtime.inputs);
+      if (clips.length === 0) {
         throw createProviderError('TimelineProducer config must define at least one clip.', {
           code: 'invalid_config',
           kind: 'user_input',
@@ -147,42 +203,37 @@ export function createTimelineProducerHandler(): HandlerFactory {
         });
       }
 
-      const inputIdMap = buildInputIdMap(request.inputs);
       const resolvedInputs = runtime.inputs.all();
       const assetDurationCache = new Map<string, number>();
-      const masterKind = config.masterTrack?.kind ?? config.clips[0]!.kind;
+      const allowedKinds = resolveAllowedTracks(config, runtime.inputs);
+      if (allowedKinds && config.masterTrack && !allowedKinds.has(config.masterTrack.kind)) {
+        throw createProviderError(
+          `Master track kind "${config.masterTrack.kind}" is not included in configured tracks.`,
+          {
+            code: 'invalid_config',
+            kind: 'user_input',
+            causedByUser: true,
+          },
+        );
+      }
+      const masterKind = config.masterTrack?.kind ?? clips[0]!.kind;
       const fanInByInput = new Map<string, FanInValue>();
 
-      for (const clip of config.clips) {
-        const baseName = parseInputReference(clip.inputs);
-        if (fanInByInput.has(baseName)) {
+      for (const clip of clips) {
+        if (fanInByInput.has(clip.inputs)) {
           continue;
         }
-        const fanIn = readFanInForInput(runtime.inputs, inputIdMap, baseName);
-        fanInByInput.set(baseName, fanIn);
+        const fanIn = readFanInForInput(runtime.inputs, clip.inputs);
+        if (fanIn) {
+          fanInByInput.set(clip.inputs, fanIn);
+        }
       }
 
-      const masterClip = config.clips.find((clip) => clip.kind === masterKind);
-      if (!masterClip) {
-        throw createProviderError(`Master track kind "${masterKind}" is not defined in the clip configuration.`, {
-          code: 'invalid_config',
-          kind: 'user_input',
-          causedByUser: true,
-        });
-      }
-
-      const masterFanIn = fanInByInput.get(parseInputReference(masterClip.inputs));
-      if (!masterFanIn) {
-        throw createProviderError(`Missing fan-in data for master track input "${masterClip.inputs}".`, {
-          code: 'missing_fanin',
-          kind: 'user_input',
-          causedByUser: true,
-        });
-      }
-
-      const segmentCount = Math.max(masterFanIn.groups.length, 0);
-      if (segmentCount === 0) {
-        throw createProviderError('TimelineProducer requires at least one segment from the master track.', {
+      const masterClip = resolveMasterClip(clips, masterKind, fanInByInput);
+      const masterFanIn = masterClip ? fanInByInput.get(masterClip.inputs) : undefined;
+      const segmentCount = Math.max(masterFanIn?.groups.length ?? 0, 0);
+      if (!masterClip || !masterFanIn || segmentCount === 0) {
+        throw createProviderError('TimelineProducer requires at least one master track with fan-in data.', {
           code: 'missing_segments',
           kind: 'user_input',
           causedByUser: true,
@@ -203,9 +254,8 @@ export function createTimelineProducerHandler(): HandlerFactory {
       const totalTimelineDuration = roundSeconds(segmentDurations.reduce((sum, value) => sum + value, 0));
 
       const tracks: TimelineTrack[] = await Promise.all(
-        config.clips.map(async (clip, index) => {
-          const baseName = parseInputReference(clip.inputs);
-          const fanIn = fanInByInput.get(baseName);
+        clips.map(async (clip, index) => {
+          const fanIn = fanInByInput.get(clip.inputs);
           if (!fanIn) {
             throw createProviderError(`Missing fan-in data for "${clip.inputs}".`, {
               code: 'missing_fanin',
@@ -232,7 +282,7 @@ export function createTimelineProducerHandler(): HandlerFactory {
         movieId: readOptionalString(resolvedInputs, ['MovieId', 'movieId']),
         movieTitle: readOptionalString(resolvedInputs, ['MovieTitle', 'ScriptGenerator.MovieTitle']),
         duration: totalTimelineDuration,
-        assetFolder: buildAssetFolder(config),
+        assetFolder: buildAssetFolder(runtime.inputs),
         tracks,
       };
 
@@ -265,17 +315,14 @@ function parseTimelineConfig(raw: unknown): TimelineProducerConfig {
       causedByUser: true,
     });
   }
-  const source = raw as Record<string, unknown>;
-  if (!isRecord(source.config)) {
-    throw createProviderError('TimelineProducer provider configuration must include a config object.', {
-      code: 'invalid_config',
-      kind: 'user_input',
-      causedByUser: true,
-    });
-  }
-  const resolved = source.config as Record<string, unknown>;
-  const clipsRaw = Array.isArray(resolved.clips) ? resolved.clips : [];
-  const clips: TimelineClipConfig[] = clipsRaw
+  const source = isRecord(raw.config) ? (raw.config as Record<string, unknown>) : (raw as Record<string, unknown>);
+  const tracks = Array.isArray(source.tracks)
+    ? source.tracks
+      .map((entry) => (typeof entry === 'string' ? (entry as ClipKind) : undefined))
+      .filter((entry): entry is ClipKind => Boolean(entry))
+    : undefined;
+  const clipsRaw = Array.isArray(source.clips) ? source.clips : [];
+  const explicitClips: TimelineClipConfig[] = clipsRaw
     .map((entry) => (isRecord(entry) ? entry : undefined))
     .filter((entry): entry is Record<string, unknown> => Boolean(entry))
     .map((entry) => ({
@@ -291,24 +338,147 @@ function parseTimelineConfig(raw: unknown): TimelineProducerConfig {
     }))
     .filter((clip) => clip.inputs.length > 0);
 
+  const derivedClips = buildClipsFromShorthand(source);
+  const clips = explicitClips.length > 0 ? explicitClips : derivedClips;
+
   return {
-    rootFolder: typeof resolved.rootFolder === 'string' ? resolved.rootFolder : undefined,
-    source: typeof resolved.source === 'string' ? resolved.source : undefined,
-    numTracks: typeof resolved.numTracks === 'number' ? resolved.numTracks : undefined,
-    masterTrack: isRecord(resolved.masterTrack) && typeof resolved.masterTrack.kind === 'string'
-      ? { kind: resolved.masterTrack.kind as ClipKind }
+    numTracks: typeof source.numTracks === 'number' ? source.numTracks : undefined,
+    masterTrack: isRecord(source.masterTrack) && typeof source.masterTrack.kind === 'string'
+      ? { kind: source.masterTrack.kind as ClipKind }
+      : typeof source.masterTrack === 'string'
+        ? { kind: source.masterTrack as ClipKind }
       : undefined,
     clips,
+    tracks,
   };
 }
 
-function buildAssetFolder(config: TimelineProducerConfig): TimelineDocument['assetFolder'] | undefined {
-  if (!config.rootFolder && !config.source) {
+function buildClipsFromShorthand(source: Record<string, unknown>): TimelineClipConfig[] {
+  const clips: TimelineClipConfig[] = [];
+  const imageClip = isRecord(source.imageClip) ? (source.imageClip as Record<string, unknown>) : undefined;
+  const videoClip = isRecord(source.videoClip) ? (source.videoClip as Record<string, unknown>) : undefined;
+  const audioClip = isRecord(source.audioClip) ? (source.audioClip as Record<string, unknown>) : undefined;
+  const musicClip = isRecord(source.musicClip) ? (source.musicClip as Record<string, unknown>) : undefined;
+
+  if (imageClip?.artifact && typeof imageClip.artifact === 'string') {
+    clips.push({
+      kind: 'Image',
+      inputs: imageClip.artifact,
+      effect: typeof imageClip.effect === 'string' ? imageClip.effect : undefined,
+    });
+  }
+  if (videoClip?.artifact && typeof videoClip.artifact === 'string') {
+    clips.push({
+      kind: 'Video',
+      inputs: videoClip.artifact,
+      fitStrategy: typeof videoClip.fitStrategy === 'string' ? videoClip.fitStrategy : undefined,
+      volume: typeof videoClip.volume === 'number' ? videoClip.volume : undefined,
+    });
+  }
+  if (audioClip?.artifact && typeof audioClip.artifact === 'string') {
+    clips.push({
+      kind: 'Audio',
+      inputs: audioClip.artifact,
+      volume: typeof audioClip.volume === 'number' ? audioClip.volume : undefined,
+    });
+  }
+  if (musicClip?.artifact && typeof musicClip.artifact === 'string') {
+    clips.push({
+      kind: 'Music',
+      inputs: musicClip.artifact,
+      play: typeof musicClip.play === 'string' ? musicClip.play : musicClip.playStrategy as string | undefined,
+      volume: typeof musicClip.volume === 'number' ? musicClip.volume : undefined,
+    });
+  }
+  return clips;
+}
+
+function readConfigOverrides(inputs: ResolvedInputsAccessor, request: ProviderJobContext): Record<string, unknown> {
+  const qualifiedProducer = readQualifiedProducerName(request);
+  if (!qualifiedProducer) {
+    return {};
+  }
+  const prefix = `Input:${qualifiedProducer}.`;
+  const overrides: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(inputs.all())) {
+    if (!key.startsWith(prefix)) {
+      continue;
+    }
+    const path = key.slice(prefix.length);
+    assignPath(overrides, path, value);
+  }
+  return overrides;
+}
+
+function readQualifiedProducerName(request: ProviderJobContext): string | undefined {
+  const extras = request.context.extras;
+  if (!extras || typeof extras !== 'object') {
     return undefined;
   }
+  const jobContext = (extras as Record<string, unknown>).jobContext;
+  if (!jobContext || typeof jobContext !== 'object') {
+    return undefined;
+  }
+  const qualifiedName = (jobContext as Record<string, unknown>).qualifiedName;
+  return typeof qualifiedName === 'string' ? qualifiedName : undefined;
+}
+
+function assignPath(target: Record<string, unknown>, path: string, value: unknown): void {
+  const segments = path.split('.').filter((segment) => segment.length > 0);
+  let cursor: Record<string, unknown> = target;
+  segments.forEach((segment, index) => {
+    if (index === segments.length - 1) {
+      cursor[segment] = value;
+      return;
+    }
+    if (!isRecord(cursor[segment])) {
+      cursor[segment] = {};
+    }
+    cursor = cursor[segment] as Record<string, unknown>;
+  });
+}
+
+function mergeConfig(base: TimelineProducerConfig, overrides: Record<string, unknown>): TimelineProducerConfig {
+  const result: Record<string, unknown> = { ...base };
+  const apply = (source: Record<string, unknown>, target: Record<string, unknown>) => {
+    for (const [key, value] of Object.entries(source)) {
+      if (value && typeof value === 'object' && !Array.isArray(value)) {
+        if (!isRecord(target[key])) {
+          target[key] = {};
+        }
+        apply(value as Record<string, unknown>, target[key] as Record<string, unknown>);
+      } else {
+        target[key] = value;
+      }
+    }
+  };
+  apply(overrides, result);
   return {
-    source: config.source ?? 'local',
-    rootPath: config.rootFolder,
+    clips: base.clips,
+    numTracks: typeof result.numTracks === 'number' ? result.numTracks : base.numTracks,
+    masterTrack: isRecord(result.masterTrack) && typeof result.masterTrack.kind === 'string'
+      ? { kind: result.masterTrack.kind as ClipKind }
+      : base.masterTrack,
+    tracks: Array.isArray(result.tracks) ? (result.tracks as ClipKind[]) : base.tracks,
+  };
+}
+
+function buildAssetFolder(inputs: ResolvedInputsAccessor): TimelineDocument['assetFolder'] {
+  const storageRoot = inputs.getByNodeId<string>('Input:StorageRoot') ?? inputs.get<string>('StorageRoot');
+  if (!storageRoot || typeof storageRoot !== 'string' || storageRoot.trim().length === 0) {
+    throw createProviderError('TimelineProducer is missing storage root (Input:StorageRoot).', {
+      code: 'missing_storage_root',
+      kind: 'user_input',
+      causedByUser: true,
+    });
+  }
+  const basePath = inputs.getByNodeId<string>('Input:StorageBasePath') ?? inputs.get<string>('StorageBasePath');
+  const movieId = inputs.getByNodeId<string>('Input:MovieId') ?? inputs.get<string>('MovieId');
+  const segments = [storageRoot, basePath, movieId].filter((segment) => typeof segment === 'string' && segment.trim().length > 0) as string[];
+  const rootPath = segments.join('/');
+  return {
+    source: 'local',
+    rootPath,
   };
 }
 
@@ -324,6 +494,13 @@ async function buildTrack(args: {
   durationCache: Map<string, number>;
 }): Promise<TimelineTrack> {
   const { clip, fanIn, trackIndex, segmentDurations, segmentOffsets, isMaster, totalDuration, inputs, durationCache } = args;
+  if (!fanIn || fanIn.groups.length === 0) {
+    return {
+      id: `track-${trackIndex}`,
+      kind: clip.kind,
+      clips: [],
+    };
+  }
   switch (clip.kind) {
     case 'Audio':
       return buildAudioTrack({
@@ -599,60 +776,21 @@ function pickKenBurnsPreset(segmentIndex: number, imageIndex: number): KenBurnsP
   return KEN_BURNS_PRESETS[presetIndex]!;
 }
 
-function buildInputIdMap(inputs: string[]): Map<string, string> {
-  const map = new Map<string, string>();
-  for (const input of inputs) {
-    if (!input.startsWith('Input:')) {
-      continue;
-    }
-    const canonical = input;
-    const trimmed = canonical.slice('Input:'.length);
-    const base = stripNamespace(trimmed);
-    map.set(canonical, canonical);
-    map.set(trimmed, canonical);
-    map.set(base, canonical);
-  }
-  return map;
-}
-
-function readFanInForInput(
-  inputs: ResolvedInputsAccessor,
-  inputIdMap: Map<string, string>,
-  baseName: string,
-): FanInValue {
-  const canonicalId = inputIdMap.get(baseName);
-  if (!canonicalId) {
-    throw createProviderError(`TimelineProducer could not resolve input "${baseName}".`, {
-      code: 'unknown_input',
-      kind: 'user_input',
-      causedByUser: true,
-    });
-  }
+function readFanInForInput(inputs: ResolvedInputsAccessor, canonicalId: string): FanInValue {
   const fanIn = resolveFanIn(inputs, canonicalId);
-  if (!fanIn) {
-    throw createProviderError(`TimelineProducer is missing fan-in data for "${baseName}".`, {
-      code: 'missing_fanin',
-      kind: 'user_input',
-      causedByUser: true,
-    });
+  if (fanIn) {
+    return fanIn;
   }
-  return fanIn;
+  return {
+    groupBy: 'segment',
+    groups: [],
+  };
 }
 
 function resolveFanIn(inputs: ResolvedInputsAccessor, canonicalId: string): FanInValue | undefined {
   const direct = inputs.getByNodeId<FanInValue>(canonicalId);
   if (isFanInValue(direct)) {
     return normalizeFanIn(direct);
-  }
-  const trimmed = canonicalId.replace(/^Input:/, '');
-  const scoped = inputs.get<FanInValue>(trimmed);
-  if (isFanInValue(scoped)) {
-    return normalizeFanIn(scoped);
-  }
-  const base = stripNamespace(trimmed);
-  const baseValue = inputs.get<FanInValue>(base);
-  if (isFanInValue(baseValue)) {
-    return normalizeFanIn(baseValue);
   }
   return undefined;
 }
@@ -797,6 +935,9 @@ function resolveAssetBinary(inputs: ResolvedInputsAccessor, assetId: string): Ar
   if (isBinaryPayload(value)) {
     return value;
   }
+  if (typeof value === 'string') {
+    return Buffer.from(value);
+  }
   if (value !== undefined) {
     throw createProviderError(`TimelineProducer expected binary data for asset "${assetId}".`, {
       code: 'invalid_asset_payload',
@@ -893,6 +1034,16 @@ function readOptionalPositiveNumber(inputs: Record<string, unknown>, keys: strin
   return undefined;
 }
 
+function readOptionalString(inputs: Record<string, unknown>, keys: string[]): string | undefined {
+  for (const key of keys) {
+    const value = inputs[key];
+    if (typeof value === 'string' && value.trim().length > 0) {
+      return value;
+    }
+  }
+  return undefined;
+}
+
 function buildSegmentOffsets(durations: number[]): number[] {
   const offsets: number[] = [];
   let cursor = 0;
@@ -943,21 +1094,6 @@ function resolveVideoFitStrategy(fitStrategy: string | undefined, segmentDuratio
   }
   const ratio = Math.abs(segmentDuration - originalDuration) / originalDuration;
   return ratio <= 0.2 ? 'stretch' : 'freeze-fade';
-}
-
-function stripNamespace(name: string): string {
-  const separatorIndex = name.lastIndexOf('.');
-  return separatorIndex >= 0 ? name.slice(separatorIndex + 1) : name;
-}
-
-function readOptionalString(inputs: Record<string, unknown>, keys: string[]): string | undefined {
-  for (const key of keys) {
-    const value = inputs[key];
-    if (typeof value === 'string' && value.trim().length > 0) {
-      return value;
-    }
-  }
-  return undefined;
 }
 
 function roundSeconds(value: number): number {

@@ -44,8 +44,12 @@ models:
   - model: OrderedTimeline
     provider: Tutopanda
     inputSchema: ../schemas/timeline-input.json
-    inputs: 
-      ImageSegments[segment]: imageClip.artifact
-      VideoSegments: videoClip.artifact
-      AudioSegments: audioClip.artifact
-      MusicSegments: musicClip.artifact
+    config:
+      imageClip:
+        artifact: ImageSegments[Image]
+      videoClip:
+        artifact: VideoSegments
+      audioClip:
+        artifact: AudioSegments
+      musicClip:
+        artifact: Music

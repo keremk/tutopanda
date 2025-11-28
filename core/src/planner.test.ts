@@ -99,7 +99,6 @@ function assertTopological(plan: ExecutionPlanLike, graph: ProducerGraph) {
       order.set(job.jobId, index);
     }
   });
-
   for (const edge of graph.edges) {
     if (!order.has(edge.from) || !order.has(edge.to)) {
       continue;
@@ -374,6 +373,239 @@ describe('planner', () => {
     expect(jobs.some((job) => job.producer === 'AudioProducer')).toBe(true);
     expect(jobs.some((job) => job.producer === 'TimelineAssembler')).toBe(true);
     expect(jobs.some((job) => job.producer === 'ScriptProducer')).toBe(false);
+  });
+
+  it('marks producer and downstream jobs dirty when model selection input changes', async () => {
+    const ctx = memoryContext();
+    await initializeMovieStorage(ctx, 'demo');
+    const eventLog = createEventLog(ctx);
+    const planner = createPlanner();
+
+    const graph: ProducerGraph = {
+      nodes: [
+        {
+          jobId: 'Producer:A',
+          producer: 'ProducerA',
+          inputs: ['Input:Prompt', 'Input:ProducerA.ProducerA.model'],
+          produces: ['Artifact:A'],
+          provider: 'provider-a',
+          providerModel: 'model-a',
+          rateKey: 'rk:a',
+          context: { namespacePath: [], indices: {}, qualifiedName: 'ProducerA', inputs: [], produces: [] },
+        },
+        {
+          jobId: 'Producer:B',
+          producer: 'ProducerB',
+          inputs: ['Artifact:A', 'Input:ProducerB.ProducerB.volume'],
+          produces: ['Artifact:B'],
+          provider: 'provider-b',
+          providerModel: 'model-b',
+          rateKey: 'rk:b',
+          context: { namespacePath: [], indices: {}, qualifiedName: 'ProducerB', inputs: [], produces: [] },
+        },
+      ],
+      edges: [
+        { from: 'Producer:A', to: 'Producer:B' },
+      ],
+    };
+
+    const baselineInputs = createInputEvents(
+      {
+        'Input:Prompt': 'hello',
+        'Input:ProducerA.ProducerA.model': 'model-a',
+        'Input:ProducerB.ProducerB.volume': 0.5,
+      },
+      'rev-0001',
+    );
+    for (const event of baselineInputs) {
+      await eventLog.appendInput('demo', event);
+    }
+    const artefactCreatedAt = new Date().toISOString();
+    await eventLog.appendArtefact('demo', {
+      artefactId: 'Artifact:A',
+      revision: 'rev-0001',
+      inputsHash: 'hash-a',
+      output: { blob: { hash: 'blob-a', size: 1, mimeType: 'text/plain' } },
+      status: 'succeeded',
+      producedBy: 'Producer:A',
+      createdAt: artefactCreatedAt,
+    });
+    await eventLog.appendArtefact('demo', {
+      artefactId: 'Artifact:B',
+      revision: 'rev-0001',
+      inputsHash: 'hash-b',
+      output: { blob: { hash: 'blob-b', size: 1, mimeType: 'text/plain' } },
+      status: 'succeeded',
+      producedBy: 'Producer:B',
+      createdAt: artefactCreatedAt,
+    });
+
+    const manifest: Manifest = {
+      revision: 'rev-0001',
+      baseRevision: null,
+      createdAt: artefactCreatedAt,
+      inputs: Object.fromEntries(
+        baselineInputs.map((event) => [
+          event.id,
+          {
+            hash: event.hash,
+            payloadDigest: hashPayload(event.payload).canonical,
+            createdAt: event.createdAt,
+          },
+        ]),
+      ),
+      artefacts: {
+        'Artifact:A': {
+          hash: 'blob-a',
+          producedBy: 'Producer:A',
+          status: 'succeeded',
+          createdAt: artefactCreatedAt,
+        },
+        'Artifact:B': {
+          hash: 'blob-b',
+          producedBy: 'Producer:B',
+          status: 'succeeded',
+          createdAt: artefactCreatedAt,
+        },
+      },
+      timeline: {},
+    };
+
+    const pending = createInputEvents(
+      { 'Input:ProducerA.ProducerA.model': 'model-a-v2' },
+      'rev-0002' as RevisionId,
+    );
+
+    const plan = await planner.computePlan({
+      movieId: 'demo',
+      manifest,
+      eventLog,
+      blueprint: graph,
+      targetRevision: 'rev-0002' as RevisionId,
+      pendingEdits: pending,
+    });
+
+    const allJobs = plan.layers.flat().map((job) => job.jobId);
+    expect(allJobs).toContain('Producer:A');
+    expect(allJobs).toContain('Producer:B');
+    expect(allJobs.length).toBe(2);
+    assertTopological(plan, graph);
+  });
+
+  it('marks only the dependent producer dirty when a config input changes', async () => {
+    const ctx = memoryContext();
+    await initializeMovieStorage(ctx, 'demo');
+    const eventLog = createEventLog(ctx);
+    const planner = createPlanner();
+
+    const graph: ProducerGraph = {
+      nodes: [
+        {
+          jobId: 'Producer:A',
+          producer: 'ProducerA',
+          inputs: ['Input:Prompt'],
+          produces: ['Artifact:A'],
+          provider: 'provider-a',
+          providerModel: 'model-a',
+          rateKey: 'rk:a',
+          context: { namespacePath: [], indices: {}, qualifiedName: 'ProducerA', inputs: [], produces: [] },
+        },
+        {
+          jobId: 'Producer:B',
+          producer: 'ProducerB',
+          inputs: ['Artifact:A', 'Input:ProducerB.ProducerB.volume'],
+          produces: ['Artifact:B'],
+          provider: 'provider-b',
+          providerModel: 'model-b',
+          rateKey: 'rk:b',
+          context: { namespacePath: [], indices: {}, qualifiedName: 'ProducerB', inputs: [], produces: [] },
+        },
+      ],
+      edges: [
+        { from: 'Producer:A', to: 'Producer:B' },
+      ],
+    };
+
+    const baselineInputs = createInputEvents(
+      {
+        'Input:Prompt': 'hello',
+        'Input:ProducerB.ProducerB.volume': 0.5,
+      },
+      'rev-0001',
+    );
+    for (const event of baselineInputs) {
+      await eventLog.appendInput('demo', event);
+    }
+    const artefactCreatedAt = new Date().toISOString();
+    await eventLog.appendArtefact('demo', {
+      artefactId: 'Artifact:A',
+      revision: 'rev-0001',
+      inputsHash: 'hash-a',
+      output: { blob: { hash: 'blob-a', size: 1, mimeType: 'text/plain' } },
+      status: 'succeeded',
+      producedBy: 'Producer:A',
+      createdAt: artefactCreatedAt,
+    });
+    await eventLog.appendArtefact('demo', {
+      artefactId: 'Artifact:B',
+      revision: 'rev-0001',
+      inputsHash: 'hash-b',
+      output: { blob: { hash: 'blob-b', size: 1, mimeType: 'text/plain' } },
+      status: 'succeeded',
+      producedBy: 'Producer:B',
+      createdAt: artefactCreatedAt,
+    });
+
+    const manifest: Manifest = {
+      revision: 'rev-0001',
+      baseRevision: null,
+      createdAt: artefactCreatedAt,
+      inputs: Object.fromEntries(
+        baselineInputs.map((event) => [
+          event.id,
+          {
+            hash: event.hash,
+            payloadDigest: hashPayload(event.payload).canonical,
+            createdAt: event.createdAt,
+          },
+        ]),
+      ),
+      artefacts: {
+        'Artifact:A': {
+          hash: 'blob-a',
+          producedBy: 'Producer:A',
+          status: 'succeeded',
+          createdAt: artefactCreatedAt,
+        },
+        'Artifact:B': {
+          hash: 'blob-b',
+          producedBy: 'Producer:B',
+          status: 'succeeded',
+          createdAt: artefactCreatedAt,
+        },
+      },
+      timeline: {},
+    };
+
+    const pending = createInputEvents(
+      { 'Input:ProducerB.ProducerB.volume': 0.7 },
+      'rev-0002' as RevisionId,
+    );
+
+    const plan = await planner.computePlan({
+      movieId: 'demo',
+      manifest,
+      eventLog,
+      blueprint: graph,
+      targetRevision: 'rev-0002' as RevisionId,
+      pendingEdits: pending,
+    });
+
+    const allJobs = plan.layers.flat().map((job) => job.jobId);
+    expect(allJobs).toContain('Producer:B');
+    expect(allJobs).not.toContain('Producer:A');
+    expect(allJobs.length).toBe(1);
+    assertTopological(plan, graph);
   });
 
   it('throws when the graph contains a cycle', async () => {

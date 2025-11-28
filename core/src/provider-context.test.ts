@@ -3,21 +3,7 @@ import { prepareJobContext } from './provider-context.js';
 import type { JobDescriptor } from './types.js';
 
 describe('prepareJobContext', () => {
-  it('overrides namespaced canonical defaults with explicit values', () => {
-    const job = createJobDescriptor();
-    const baseInputs = {
-      NumOfImagesPerNarrative: 2,
-      'Input:ImagePromptGenerator.NumOfImagesPerNarrative': 1,
-    };
-
-    const { resolvedInputs } = prepareJobContext(job, baseInputs);
-
-    expect(resolvedInputs['Input:NumOfImagesPerNarrative']).toBe(2);
-    expect(resolvedInputs['Input:ImagePromptGenerator.NumOfImagesPerNarrative']).toBe(2);
-    expect(resolvedInputs.NumOfImagesPerNarrative).toBe(2);
-  });
-
-  it('keeps canonical defaults when no explicit value is provided', () => {
+  it('keeps canonical entries as-is', () => {
     const job = createJobDescriptor();
     const baseInputs = {
       'Input:ImagePromptGenerator.NumOfImagesPerNarrative': 1,
@@ -28,15 +14,10 @@ describe('prepareJobContext', () => {
     expect(resolvedInputs['Input:ImagePromptGenerator.NumOfImagesPerNarrative']).toBe(1);
   });
 
-  it('adds canonical entries when none exist', () => {
+  it('throws when provided non-canonical inputs', () => {
     const job = createJobDescriptor();
-    const baseInputs = {
-      NumOfSegments: 3,
-    };
-
-    const { resolvedInputs } = prepareJobContext(job, baseInputs);
-
-    expect(resolvedInputs['Input:NumOfSegments']).toBe(3);
+    const baseInputs = { NumOfSegments: 3 };
+    expect(() => prepareJobContext(job, baseInputs)).toThrow(/canonical ids/i);
   });
 });
 

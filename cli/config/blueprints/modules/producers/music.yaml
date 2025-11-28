@@ -24,7 +24,7 @@ artifacts:
 models:    
   - model: stability-ai/stable-audio-2.5
     provider: replicate
-    inputSchema: ./schemas/stable-audio.json
+    inputSchema: ../schemas/stable-audio.json
     inputs:
       Prompt: prompt
       Duration: duration
@@ -34,7 +34,7 @@ models:
         mimeType: audio/mp3
   - model: elevenlabs/music
     provider: replicate
-    inputSchema: ./schemas/elevenlabs-music.json
+    inputSchema: ../schemas/elevenlabs-music.json
     inputs:
       Prompt: prompt
       Duration: music_length_ms

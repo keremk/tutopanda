@@ -1,4 +1,4 @@
-import type { HandlerFactory } from '../../types.js';
+import type { HandlerFactory, ProviderJobContext } from '../../types.js';
 import { createProducerHandlerFactory } from '../../sdk/handler-factory.js';
 import { createProviderError } from '../../sdk/errors.js';
 import {
@@ -10,6 +10,7 @@ import {
   isRecord,
   runReplicateWithRetries,
 } from '../../sdk/replicate/index.js';
+import { validatePayload } from '../../sdk/schema-validator.js';
 
 interface ReplicateMusicConfig {
   promptKey: string;
@@ -47,6 +48,8 @@ export function createReplicateMusicHandler(): HandlerFactory {
         const resolvedInputs = runtime.inputs.all();
         const plannerContext = extractPlannerContext(request);
         const sdkPayload = runtime.sdk.buildPayload();
+        const inputSchema = readInputSchema(request);
+        validatePayload(inputSchema, sdkPayload, 'input');
 
         const providerConfig = request.context.providerConfig;
         const customAttributes =
@@ -246,4 +249,17 @@ function capDuration(
     return Math.min(converted, max);
   }
   return converted;
+}
+
+function readInputSchema(request: ProviderJobContext): string | undefined {
+  const extras = request.context.extras;
+  if (!extras || typeof extras !== 'object') {
+    return undefined;
+  }
+  const schema = (extras as Record<string, unknown>).schema;
+  if (!schema || typeof schema !== 'object') {
+    return undefined;
+  }
+  const input = (schema as Record<string, unknown>).input;
+  return typeof input === 'string' ? input : undefined;
 }

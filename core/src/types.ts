@@ -133,18 +133,22 @@ export interface SubBlueprintRef {
  */
 export interface ProducerConfig {
   name: string;  // Must match ProducerKind
-  provider: ProviderName;
-  model: string;
+  // Legacy single-model fields (kept for backward compatibility)
+  provider?: ProviderName;
+  model?: string;
   settings?: Record<string, unknown>;
   systemPrompt?: string;
   userPrompt?: string;
   jsonSchema?: string;
   textFormat?: string;
   variables?: string[];
-  // Any other provider-specific attributes
-  [key: string]: unknown;
   sdkMapping?: Record<string, BlueprintProducerSdkMappingField>;
   outputs?: Record<string, BlueprintProducerOutputDefinition>;
+  config?: Record<string, unknown>;
+  // Preferred multi-model definition
+  models?: ProducerModelVariant[];
+  // Any other provider-specific attributes
+  [key: string]: unknown;
 }
 
 /**
@@ -201,6 +205,22 @@ export interface BlueprintProducerSdkMappingField {
 export interface BlueprintProducerOutputDefinition {
   type: string;
   mimeType?: string;
+}
+
+export interface ProducerModelVariant {
+  provider: ProviderName;
+  model: string;
+  promptFile?: string;
+  inputSchema?: string;
+  outputSchema?: string;
+  inputs?: Record<string, BlueprintProducerSdkMappingField>;
+  outputs?: Record<string, BlueprintProducerOutputDefinition>;
+  config?: Record<string, unknown>;
+  settings?: Record<string, unknown>;
+  systemPrompt?: string;
+  userPrompt?: string;
+  textFormat?: string;
+  variables?: string[];
 }
 
 export interface BlueprintEdgeDefinition {

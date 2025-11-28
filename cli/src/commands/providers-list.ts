@@ -27,7 +27,7 @@ export async function runProvidersList(options: ProvidersListOptions): Promise<P
   }
   const blueprintPath = expandPath(normalizedBlueprint);
   const { root } = await loadBlueprintBundle(blueprintPath);
-  const providerOptions = buildProducerOptionsFromBlueprint(root);
+  const providerOptions = buildProducerOptionsFromBlueprint(root, [], true);
 
   const registry = createProviderRegistry({ mode: 'live' });
   const entries: ProviderListEntry[] = [];

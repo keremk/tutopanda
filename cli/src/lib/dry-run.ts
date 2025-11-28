@@ -64,21 +64,16 @@ export async function executeDryRun(args: ExecuteDryRunArgs): Promise<DryRunSumm
   const eventLog = createEventLog(storage);
   const manifestService = createManifestService(storage);
 
-
   // Populate SchemaRegistry from provider options (blueprints)
   const schemaRegistry = new SchemaRegistry();
   /* eslint-disable no-unused-vars */
   for (const [_, options] of args.providerOptions) {
     for (const option of options) {
-      if (option.config) {
-        const config = option.config as Record<string, unknown>;
-        // Check if sdkMapping exists in the config (it comes from the blueprint)
-        if (config.sdkMapping) {
-          schemaRegistry.register(option.provider as ProviderName, option.model, {
-            sdkMapping: config.sdkMapping as any,
-            config: config.config as any,
-          });
-        }
+      if (option.sdkMapping) {
+        schemaRegistry.register(option.provider as ProviderName, option.model, {
+          sdkMapping: option.sdkMapping as any,
+          config: option.config as any,
+        });
       }
     }
   }
@@ -86,10 +81,20 @@ export async function executeDryRun(args: ExecuteDryRunArgs): Promise<DryRunSumm
   const registry = createProviderRegistry({ mode: 'simulated', schemaRegistry, logger });
   const preResolved = prepareProviderHandlers(registry, args.plan, args.providerOptions);
   await registry.warmStart?.(preResolved);
+  const resolvedInputsWithSystem = {
+    ...args.resolvedInputs,
+    ...(args.resolvedInputs['Input:MovieId'] === undefined ? { 'Input:MovieId': args.movieId } : {}),
+    ...(args.storage?.rootDir && args.resolvedInputs['Input:StorageRoot'] === undefined
+      ? { 'Input:StorageRoot': args.storage.rootDir }
+      : {}),
+    ...(args.storage?.basePath && args.resolvedInputs['Input:StorageBasePath'] === undefined
+      ? { 'Input:StorageBasePath': args.storage.basePath }
+      : {}),
+  };
   const produce = createProviderProduce(
     registry,
     args.providerOptions,
-    args.resolvedInputs,
+    resolvedInputsWithSystem,
     preResolved,
     logger,
   );

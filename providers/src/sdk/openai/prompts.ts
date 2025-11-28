@@ -43,7 +43,7 @@ function substituteVariables(
 ): string {
   return template.replace(/\{\{(\w+)\}\}/g, (_, varName: string) => {
     const value = inputs[varName];
-    if (value == null) {
+    if (value === null || value === undefined) {
       logger?.warn?.('openai.prompts.missingInput', { variable: varName });
       return '';
     }

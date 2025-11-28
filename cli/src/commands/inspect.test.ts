@@ -11,9 +11,9 @@ import { runInspect } from './inspect.js';
 import { createInputsFile } from './__testutils__/inputs.js';
 import { getBundledBlueprintsRoot } from '../lib/config-assets.js';
 
-const SCRIPT_BLUEPRINT_PATH = resolve(
+const VIDEO_AUDIO_MUSIC_BLUEPRINT_PATH = resolve(
   getBundledBlueprintsRoot(),
-  'modules/script-generator.yaml',
+  'video-audio-music.yaml',
 );
 
 const tmpRoots: string[] = [];
@@ -54,7 +54,7 @@ describe('runInspect', () => {
     const queryResult = await runQuery({
       inputsPath,
       nonInteractive: true,
-      usingBlueprint: SCRIPT_BLUEPRINT_PATH,
+      usingBlueprint: VIDEO_AUDIO_MUSIC_BLUEPRINT_PATH,
     });
 
     const inspectResult = await runInspect({ movieId: queryResult.movieId, prompts: true });

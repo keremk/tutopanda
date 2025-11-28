@@ -523,9 +523,6 @@ function mergeResolvedArtifacts(
       const resolvedValue = readResolvedValue(canonicalId, resolvedArtifacts);
       if (resolvedValue !== undefined) {
         mergedResolvedInputs[canonicalId] = resolvedValue;
-        const trimmed = trimIdPrefix(canonicalId);
-        mergedResolvedInputs[trimmed] = resolvedValue;
-        mergedResolvedInputs[alias] = resolvedValue;
       }
     }
   }
@@ -534,8 +531,6 @@ function mergeResolvedArtifacts(
     for (const [inputId, descriptor] of Object.entries(jobContext.fanIn)) {
       const fanInValue = materializeFanInValue(descriptor);
       mergedResolvedInputs[inputId] = fanInValue;
-      const trimmed = trimIdPrefix(inputId);
-      mergedResolvedInputs[trimmed] = fanInValue;
     }
   }
 

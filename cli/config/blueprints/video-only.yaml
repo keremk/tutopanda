@@ -60,45 +60,45 @@ loops:
     countInput: NumOfSegments
 
 modules:
-  - name: ScriptGenerator
-    path: ./modules/script-generator.yaml
-  - name: VideoPromptGenerator
-    path: ./modules/video-prompt-generator.yaml
-  - name: VideoGenerator
-    path: ./modules/video-generator.yaml
+  - name: ScriptProducer
+    path: ./modules/producers/script.yaml
+  - name: VideoPromptProducer
+    path: ./modules/producers/video-prompt.yaml
+  - name: VideoProducer
+    path: ./modules/producers/video.yaml
     loop: segment
 
 connections:
   - from: InquiryPrompt
-    to: ScriptGenerator.InquiryPrompt
+    to: ScriptProducer.InquiryPrompt
   - from: Audience
-    to: ScriptGenerator.Audience
+    to: ScriptProducer.Audience
   - from: Duration
-    to: ScriptGenerator.Duration
+    to: ScriptProducer.Duration
   - from: Language
-    to: ScriptGenerator.Language
+    to: ScriptProducer.Language
   - from: NumOfSegments
-    to: ScriptGenerator.NumOfSegments
+    to: ScriptProducer.NumOfSegments
 
-  - from: ScriptGenerator.NarrationScript[segment]
-    to: VideoPromptGenerator[segment].NarrativeText
-  - from: ScriptGenerator.MovieSummary
-    to: VideoPromptGenerator[segment].MovieSummary
+  - from: ScriptProducer.NarrationScript[segment]
+    to: VideoPromptProducer[segment].NarrativeText
+  - from: ScriptProducer.MovieSummary
+    to: VideoPromptProducer[segment].MovieSummary
   - from: Style
-    to: VideoPromptGenerator[segment].Style
+    to: VideoPromptProducer[segment].Style
   - from: SegmentDuration
-    to: VideoPromptGenerator[segment].SegmentDuration
+    to: VideoPromptProducer[segment].SegmentDuration
   - from: Audience
-    to: VideoPromptGenerator[segment].Audience
+    to: VideoPromptProducer[segment].Audience
 
-  - from: VideoPromptGenerator.VideoPrompt[segment]
-    to: VideoGenerator[segment].Prompt
+  - from: VideoPromptProducer.VideoPrompt[segment]
+    to: VideoProducer[segment].Prompt
   - from: Resolution
-    to: VideoGenerator[segment].Resolution
+    to: VideoProducer[segment].Resolution
   - from: AspectRatio
-    to: VideoGenerator[segment].AspectRatio
+    to: VideoProducer[segment].AspectRatio
   - from: SegmentDuration
-    to: VideoGenerator[segment].SegmentDuration
+    to: VideoProducer[segment].SegmentDuration
 
-  - from: VideoGenerator[segment].SegmentVideo
+  - from: VideoProducer[segment].SegmentVideo
     to: SegmentVideo[segment]

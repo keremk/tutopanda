@@ -6,7 +6,6 @@ import { expandPath } from './path.js';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const CONFIG_ROOT = resolve(__dirname, '../../config');
 const CONFIG_BLUEPRINTS_ROOT = resolve(CONFIG_ROOT, 'blueprints');
-const DEFAULT_INPUTS_PATH = resolve(CONFIG_ROOT, 'inputs-default.yaml');
 
 export function getBundledConfigRoot(): string {
   return CONFIG_ROOT;
@@ -16,20 +15,12 @@ export function getBundledBlueprintsRoot(): string {
   return CONFIG_BLUEPRINTS_ROOT;
 }
 
-export function getBundledDefaultInputsPath(): string {
-  return DEFAULT_INPUTS_PATH;
-}
-
 export function getCliConfigRoot(cliRoot: string): string {
   return resolve(expandPath(cliRoot), 'config');
 }
 
 export function getCliBlueprintsRoot(cliRoot: string): string {
   return resolve(getCliConfigRoot(cliRoot), 'blueprints');
-}
-
-export function getCliDefaultInputsPath(cliRoot: string): string {
-  return resolve(getCliConfigRoot(cliRoot), 'inputs-default.yaml');
 }
 
 export interface ResolveBlueprintOptions {

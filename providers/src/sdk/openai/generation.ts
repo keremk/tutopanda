@@ -149,7 +149,9 @@ async function generatePlainText(options: PlainTextOptions): Promise<GenerationR
  * Sanitizes response metadata for diagnostics.
  */
 export function sanitizeResponseMetadata(metadata: unknown): Record<string, unknown> | undefined {
-  if (!metadata || typeof metadata !== 'object') return undefined;
+  if (!metadata || typeof metadata !== 'object') {
+    return undefined;
+  }
   const response = metadata as Record<string, unknown>;
   return {
     id: response.id,

@@ -212,4 +212,27 @@ describe('createReplicateTextToImageHandler', () => {
     await expect(handler.invoke(request)).rejects.toThrow('No prompt available for image generation.');
   });
 
+  it('fails fast when input schema validation fails', async () => {
+    const handler = buildHandler();
+    replicateMocks.run.mockResolvedValueOnce([]);
+    await handler.warmStart?.({ logger: undefined });
+
+    const request = createJobContext({
+      context: {
+        extras: {
+          schema: {
+            input: JSON.stringify({
+              type: 'object',
+              required: ['unprovided'],
+              properties: { unprovided: { type: 'string' } },
+            }),
+          },
+        },
+      },
+    });
+
+    await expect(handler.invoke(request)).rejects.toThrow(/invalid input payload/i);
+    expect(replicateMocks.run).not.toHaveBeenCalled();
+  });
+
 });

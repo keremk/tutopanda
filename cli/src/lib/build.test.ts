@@ -25,9 +25,7 @@ describe('createProviderProduce', () => {
     ]);
 
     const resolvedInputs = {
-      NumOfImagesPerNarrative: 2,
-      'Input:NumOfImagesPerNarrative': 1,
-      'Input:ImagePromptGenerator.NumOfImagesPerNarrative': 1,
+      'Input:ImagePromptGenerator.NumOfImagesPerNarrative': 2,
     };
 
     let capturedContext: ProviderJobContext | undefined;
@@ -86,8 +84,6 @@ describe('createProviderProduce', () => {
     const extras = capturedContext?.context.extras as Record<string, unknown> | undefined;
     expect(extras).toBeDefined();
     const forwarded = (extras?.resolvedInputs ?? {}) as Record<string, unknown>;
-    expect(forwarded.NumOfImagesPerNarrative).toBe(2);
-    expect(forwarded['Input:NumOfImagesPerNarrative']).toBe(2);
     expect(forwarded['Input:ImagePromptGenerator.NumOfImagesPerNarrative']).toBe(2);
 
     const jobContext = (extras?.jobContext ?? {}) as { inputBindings?: Record<string, string> };

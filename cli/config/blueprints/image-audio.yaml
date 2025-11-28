@@ -76,63 +76,63 @@ loops:
     countInput: NumOfImagesPerNarrative
 
 modules:
-  - name: ScriptGenerator
-    path: ./modules/script-generator.yaml
-  - name: ImagePromptGenerator
-    path: ./modules/image-prompt-generator.yaml
+  - name: ScriptProducer
+    path: ./modules/producers/script.yaml
+  - name: ImagePromptProducer
+    path: ./modules/producers/image-prompt.yaml
     loop: segment
-  - name: ImageGenerator
-    path: ./modules/image-generator.yaml
+  - name: ImageProducer
+    path: ./modules/producers/image.yaml
     loop: segment.image
-  - name: AudioGenerator
-    path: ./modules/audio-generator.yaml
+  - name: AudioProducer
+    path: ./modules/producers/audio.yaml
     loop: segment
   - name: TimelineComposer
-    path: ./modules/timeline-composer.yaml
+    path: ./modules/producers/timeline-composer.yaml
 
 connections:
   - from: InquiryPrompt
-    to: ScriptGenerator.InquiryPrompt
+    to: ScriptProducer.InquiryPrompt
   - from: Audience
-    to: ScriptGenerator.Audience
+    to: ScriptProducer.Audience
   - from: Duration
-    to: ScriptGenerator.Duration
+    to: ScriptProducer.Duration
   - from: NumOfSegments
-    to: ScriptGenerator.NumOfSegments
+    to: ScriptProducer.NumOfSegments
   - from: Style
-    to: ScriptGenerator.Style
+    to: ScriptProducer.Style
 
-  - from: ScriptGenerator.NarrationScript[segment]
-    to: ImagePromptGenerator[segment].NarrativeText
-  - from: ScriptGenerator.MovieSummary
-    to: ImagePromptGenerator[segment].OverallSummary
+  - from: ScriptProducer.NarrationScript[segment]
+    to: ImagePromptProducer[segment].NarrativeText
+  - from: ScriptProducer.MovieSummary
+    to: ImagePromptProducer[segment].OverallSummary
   - from: Style
-    to: ImagePromptGenerator[segment].Style
+    to: ImagePromptProducer[segment].Style
   - from: Audience
-    to: ImagePromptGenerator[segment].Audience
+    to: ImagePromptProducer[segment].Audience
   - from: NumOfImagesPerNarrative
-    to: ImagePromptGenerator[segment].NumOfImagesPerNarrative
+    to: ImagePromptProducer[segment].NumOfImagesPerNarrative
 
-  - from: ImagePromptGenerator.ImagePrompt[segment][image]
-    to: ImageGenerator[segment][image].Prompt
+  - from: ImagePromptProducer.ImagePrompt[segment][image]
+    to: ImageProducer[segment][image].Prompt
   - from: Size
-    to: ImageGenerator[segment][image].Size
+    to: ImageProducer[segment][image].Size
   - from: AspectRatio
-    to: ImageGenerator[segment][image].AspectRatio
-  - from: ImageGenerator[segment][image].SegmentImage
+    to: ImageProducer[segment][image].AspectRatio
+  - from: ImageProducer[segment][image].SegmentImage
     to: SegmentImage[segment][image]
-  - from: ImageGenerator[segment][image].SegmentImage
+  - from: ImageProducer[segment][image].SegmentImage
     to: TimelineComposer.ImageSegments
 
-  - from: ScriptGenerator.NarrationScript[segment]
-    to: AudioGenerator[segment].TextInput
+  - from: ScriptProducer.NarrationScript[segment]
+    to: AudioProducer[segment].TextInput
   - from: VoiceId
-    to: AudioGenerator[segment].VoiceId
+    to: AudioProducer[segment].VoiceId
   - from: Emotion
-    to: AudioGenerator[segment].Emotion
-  - from: AudioGenerator[segment].SegmentAudio
+    to: AudioProducer[segment].Emotion
+  - from: AudioProducer[segment].SegmentAudio
     to: SegmentAudio[segment]
-  - from: AudioGenerator[segment].SegmentAudio
+  - from: AudioProducer[segment].SegmentAudio
     to: TimelineComposer.AudioSegments
 
   - from: Duration
@@ -142,11 +142,11 @@ connections:
 
 collectors:
   - name: TimelineImages
-    from: ImageGenerator[segment][image].SegmentImage
+    from: ImageProducer[segment][image].SegmentImage
     into: TimelineComposer.ImageSegments
     groupBy: segment
     orderBy: image
   - name: TimelineAudio
-    from: AudioGenerator[segment].SegmentAudio
+    from: AudioProducer[segment].SegmentAudio
     into: TimelineComposer.AudioSegments
     groupBy: segment

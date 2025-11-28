@@ -50,7 +50,7 @@ loops:
 
 models: 
   - provider: openai
-    model: gpt-5-1
+    model: gpt-5-mini
     promptFile: ../prompts/script.toml
     inputSchema: ../schemas/openai-input.json
     outputSchema: ../schemas/script-producer.json

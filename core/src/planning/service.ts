@@ -6,12 +6,15 @@ import { ManifestNotFoundError, type ManifestService } from '../manifest.js';
 import { createProducerGraph, createPlanner, type PlannerLogger } from '../planner.js';
 import { nextRevisionId } from '../revisions.js';
 import { planStore, type StorageContext } from '../storage.js';
+import { formatCanonicalInputId, isCanonicalInputId } from '../canonical-ids.js';
 import type { Clock } from '../types.js';
 import type {
   ArtefactEvent,
   ArtefactEventOutput,
   ArtefactEventStatus,
   BlueprintTreeNode,
+  BlueprintProducerOutputDefinition,
+  BlueprintProducerSdkMappingField,
   ExecutionPlan,
   InputEvent,
   InputEventSource,
@@ -19,6 +22,16 @@ import type {
   ProducerCatalog,
   RevisionId,
 } from '../types.js';
+
+type ProviderOptionEntry = {
+  sdkMapping?: Record<string, BlueprintProducerSdkMappingField>;
+  outputs?: Record<string, BlueprintProducerOutputDefinition>;
+  inputSchema?: string;
+  outputSchema?: string;
+  config?: Record<string, unknown>;
+  selectionInputKeys?: string[];
+  configInputPaths?: string[];
+};
 
 export interface PendingArtefactDraft {
   artefactId: string;
@@ -34,6 +47,7 @@ export interface GeneratePlanArgs {
   blueprintTree: BlueprintTreeNode;
   inputValues: Record<string, unknown>;
   providerCatalog: ProducerCatalog;
+  providerOptions: Map<string, ProviderOptionEntry>;
   storage: StorageContext;
   manifestService: ManifestService;
   eventLog: EventLog;
@@ -101,7 +115,11 @@ export function createPlanningService(options: PlanningServiceOptions = {}): Pla
 
       const blueprintGraph = buildBlueprintGraph(args.blueprintTree);
       const canonicalBlueprint = expandBlueprintGraph(blueprintGraph, args.inputValues);
-      const producerGraph = createProducerGraph(canonicalBlueprint, args.providerCatalog);
+      const producerGraph = createProducerGraph(
+        canonicalBlueprint,
+        args.providerCatalog,
+        args.providerOptions,
+      );
 
       const plan = await planner.computePlan({
         movieId: args.movieId,
@@ -164,6 +182,9 @@ function createInputEvents(
   for (const [id, payload] of Object.entries(inputValues)) {
     if (payload === undefined) {
       continue;
+    }
+    if (!isCanonicalInputId(id)) {
+      throw new Error(`Input "${id}" is not a canonical input id. Expected to start with "Input:".`);
     }
     events.push(makeInputEvent(id, payload, revision, editedBy, createdAt));
   }
@@ -242,13 +263,6 @@ function seedBlueprintInputDefaults(
   for (const child of tree.children.values()) {
     seedBlueprintInputDefaults(child, resolvedInputs);
   }
-}
-
-function formatCanonicalInputId(namespacePath: string[], name: string): string {
-  if (namespacePath.length === 0) {
-    return `Input:${name}`;
-  }
-  return `Input:${namespacePath.join('.')}.${name}`;
 }
 
 async function planExists(

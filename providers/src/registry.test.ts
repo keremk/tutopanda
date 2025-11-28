@@ -108,6 +108,6 @@ describe('createProviderRegistry', () => {
           providerConfig: {},
         },
       }),
-    ).rejects.toThrow(/TimelineProducer provider configuration must include a config object/);
+    ).rejects.toThrow(/TimelineProducer config must define at least one clip/);
   });
 });

@@ -284,7 +284,7 @@ tutopanda query --inputs=<path> --using-blueprint=<path> [--dryrun] [--nonIntera
 **Example:**
 ```bash
 tutopanda query \
-  --inputs=~/.tutopanda/config/inputs-default.yaml \
+  --inputs=~/.tutopanda/config/inputs.yaml \
   --using-blueprint=~/.tutopanda/config/blueprints/image-audio.yaml
 ```
 
@@ -1413,7 +1413,7 @@ Movie IDs are 8-character prefixes of UUIDs:
 
 - **Source Code:** `/home/keremk/developer/tutopanda/cli`
 - **Example Blueprints:** `~/.tutopanda/config/blueprints/`
-- **Example Inputs:** `<root>/config/inputs-default.yaml`
+- **Example Inputs:** `<root>/config/inputs.yaml`
 - **Default Settings:** `cli/tutosettings.json`
 
 For feature requests and bug reports, please open an issue in the Tutopanda repository.

@@ -88,96 +88,96 @@ loops:
     countInput: NumOfSegments
 
 modules:
-  - name: ScriptGenerator
+  - name: ScriptProducer
     path: ./modules/producers/script.yaml
-  - name: VideoPromptGenerator
-    path: ./modules/video-prompt-generator.yaml
+  - name: VideoPromptProducer
+    path: ./modules/producers/video-prompt.yaml
     loop: segment
-  - name: VideoGenerator
-    path: ./modules/video-generator.yaml
+  - name: VideoProducer
+    path: ./modules/producers/video.yaml
     loop: segment
-  - name: AudioGenerator
-    path: ./modules/audio-generator.yaml
+  - name: AudioProducer
+    path: ./modules/producers/audio.yaml
     loop: segment
-  - name: MusicPromptGenerator
-    path: ./modules/music-prompt-generator.yaml
-  - name: MusicGenerator
-    path: ./modules/music-generator.yaml
+  - name: MusicPromptProducer
+    path: ./modules/producers/music-prompt.yaml
+  - name: MusicProducer
+    path: ./modules/producers/music.yaml
   - name: TimelineComposer
-    path: ./modules/timeline-composer-video-audio-music.yaml
+    path: ./modules/producers/timeline-composer.yaml
   - name: VideoExporter
-    path: ./modules/video-exporter.yaml
+    path: ./modules/producers/video-exporter.yaml
 
 connections:
   - from: InquiryPrompt
-    to: ScriptGenerator.InquiryPrompt
+    to: ScriptProducer.InquiryPrompt
   - from: Audience
-    to: ScriptGenerator.Audience
+    to: ScriptProducer.Audience
   - from: Duration
-    to: ScriptGenerator.Duration
+    to: ScriptProducer.Duration
   - from: Language
-    to: ScriptGenerator.Language
+    to: ScriptProducer.Language
   - from: NumOfSegments
-    to: ScriptGenerator.NumOfSegments
+    to: ScriptProducer.NumOfSegments
 
-  - from: ScriptGenerator.NarrationScript[segment]
-    to: VideoPromptGenerator[segment].NarrativeText
-  - from: ScriptGenerator.MovieSummary
-    to: VideoPromptGenerator[segment].MovieSummary
+  - from: ScriptProducer.NarrationScript[segment]
+    to: VideoPromptProducer[segment].NarrativeText
+  - from: ScriptProducer.MovieSummary
+    to: VideoPromptProducer[segment].MovieSummary
   - from: Style
-    to: VideoPromptGenerator[segment].Style
+    to: VideoPromptProducer[segment].Style
   - from: SegmentDuration
-    to: VideoPromptGenerator[segment].SegmentDuration
+    to: VideoPromptProducer[segment].SegmentDuration
   - from: Audience
-    to: VideoPromptGenerator[segment].Audience
+    to: VideoPromptProducer[segment].Audience
 
-  - from: VideoPromptGenerator.VideoPrompt[segment]
-    to: VideoGenerator[segment].Prompt
+  - from: VideoPromptProducer.VideoPrompt[segment]
+    to: VideoProducer[segment].Prompt
   - from: AspectRatio
-    to: VideoGenerator[segment].AspectRatio
+    to: VideoProducer[segment].AspectRatio
   - from: Resolution
-    to: VideoGenerator[segment].Resolution
+    to: VideoProducer[segment].Resolution
   - from: SegmentDuration
-    to: VideoGenerator[segment].SegmentDuration
-  - from: VideoGenerator[segment].SegmentVideo
+    to: VideoProducer[segment].SegmentDuration
+  - from: VideoProducer[segment].SegmentVideo
     to: SegmentVideo[segment]
-  - from: VideoGenerator[segment].SegmentVideo
+  - from: VideoProducer[segment].SegmentVideo
     to: TimelineComposer.VideoSegments
 
-  - from: ScriptGenerator.NarrationScript[segment]
-    to: AudioGenerator[segment].TextInput
+  - from: ScriptProducer.NarrationScript[segment]
+    to: AudioProducer[segment].TextInput
   - from: VoiceId
-    to: AudioGenerator[segment].VoiceId
+    to: AudioProducer[segment].VoiceId
   - from: Emotion
-    to: AudioGenerator[segment].Emotion
-  - from: AudioGenerator[segment].SegmentAudio
+    to: AudioProducer[segment].Emotion
+  - from: AudioProducer[segment].SegmentAudio
     to: SegmentAudio[segment]
-  - from: AudioGenerator[segment].SegmentAudio
+  - from: AudioProducer[segment].SegmentAudio
     to: TimelineComposer.AudioSegments
   
-  - from: ScriptGenerator.MovieSummary
-    to: MusicPromptGenerator.MovieSummary
+  - from: ScriptProducer.MovieSummary
+    to: MusicPromptProducer.MovieSummary
   - from: MusicalStyle
-    to: MusicPromptGenerator.MusicalStyle
+    to: MusicPromptProducer.MusicalStyle
   - from: NumOfSegments
-    to: MusicPromptGenerator.NumOfSegments
+    to: MusicPromptProducer.NumOfSegments
   - from: Duration
-    to: MusicPromptGenerator.Duration
+    to: MusicPromptProducer.Duration
   - from: Audience
-    to: MusicPromptGenerator.Audience
-  - from: ScriptGenerator.NarrationScript
-    to: MusicPromptGenerator.NarrationScript
+    to: MusicPromptProducer.Audience
+  - from: ScriptProducer.NarrationScript
+    to: MusicPromptProducer.NarrationScript
 
-  - from: MusicPromptGenerator.MusicPrompt
-    to: MusicGenerator.Prompt
+  - from: MusicPromptProducer.MusicPrompt
+    to: MusicProducer.Prompt
   - from: Duration
-    to: MusicGenerator.Duration
-  - from: MusicGenerator.Music
+    to: MusicProducer.Duration
+  - from: MusicProducer.Music
     to: Music
 
   - from: Duration
     to: TimelineComposer.Duration
-  - from: MusicGenerator.Music
+  - from: MusicProducer.Music
     to: TimelineComposer.Music
   - from: TimelineComposer.Timeline
     to: Timeline
@@ -190,20 +190,20 @@ connections:
 
 collectors:
   - name: TimelineVideo
-    from: VideoGenerator[segment].SegmentVideo
+    from: VideoProducer[segment].SegmentVideo
     into: TimelineComposer.VideoSegments
     groupBy: segment
   - name: TimelineAudio
-    from: AudioGenerator[segment].SegmentAudio
+    from: AudioProducer[segment].SegmentAudio
     into: TimelineComposer.AudioSegments
     groupBy: segment
 
   - name: NarrationScript 
-    from: ScriptGenerator.NarrationScript
-    into: MusicPromptGenerator.NarrationScript
+    from: ScriptProducer.NarrationScript
+    into: MusicPromptProducer.NarrationScript
     groupBy: segment  
 
   - name: MusicTrack
-    from: MusicGenerator.Music
+    from: MusicProducer.Music
     into: TimelineComposer.Music
     groupBy: segment

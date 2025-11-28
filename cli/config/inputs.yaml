@@ -1,11 +1,9 @@
 inputs:
-  Duration: 30,
-  NumOfSegments: 3,
-  NumOfImagesPerNarrative: 2
+  InquiryPrompt: "Describe the solar system"
+  Duration: 30
+  NumOfSegments: 3
   VoiceId: Wise_Woman
   Emotion: neutral
-  AspectRatio: "16:9"
-  Size: "1K"
   AspectRatio: "16:9"
   Resolution: "480p"
   SegmentDuration: 10
@@ -15,9 +13,6 @@ models:
   - model: minimax/speech-2.6-hd
     provider: replicate
     producerId: AudioProducer
-  - model: bytedance/seedream-4
-    provider: replicate
-    producerId: ImageProducer
   - model: stability-ai/stable-audio-2.5
     provider: replicate
     producerId: MusicProducer
@@ -31,9 +26,6 @@ models:
     producerId: ScriptProducer
   - model: gpt-5-mini
     provider: openai
-    producerId: ImagePromptProducer
-  - model: gpt-5-mini
-    provider: openai
     producerId: VideoPromptProducer
   - model: gpt-5-mini
     provider: openai
@@ -45,6 +37,4 @@ models:
       masterTrack: Audio
       musicClip:
         volume: 0.4
-      tracks: ["Image", "Audio", "Music"]
-      
-    
+      tracks: ["Video", "Audio", "Music"]

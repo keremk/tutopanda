@@ -5,6 +5,7 @@ import type { ProviderJobContext } from './types.js';
 const blobKinds = new Set<ArtifactKind>([
   'SegmentAudio',
   'MusicTrack',
+  'Music',
   'SegmentImage',
   'StartImage',
   'SegmentVideo',
@@ -14,6 +15,7 @@ const blobKinds = new Set<ArtifactKind>([
 const expectedMimeTypes: Partial<Record<ArtifactKind, string>> = {
   SegmentAudio: 'audio/wav',
   MusicTrack: 'audio/mpeg',
+  Music: 'audio/mpeg',
   SegmentImage: 'image/png',
   StartImage: 'image/png',
   SegmentVideo: 'video/mp4',

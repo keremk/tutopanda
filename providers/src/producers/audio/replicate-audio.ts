@@ -1,5 +1,5 @@
 import { createProducerHandlerFactory } from '../../sdk/handler-factory.js';
-import type { HandlerFactory } from '../../types.js';
+import type { HandlerFactory, ProviderJobContext } from '../../types.js';
 import { createProviderError } from '../../sdk/errors.js';
 import {
   createReplicateClientManager,
@@ -10,6 +10,7 @@ import {
   isRecord,
   runReplicateWithRetries,
 } from '../../sdk/replicate/index.js';
+import { validatePayload } from '../../sdk/schema-validator.js';
 
 interface ReplicateAudioConfig {
   textKey: string;
@@ -42,6 +43,8 @@ export function createReplicateAudioHandler(): HandlerFactory {
         const config = runtime.config.parse<ReplicateAudioConfig>(parseReplicateAudioConfig);
         const plannerContext = extractPlannerContext(request);
         const sdkPayload = runtime.sdk.buildPayload();
+        const inputSchema = readInputSchema(request);
+        validatePayload(inputSchema, sdkPayload, 'input');
         const text = sdkPayload[config.textKey] as string | undefined;
         const voice = sdkPayload.voice_id ?? sdkPayload.voice;
 
@@ -175,6 +178,19 @@ function getVoiceFieldName(model: string): string {
   }
   // Default to minimax format
   return 'voice_id';
+}
+
+function readInputSchema(request: ProviderJobContext): string | undefined {
+  const extras = request.context.extras;
+  if (!extras || typeof extras !== 'object') {
+    return undefined;
+  }
+  const schema = (extras as Record<string, unknown>).schema;
+  if (!schema || typeof schema !== 'object') {
+    return undefined;
+  }
+  const input = (schema as Record<string, unknown>).input;
+  return typeof input === 'string' ? input : undefined;
 }
 
 // Retry logic shared across replicate producers lives in sdk/replicate/retry.ts.

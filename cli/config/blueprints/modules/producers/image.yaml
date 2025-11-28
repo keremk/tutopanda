@@ -31,8 +31,8 @@ artifacts:
 models:
   - model: bytedance/seedream-4
     provider: replicate
-    inputSchema: ./schemas/bytedance-seedream-4.json
-    inputsMap:
+    inputSchema: ../schemas/bytedance-seedream-4.json
+    inputs:
       Prompt: prompt
       AspectRatio: aspect_ratio
       Size: output_size
@@ -42,8 +42,8 @@ models:
         mimeType: image/png
   - model: google/nano-banana
     provider: replicate
-    inputSchema: ./schemas/google-nano-banana.json
-    inputsMap:
+    inputSchema: ../schemas/google-nano-banana.json
+    inputs:
       Prompt: prompt
       AspectRatio: aspect_ratio
     outputs:
@@ -52,8 +52,8 @@ models:
         mimeType: image/jpeg
   - model: qwen/qwen-image
     provider: replicate
-    inputSchema: ./schemas/qwen-image.json
-    inputsMap:
+    inputSchema: ../schemas/qwen-image.json
+    inputs:
       Prompt: prompt
       AspectRatio: aspect_ratio
     outputs:

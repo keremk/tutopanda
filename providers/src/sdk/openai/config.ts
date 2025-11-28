@@ -199,7 +199,24 @@ export function normalizeJsonSchema(
   schema: JSONSchema7,
   meta?: { title?: string; description?: string },
 ): JSONSchema7 {
-  const clone = deepClone(schema);
+  // Unwrap schemas that are nested under a "schema" key (e.g., { schema: { type: 'object', ... } })
+  const baseSchema = (() => {
+    const clone = deepClone(schema);
+    if (
+      clone &&
+      typeof clone === 'object' &&
+      !Array.isArray(clone) &&
+      !clone.type &&
+      'schema' in clone &&
+      clone.schema &&
+      typeof clone.schema === 'object'
+    ) {
+      return clone.schema as JSONSchema7;
+    }
+    return clone;
+  })();
+
+  const clone = deepClone(baseSchema);
 
   function visit(node: JSONSchema7, isRoot: boolean): JSONSchema7 {
     const next: JSONSchema7 = { ...node };
@@ -306,11 +323,13 @@ function readString(value: unknown, field: string): string {
 }
 
 function readOptionalString(value: unknown): string | undefined {
-  return value == null ? undefined : String(value);
+  return value === null || value === undefined ? undefined : String(value);
 }
 
 function readOptionalNumber(value: unknown): number | undefined {
-  if (value == null) return undefined;
+  if (value === null || value === undefined) {
+    return undefined;
+  }
   const num = Number(value);
   if (Number.isNaN(num)) {
     throw new Error(`Expected numeric value, received ${value}`);
@@ -319,7 +338,9 @@ function readOptionalNumber(value: unknown): number | undefined {
 }
 
 function readOptionalStringArray(value: unknown): string[] | undefined {
-  if (value == null) return undefined;
+  if (value === null || value === undefined) {
+    return undefined;
+  }
   if (Array.isArray(value)) {
     return value.map((item) => String(item));
   }
@@ -327,7 +348,9 @@ function readOptionalStringArray(value: unknown): string[] | undefined {
 }
 
 function readOptionalReasoning(value: unknown): OpenAiLlmConfig['reasoning'] {
-  if (value == null) return undefined;
+  if (value === null || value === undefined) {
+    return undefined;
+  }
   const reasoning = String(value);
   const valid = ['minimal', 'low', 'medium', 'high'] as const;
   if (valid.includes(reasoning as (typeof valid)[number])) {

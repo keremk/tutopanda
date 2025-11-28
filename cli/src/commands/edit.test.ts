@@ -1,7 +1,7 @@
 /* eslint-env node */
 import process from 'node:process';
 import './__testutils__/mock-providers.js';
-import { mkdtemp, readFile, rm, stat } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, stat, copyFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -11,9 +11,9 @@ import { runEdit } from './edit.js';
 import { createInputsFile } from './__testutils__/inputs.js';
 import { getBundledBlueprintsRoot } from '../lib/config-assets.js';
 
-const SCRIPT_BLUEPRINT_PATH = resolve(
+const VIDEO_AUDIO_MUSIC_BLUEPRINT_PATH = resolve(
   getBundledBlueprintsRoot(),
-  'modules/script-generator.yaml',
+  'video-audio-music.yaml',
 );
 
 const tmpRoots: string[] = [];
@@ -54,16 +54,17 @@ describe('runEdit', () => {
     const queryResult = await runQuery({
       inputsPath: queryInputsPath,
       nonInteractive: true,
-      usingBlueprint: SCRIPT_BLUEPRINT_PATH,
+      usingBlueprint: VIDEO_AUDIO_MUSIC_BLUEPRINT_PATH,
     });
 
+    const movieInputsPath = resolve(queryResult.storagePath, 'inputs.yaml');
     const editInputsPath = await createInputsFixture(root, 'Tell me about stars', 'edit-inputs.yaml');
+    await copyFile(editInputsPath, movieInputsPath);
 
     const editResult = await runEdit({
       movieId: queryResult.movieId,
-      inputsPath: editInputsPath,
       nonInteractive: true,
-      usingBlueprint: SCRIPT_BLUEPRINT_PATH,
+      usingBlueprint: VIDEO_AUDIO_MUSIC_BLUEPRINT_PATH,
     });
 
     expect(editResult.targetRevision).toBe('rev-0002');
@@ -93,19 +94,24 @@ describe('runEdit', () => {
     const queryResult = await runQuery({
       inputsPath: queryInputsPath,
       nonInteractive: true,
-      usingBlueprint: SCRIPT_BLUEPRINT_PATH,
+      usingBlueprint: VIDEO_AUDIO_MUSIC_BLUEPRINT_PATH,
     });
 
+    const movieInputsPath = resolve(queryResult.storagePath, 'inputs.yaml');
     const editInputsPath = await createInputsFixture(root, 'Describe oceans with drama', 'edit-inputs.yaml', {
       Style: 'storybook',
     });
+    await copyFile(editInputsPath, movieInputsPath);
 
     const editResult = await runEdit({
       movieId: queryResult.movieId,
       dryRun: true,
-      inputsPath: editInputsPath,
-      usingBlueprint: SCRIPT_BLUEPRINT_PATH,
+      usingBlueprint: VIDEO_AUDIO_MUSIC_BLUEPRINT_PATH,
     });
+
+    // Debug snapshot for dry-run summary during test failure investigation.
+    // eslint-disable-next-line no-console
+    console.log('dryRunSummary', editResult.dryRun);
 
     expect(editResult.dryRun).toBeDefined();
     expect(editResult.dryRun?.jobCount).toBeGreaterThan(0);

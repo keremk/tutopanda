@@ -19,13 +19,17 @@ import { writePromptFile } from './prompts.js';
 import { loadBlueprintBundle } from './blueprint-loader/index.js';
 import { loadInputsFromYaml, type InputMap } from './input-loader.js';
 import {
-  buildProducerOptionsFromBlueprint,
   buildProducerCatalog,
   type ProducerOptionsMap,
 } from './producer-options.js';
+import type {
+  BlueprintProducerOutputDefinition,
+  BlueprintProducerSdkMappingField,
+} from '@tutopanda/core';
 import { expandPath } from './path.js';
 import { mergeMovieMetadata } from './movie-metadata.js';
 import { INPUT_FILE_NAME } from './input-files.js';
+import { applyProviderDefaults } from './provider-defaults.js';
 
 const planningService = createPlanningService();
 
@@ -76,13 +80,13 @@ export async function generatePlan(options: GeneratePlanOptions): Promise<Genera
   const { root: blueprintRoot } = await loadBlueprintBundle(blueprintPath);
   await mergeMovieMetadata(movieDir, { blueprintPath });
 
-  const inputValues = await loadInputsFromYaml(options.inputsPath, blueprintRoot, options.inquiryPromptOverride);
-  if (typeof inputValues.InquiryPrompt !== 'string' || inputValues.InquiryPrompt.trim().length === 0) {
-    throw new Error('Input YAML must specify inputs.InquiryPrompt as a non-empty string.');
-  }
+  const { values: inputValues, providerOptions } = await loadInputsFromYaml(
+    options.inputsPath,
+    blueprintRoot,
+    options.inquiryPromptOverride,
+  );
+  applyProviderDefaults(inputValues, providerOptions);
   await persistInputs(movieDir, inputValues);
-
-  const providerOptions = buildProducerOptionsFromBlueprint(blueprintRoot);
   const catalog = buildProducerCatalog(providerOptions);
   logger.info(`Using blueprint: ${blueprintPath}`);
 
@@ -91,6 +95,7 @@ export async function generatePlan(options: GeneratePlanOptions): Promise<Genera
     blueprintTree: blueprintRoot,
     inputValues,
     providerCatalog: catalog,
+    providerOptions: buildProviderMetadata(providerOptions),
     storage: storageContext,
     manifestService,
     eventLog,
@@ -114,8 +119,38 @@ export async function generatePlan(options: GeneratePlanOptions): Promise<Genera
 async function persistInputs(movieDir: string, values: InputMap): Promise<void> {
   const contents = stringifyYaml({ inputs: values });
   await writeFile(join(movieDir, INPUT_FILE_NAME), contents, 'utf8');
-  const promptValue = values.InquiryPrompt;
+  const promptValue = values['Input:InquiryPrompt'];
   if (typeof promptValue === 'string' && promptValue.trim().length > 0) {
     await writePromptFile(movieDir, join('prompts', 'inquiry.txt'), promptValue);
   }
+}
+
+function buildProviderMetadata(options: ProducerOptionsMap): Map<string, {
+  sdkMapping?: Record<string, BlueprintProducerSdkMappingField>;
+  outputs?: Record<string, BlueprintProducerOutputDefinition>;
+  inputSchema?: string;
+  outputSchema?: string;
+  config?: Record<string, unknown>;
+}> {
+  const map = new Map<string, {
+    sdkMapping?: Record<string, BlueprintProducerSdkMappingField>;
+    outputs?: Record<string, BlueprintProducerOutputDefinition>;
+    inputSchema?: string;
+    outputSchema?: string;
+    config?: Record<string, unknown>;
+  }>();
+  for (const [key, entries] of options) {
+    const primary = entries[0];
+    if (!primary) {
+      continue;
+    }
+    map.set(key, {
+      sdkMapping: primary.sdkMapping as Record<string, BlueprintProducerSdkMappingField> | undefined,
+      outputs: primary.outputs as Record<string, BlueprintProducerOutputDefinition> | undefined,
+      inputSchema: primary.inputSchema,
+      outputSchema: primary.outputSchema,
+      config: primary.config,
+    });
+  }
+  return map;
 }

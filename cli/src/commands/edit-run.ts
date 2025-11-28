@@ -10,7 +10,6 @@ import type { Logger } from '@tutopanda/core';
 
 export interface EditRunOptions {
   movieId: string;
-  inputsPath?: string;
   dryRun?: boolean;
   nonInteractive?: boolean;
   usingBlueprint?: string;
@@ -50,12 +49,8 @@ export async function runEditRun(options: EditRunOptions): Promise<EditRunResult
     logger.info(`Detected ${preflight.pendingArtefacts.length} artefact change(s) from friendly edits.`);
   }
 
-  const inputsPath = options.inputsPath
-    ?? resolve(cliConfig.storage.root, 'movies', storageMovieId, 'inputs.yaml');
-
   const editResult = await runEdit({
     movieId: storageMovieId,
-    inputsPath,
     dryRun: options.dryRun,
     nonInteractive: options.nonInteractive,
     usingBlueprint: options.usingBlueprint,

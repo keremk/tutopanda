@@ -7,6 +7,7 @@ import {
   createStorageContext,
   ManifestNotFoundError,
   type BlobRef,
+  type Manifest,
 } from '@tutopanda/core';
 import type { CliConfig } from './cli-config.js';
 import { mergeMovieMetadata, readMovieMetadata } from './movie-metadata.js';
@@ -199,7 +200,7 @@ async function copyArtefactsToWorkspace(args: {
   storageRoot: string;
   storageBase: string;
   movieId: string;
-  manifest: { artefacts: Record<string, ArtefactManifestEntry>; revision: string };
+  manifest: Manifest;
 }): Promise<WorkspaceArtefactEntry[]> {
   const { workspaceDir, storageRoot, storageBase, movieId, manifest } = args;
   const artefactsDir = resolve(workspaceDir, 'artefacts');

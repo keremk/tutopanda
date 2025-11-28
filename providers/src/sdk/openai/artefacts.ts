@@ -1,5 +1,5 @@
 import { Buffer } from 'node:buffer';
-import type { ProducedArtefact, ArtefactEventStatus } from '@tutopanda/core';
+import type { ProducedArtefact } from '@tutopanda/core';
 
 type JsonObject = Record<string, unknown>;
 
@@ -136,7 +136,7 @@ function buildSingleArtefact(
     artefactId,
     status: 'succeeded',
     blob: {
-      data: materialized.text,
+      data: materialized.text ?? '',
       mimeType: 'text/plain',
     },
     diagnostics,
@@ -282,7 +282,7 @@ function materializeValue(value: unknown): {
   buffer?: Uint8Array | string;
   error?: string;
 } {
-  if (value == null) {
+  if (value === null || value === undefined) {
     return { success: false, error: 'Value is undefined or null.' };
   }
 
@@ -298,7 +298,7 @@ function materializeValue(value: unknown): {
 
   // Array - join items with newlines
   if (Array.isArray(value)) {
-    const text = value.map((item) => (item == null ? '' : String(item))).join('\n');
+    const text = value.map((item) => (item === null || item === undefined ? '' : String(item))).join('\n');
     return { success: true, text, buffer: text };
   }
 

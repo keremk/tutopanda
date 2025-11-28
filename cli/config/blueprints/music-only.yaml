@@ -46,48 +46,48 @@ artifacts:
     type: audio
 
 modules:
-  - name: ScriptGenerator
-    path: ./modules/script-generator.yaml
-  - name: MusicPromptGenerator
-    path: ./modules/music-prompt-generator.yaml
-  - name: MusicGenerator
-    path: ./modules/music-generator.yaml
+  - name: ScriptProducer
+    path: ./modules/producers/script.yaml
+  - name: MusicPromptProducer
+    path: ./modules/producers/music-prompt.yaml
+  - name: MusicProducer
+    path: ./modules/producers/music.yaml
 
 connections:
   - from: InquiryPrompt
-    to: ScriptGenerator.InquiryPrompt
+    to: ScriptProducer.InquiryPrompt
   - from: Audience
-    to: ScriptGenerator.Audience
+    to: ScriptProducer.Audience
   - from: Duration
-    to: ScriptGenerator.Duration
+    to: ScriptProducer.Duration
   - from: Language
-    to: ScriptGenerator.Language
+    to: ScriptProducer.Language
   - from: NumOfSegments
-    to: ScriptGenerator.NumOfSegments
+    to: ScriptProducer.NumOfSegments
 
-  - from: ScriptGenerator.MovieSummary
-    to: MusicPromptGenerator.MovieSummary
+  - from: ScriptProducer.MovieSummary
+    to: MusicPromptProducer.MovieSummary
   - from: MusicalStyle
-    to: MusicPromptGenerator.MusicalStyle
+    to: MusicPromptProducer.MusicalStyle
   - from: NumOfSegments
-    to: MusicPromptGenerator.NumOfSegments
+    to: MusicPromptProducer.NumOfSegments
   - from: Duration
-    to: MusicPromptGenerator.Duration
+    to: MusicPromptProducer.Duration
   - from: Audience
-    to: MusicPromptGenerator.Audience
-  - from: ScriptGenerator.NarrationScript
-    to: MusicPromptGenerator.NarrationScript
+    to: MusicPromptProducer.Audience
+  - from: ScriptProducer.NarrationScript
+    to: MusicPromptProducer.NarrationScript
 
-  - from: MusicPromptGenerator.MusicPrompt
-    to: MusicGenerator.Prompt
+  - from: MusicPromptProducer.MusicPrompt
+    to: MusicProducer.Prompt
   - from: Duration
-    to: MusicGenerator.Duration
+    to: MusicProducer.Duration
 
-  - from: MusicGenerator.Music
+  - from: MusicProducer.Music
     to: Music
 
 collectors:
   - name: NarrationScript 
-    from: ScriptGenerator.NarrationScript
-    into: MusicPromptGenerator.NarrationScript
+    from: ScriptProducer.NarrationScript
+    into: MusicPromptProducer.NarrationScript
     groupBy: segment  

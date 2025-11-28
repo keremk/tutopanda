@@ -1,7 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import type {
   ProviderJobContext,
-  ProducerHandler,
   SecretResolver,
 } from '../../types.js';
 import { createReplicateVideoHandler } from './replicate-video.js';

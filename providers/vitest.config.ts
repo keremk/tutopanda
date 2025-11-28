@@ -9,6 +9,7 @@ export default defineConfig({
       'src/**/*.{test,spec}.ts',
       'src/**/__tests__/**/*.{test,spec}.ts',
       'src/**/*.{unit.test,unit.spec}.ts',
+      'tests/schemas/**/*.{test,spec}.ts',
     ],
     exclude: [
       'node_modules',

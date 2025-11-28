@@ -10,6 +10,8 @@ import {
   type InputEvent,
   type Manifest,
   type ArtefactEvent,
+  type BlueprintProducerOutputDefinition,
+  type BlueprintProducerSdkMappingField,
   type ProducerJobContext,
   type ProducerCatalog,
   type ProducerGraph,
@@ -19,6 +21,7 @@ import {
   type RevisionId,
   type FanInDescriptor,
 } from './types.js';
+import { formatProducerScopedInputId, parseQualifiedProducerName } from './canonical-ids.js';
 import type { Logger } from './logger.js';
 
 interface PlannerOptions {
@@ -93,6 +96,15 @@ export function createPlanner(options: PlannerOptions = {}) {
 export function createProducerGraph(
   canonical: CanonicalBlueprint,
   catalog: ProducerCatalog,
+  options: Map<string, {
+    sdkMapping?: Record<string, BlueprintProducerSdkMappingField>;
+    outputs?: Record<string, BlueprintProducerOutputDefinition>;
+    inputSchema?: string;
+    outputSchema?: string;
+    config?: Record<string, unknown>;
+    selectionInputKeys?: string[];
+    configInputPaths?: string[];
+  }>,
 ): ProducerGraph {
   const nodeMap = new Map(canonical.nodes.map((node) => [node.id, node]));
   const artefactProducers = computeArtefactProducers(canonical, nodeMap);
@@ -120,11 +132,26 @@ export function createProducerGraph(
     if (!catalogEntry) {
       throw new Error(`Missing producer catalog entry for ${qualifiedProducerName}`);
     }
+    const option =
+      options.get(qualifiedProducerName) ??
+      options.get(baseProducerName);
+    if (!option) {
+      throw new Error(`Missing producer option for ${qualifiedProducerName}`);
+    }
+    const { namespacePath: producerNamespace, producerName: resolvedProducerName } = parseQualifiedProducerName(
+      qualifiedProducerName,
+    );
+    const selectionInputs = option.selectionInputKeys ?? [];
+    const configInputs = option.configInputPaths ?? [];
+    const extraInputs = [...selectionInputs, ...configInputs].map((key) =>
+      formatProducerScopedInputId(producerNamespace, resolvedProducerName, key),
+    );
+    const allInputs = Array.from(new Set([...inboundInputs, ...extraInputs]));
 
     const fanInSpecs = canonical.fanIn;
     const fanInForJob: Record<string, FanInDescriptor> = {};
     if (fanInSpecs) {
-      for (const inputId of inboundInputs) {
+      for (const inputId of allInputs) {
         const spec = fanInSpecs[inputId];
         if (spec) {
           fanInForJob[inputId] = spec;
@@ -132,7 +159,7 @@ export function createProducerGraph(
       }
     }
 
-    const dependencyKeys = new Set(inboundInputs.filter((key) => key.startsWith('Artifact:')));
+    const dependencyKeys = new Set(allInputs.filter((key) => key.startsWith('Artifact:')));
     for (const spec of Object.values(fanInForJob)) {
       for (const member of spec.members) {
         dependencyKeys.add(member.id);
@@ -151,16 +178,30 @@ export function createProducerGraph(
     }
 
     const inputBindings = canonical.inputBindings[node.id];
+    const canonicalSdkMapping = normalizeSdkMapping(
+      option.sdkMapping ?? node.producer?.sdkMapping,
+      node.namespacePath,
+    );
+    const mergedBindings: Record<string, string> = inputBindings ? { ...inputBindings } : {};
+    for (const key of Object.keys(canonicalSdkMapping)) {
+      mergedBindings[key] = key;
+    }
     const nodeContext: ProducerJobContext = {
       namespacePath: node.namespacePath,
       indices: node.indices,
       qualifiedName: qualifiedProducerName,
-      inputs: inboundInputs,
+      inputs: allInputs,
       produces: producedArtefacts,
-      inputBindings: inputBindings && Object.keys(inputBindings).length > 0 ? inputBindings : undefined,
-      sdkMapping: node.producer?.sdkMapping,
-      outputs: node.producer?.outputs,
+      inputBindings: Object.keys(mergedBindings).length > 0 ? mergedBindings : undefined,
+      sdkMapping: canonicalSdkMapping,
+      outputs: option.outputs ?? node.producer?.outputs,
       fanIn: Object.keys(fanInForJob).length > 0 ? fanInForJob : undefined,
+      extras: {
+        schema: {
+          input: option.inputSchema,
+          output: option.outputSchema,
+        },
+      },
     };
     nodes.push({
       jobId: node.id,
@@ -450,12 +491,32 @@ function computeArtefactProducers(
   return map;
 }
 
+function canonicalInputId(alias: string, namespacePath: string[]): string {
+  if (alias.startsWith('Input:') || alias.startsWith('Artifact:')) {
+    return alias;
+  }
+  const qualified = namespacePath.length ? `${namespacePath.join('.')}.${alias}` : alias;
+  return `Input:${qualified}`;
+}
+
+function normalizeSdkMapping(
+  mapping: Record<string, BlueprintProducerSdkMappingField> | undefined,
+  namespacePath: string[],
+): Record<string, BlueprintProducerSdkMappingField> {
+  if (!mapping) {
+    return {};
+  }
+  const normalized: Record<string, BlueprintProducerSdkMappingField> = {};
+  for (const [key, value] of Object.entries(mapping)) {
+    const canonicalKey = canonicalInputId(key, namespacePath);
+    normalized[canonicalKey] = value;
+  }
+  return normalized;
+}
+
 function extractInputBaseId(input: string): string | null {
   if (!input.startsWith('Input:')) {
     return null;
   }
-  const withoutPrefix = input.slice('Input:'.length);
-  const bracket = withoutPrefix.indexOf('[');
-  const base = bracket >= 0 ? withoutPrefix.slice(0, bracket) : withoutPrefix;
-  return base;
+  return input.replace(/\[.*?\]/g, '');
 }

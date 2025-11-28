@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { getDefaultCliConfigPath, readCliConfig } from '../lib/cli-config.js';
 import type { CliConfig } from '../lib/cli-config.js';
+import { WORKSPACE_INPUTS_RELATIVE_PATH } from '../lib/input-files.js';
 import { formatMovieId } from './query.js';
 import { generatePlan, type PendingArtefactDraft } from '../lib/planner.js';
 import {
@@ -27,13 +28,12 @@ import {
 } from '../lib/workspace.js';
 import { readMovieMetadata } from '../lib/movie-metadata.js';
 import { resolveBlueprintSpecifier } from '../lib/config-assets.js';
-import { WORKSPACE_INPUTS_RELATIVE_PATH } from '../lib/input-files.js';
 import { resolveAndPersistConcurrency } from '../lib/concurrency.js';
 import type { Logger } from '@tutopanda/core';
 
 export interface EditOptions {
   movieId: string;
-  inputsPath?: string;
+  inputsPath?: string; // internal override (workspace); CLI no longer accepts --inputs
   dryRun?: boolean;
   nonInteractive?: boolean;
   usingBlueprint?: string;
@@ -77,10 +77,8 @@ export async function runEdit(options: EditOptions): Promise<EditResult> {
   const basePath = cliConfig.storage.basePath;
   const movieDir = resolve(storageRoot, basePath, storageMovieId);
 
-  const inputsPath = options.inputsPath ? expandPath(options.inputsPath) : undefined;
-  if (!inputsPath) {
-    throw new Error('Input YAML path is required. Provide --inputs=/path/to/inputs.yaml');
-  }
+  const defaultInputsPath = resolve(movieDir, 'inputs.yaml');
+  const inputsPath = expandPath(options.inputsPath ?? defaultInputsPath);
 
   const metadata = await readMovieMetadata(movieDir);
   const blueprintInput = options.usingBlueprint ?? metadata?.blueprintPath;
@@ -102,6 +100,13 @@ export async function runEdit(options: EditOptions): Promise<EditResult> {
     pendingArtefacts: options.pendingArtefacts,
     logger,
   });
+
+  if (options.dryRun) {
+    logger.debug?.('edit.dryrun.plan.debug', {
+      pendingInputs: planResult.inputEvents.length,
+      layers: planResult.plan.layers.map((layer) => layer.length),
+    });
+  }
 
   const hasJobs = planResult.plan.layers.some((layer) => layer.length > 0);
 

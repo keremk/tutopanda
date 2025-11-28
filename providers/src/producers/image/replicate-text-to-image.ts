@@ -10,6 +10,7 @@ import {
   isRecord,
   type PlannerContext,
 } from '../../sdk/replicate/index.js';
+import { validatePayload } from '../../sdk/schema-validator.js';
 
 interface ReplicateImageConfig {
   defaults: Record<string, unknown>;
@@ -47,6 +48,8 @@ export function createReplicateTextToImageHandler(): HandlerFactory {
         const config = runtime.config.parse<ReplicateImageConfig>(parseReplicateImageConfig);
         const plannerContext = extractPlannerContext(request);
         const sdkPayload = runtime.sdk.buildPayload();
+        const inputSchema = readInputSchema(request);
+        validatePayload(inputSchema, sdkPayload, 'input');
         const promptValue = sdkPayload[config.promptKey];
 
         if (typeof promptValue !== 'string' || promptValue.trim().length === 0) {
@@ -214,4 +217,17 @@ function buildReplicateInput(args: {
 
 function runtimeNumber(value: unknown): number | undefined {
   return typeof value === 'number' ? value : undefined;
+}
+
+function readInputSchema(request: ProviderJobContext): string | undefined {
+  const extras = request.context.extras;
+  if (!extras || typeof extras !== 'object') {
+    return undefined;
+  }
+  const schema = (extras as Record<string, unknown>).schema;
+  if (!schema || typeof schema !== 'object') {
+    return undefined;
+  }
+  const input = (schema as Record<string, unknown>).input;
+  return typeof input === 'string' ? input : undefined;
 }

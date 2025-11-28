@@ -10,6 +10,7 @@ import type {
   ProducerConfig,
   FanInDescriptor,
 } from './types.js';
+import { formatCanonicalInputId } from './canonical-ids.js';
 
 export interface CanonicalNodeInstance {
   id: string;
@@ -95,7 +96,10 @@ function resolveDimensionSizes(
       );
     }
     const symbol = node.dimensions[node.dimensions.length - 1];
-    const size = readPositiveInteger(inputValues[definition.countInput], definition.countInput);
+    const size = readPositiveInteger(
+      readInputValue(inputValues, node.namespacePath, definition.countInput),
+      definition.countInput,
+    );
     assignDimensionSize(sizes, symbol, size);
     const targetLabel = extractDimensionLabel(symbol);
     for (let index = node.dimensions.length - 2; index >= 0; index -= 1) {
@@ -645,6 +649,27 @@ function formatQualifiedNameForNode(node: BlueprintGraphNode): string {
 function extractDimensionLabel(symbol: string): string {
   const parts = symbol.split(':');
   return parts.length > 0 ? parts[parts.length - 1] ?? symbol : symbol;
+}
+
+function readInputValue(
+  values: Record<string, unknown>,
+  namespacePath: string[],
+  name: string,
+): unknown {
+  if (name in values) {
+    return values[name];
+  }
+  const canonicalId = formatCanonicalInputId(namespacePath, name);
+  if (canonicalId in values) {
+    return values[canonicalId];
+  }
+  if (namespacePath.length > 0) {
+    const rootId = formatCanonicalInputId([], name);
+    if (rootId in values) {
+      return values[rootId];
+    }
+  }
+  return undefined;
 }
 
 function readPositiveInteger(value: unknown, field: string): number {

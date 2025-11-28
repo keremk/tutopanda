@@ -23,8 +23,7 @@ export function createProducerHandlerFactory(
 ): HandlerFactory {
   return (init: HandlerFactoryInit): ProducerHandler => {
     const { descriptor } = init;
-    let handler: ProducerHandler;
-    handler = {
+    const handler: ProducerHandler = {
       provider: descriptor.provider,
       model: descriptor.model,
       environment: descriptor.environment,

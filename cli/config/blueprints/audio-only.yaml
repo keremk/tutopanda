@@ -52,30 +52,30 @@ loops:
     countInput: NumOfSegments
 
 modules:
-  - name: ScriptGenerator
-    path: ./modules/script-generator.yaml
-  - name: AudioGenerator
-    path: ./modules/audio-generator.yaml
+  - name: ScriptProducer
+    path: ./modules/producers/script.yaml
+  - name: AudioProducer
+    path: ./modules/producers/audio.yaml
     loop: segment
 
 connections:
   - from: InquiryPrompt
-    to: ScriptGenerator.InquiryPrompt
+    to: ScriptProducer.InquiryPrompt
   - from: Audience
-    to: ScriptGenerator.Audience
+    to: ScriptProducer.Audience
   - from: Duration
-    to: ScriptGenerator.Duration
+    to: ScriptProducer.Duration
   - from: Language
-    to: ScriptGenerator.Language
+    to: ScriptProducer.Language
   - from: NumOfSegments
-    to: ScriptGenerator.NumOfSegments
+    to: ScriptProducer.NumOfSegments
 
-  - from: ScriptGenerator.NarrationScript[segment]
-    to: AudioGenerator[segment].TextInput
+  - from: ScriptProducer.NarrationScript[segment]
+    to: AudioProducer[segment].TextInput
   - from: VoiceId
-    to: AudioGenerator[segment].VoiceId
+    to: AudioProducer[segment].VoiceId
   - from: Emotion
-    to: AudioGenerator[segment].Emotion
+    to: AudioProducer[segment].Emotion
 
-  - from: AudioGenerator[segment].SegmentAudio
+  - from: AudioProducer[segment].SegmentAudio
     to: SegmentAudio[segment]

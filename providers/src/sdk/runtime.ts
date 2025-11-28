@@ -131,12 +131,15 @@ function createSdkHelper(
       }
       const payload: Record<string, unknown> = {};
       for (const [alias, fieldDef] of Object.entries(effectiveMapping)) {
-        const canonicalId = jobContext?.inputBindings?.[alias] ?? alias;
+        const canonicalId = jobContext?.inputBindings?.[alias];
+        if (!canonicalId) {
+          throw new Error(`Missing canonical input mapping for "${alias}".`);
+        }
         const value = inputs.getByNodeId(canonicalId);
         if (value === undefined) {
           if (fieldDef.required !== false) {
             throw new Error(
-              `Missing required input "${canonicalId}" for field "${fieldDef.field}" (alias "${alias}").`,
+              `Missing required input "${canonicalId}" for field "${fieldDef.field}" (requested "${alias}").`,
             );
           }
           continue;

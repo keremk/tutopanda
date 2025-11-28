@@ -4,6 +4,7 @@
     "types": [
       "vitest/globals"
     ],
+    "rootDir": ".",
     "noEmit": true,
     "typeRoots": [
       "./node_modules/@types",
@@ -14,10 +15,12 @@
   },
   "include": [
     "src/**/*.ts",
-    "src/**/*.test.ts"
+    "src/**/*.test.ts",
+    "tests/**/*.ts"
   ],
   "exclude": [
     "node_modules",
-    "dist"
+    "dist",
+    "tests/integration/**"
   ]
 }

@@ -35,11 +35,13 @@
   "packageManager": "pnpm@10.15.0",
   "dependencies": {
     "@ai-sdk/openai": "^2.0.39",
-    "ai": "^5.0.44",
-    "mediabunny": "^1.24.5",
-    "replicate": "^1.2.0",
+    "@tutopanda/compositions": "workspace:*",
     "@tutopanda/core": "workspace:*",
-    "@tutopanda/compositions": "workspace:*"
+    "ai": "^5.0.44",
+    "ajv": "^8.17.1",
+    "ajv-formats": "^3.0.1",
+    "mediabunny": "^1.24.5",
+    "replicate": "^1.2.0"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.3.1",

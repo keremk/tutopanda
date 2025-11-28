@@ -1,3 +1,4 @@
+import { isCanonicalInputId } from './canonical-ids.js';
 import type { JobDescriptor, ProducerJobContext } from './types.js';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -24,29 +25,25 @@ export function prepareJobContext(
   job: JobDescriptor,
   baseInputs: Record<string, unknown>,
 ): PreparedJobContext {
-  const resolvedInputs: Record<string, unknown> = {
-    ...baseInputs,
-  };
+  const resolvedInputs: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(baseInputs)) {
-    if (key.startsWith('Input:') || key.startsWith('Artifact:')) {
-      continue;
+    if (!isCanonicalInputId(key) && !key.startsWith('Artifact:')) {
+      throw new Error(`Resolved inputs must use canonical ids. Found "${key}".`);
     }
-    const canonicalId = `Input:${key}`;
-    resolvedInputs[canonicalId] = value;
+    resolvedInputs[key] = value;
   }
   const jobResolved = extractResolvedInputs(job.context);
-  Object.assign(resolvedInputs, jobResolved);
+  for (const [key, value] of Object.entries(jobResolved)) {
+    if (!isCanonicalInputId(key) && !key.startsWith('Artifact:')) {
+      continue;
+    }
+    resolvedInputs[key] = value;
+  }
   const bindings = job.context?.inputBindings;
   if (bindings) {
     for (const [alias, canonicalId] of Object.entries(bindings)) {
-      const aliasValue = resolvedInputs[alias];
-      if (aliasValue !== undefined) {
-        resolvedInputs[canonicalId] = aliasValue;
-        continue;
-      }
-      const canonicalValue = resolvedInputs[canonicalId];
-      if (canonicalValue !== undefined && resolvedInputs[alias] === undefined) {
-        resolvedInputs[alias] = canonicalValue;
+      if (!isCanonicalInputId(canonicalId) && !canonicalId.startsWith('Artifact:')) {
+        throw new Error(`Input binding target must be canonical. Found "${canonicalId}" for alias "${alias}".`);
       }
     }
   }

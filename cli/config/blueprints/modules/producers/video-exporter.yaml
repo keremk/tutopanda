@@ -17,18 +17,9 @@ artifacts:
     description: Final rendered MP4 video.
     type: video
 
-connections:
-  - from: Timeline
-    to: Mp4Exporter
-  - from: Mp4Exporter
-    to: FinalVideo
-
-producers:
-  - name: Mp4Exporter
-    provider: tutopanda
+models:
+  - provider: tutopanda
     model: Mp4Exporter
-    config:
-      rootFolder: ~/tutopanda
     outputs:
       FinalVideo:
         type: video

@@ -15,21 +15,16 @@ const yamlRoot = resolve(repoRoot, 'cli/config/blueprints');
 
 describe('parseYamlBlueprintFile', () => {
   it('parses module producers and loads prompt/schema files', async () => {
-    const modulePath = resolve(yamlRoot, 'modules/script-generator.yaml');
+    const modulePath = resolve(yamlRoot, 'modules/producers/script.yaml');
     const document = await parseYamlBlueprintFile(modulePath);
-    expect(document.meta.id).toBe('ScriptGenerator');
+    expect(document.meta.id).toBe('ScriptProducer');
     expect(document.producers).toHaveLength(1);
     const producer = document.producers[0];
     expect(producer.model).toBe('gpt-5-mini');
-    expect(producer.systemPrompt).toContain('expert historical researcher');
-    expect(producer.jsonSchema).toContain('MovieTitle');
-    expect(producer.variables).toEqual([
-      'Audience',
-      'Duration',
-      'NumOfSegments',
-      'Language',
-      'InquiryPrompt',
-    ]);
+    expect(producer.models?.[0]?.inputSchema).toContain('"properties"');
+    expect(producer.models?.[0]?.variables).toEqual(
+      expect.arrayContaining(['InquiryPrompt', 'Duration', 'NumOfSegments', 'Audience', 'Language']),
+    );
   });
 
   it('normalizes collector references into canonical edge notation', async () => {
@@ -38,15 +33,19 @@ describe('parseYamlBlueprintFile', () => {
     expect(document.edges).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          from: 'ImageGenerator[segment][image].SegmentImage',
+          from: 'ImageProducer[segment][image].SegmentImage',
           to: 'SegmentImage[segment][image]',
+        }),
+        expect.objectContaining({
+          from: 'ScriptProducer.NarrationScript[segment]',
+          to: 'ImagePromptProducer[segment].NarrativeText',
         }),
       ]),
     );
     expect(document.subBlueprints.map((entry) => entry.name)).toEqual([
-      'ScriptGenerator',
-      'ImagePromptGenerator',
-      'ImageGenerator',
+      'ScriptProducer',
+      'ImagePromptProducer',
+      'ImageProducer',
     ]);
   });
 });
@@ -58,8 +57,8 @@ describe('loadYamlBlueprintTree', () => {
     const entry = resolve(yamlRoot, 'audio-only.yaml');
     const { root } = await loadYamlBlueprintTree(entry, { reader });
     expect(root.id).toBe('audio');
-    expect([...root.children.keys()]).toEqual(['ScriptGenerator', 'AudioGenerator']);
-    const scriptNode = root.children.get('ScriptGenerator');
-    expect(scriptNode?.document.producers[0]?.model).toBe('gpt-5-mini');
+    expect([...root.children.keys()]).toEqual(['ScriptProducer', 'AudioProducer']);
+    const scriptNode = root.children.get('ScriptProducer');
+    expect(scriptNode?.document.producers[0]?.models?.[0]?.model).toBe('gpt-5-mini');
   });
 });

@@ -12,8 +12,10 @@ import { createInputsFile } from './__testutils__/inputs.js';
 import { getBundledBlueprintsRoot } from '../lib/config-assets.js';
 
 const BUNDLED_BLUEPRINT_ROOT = getBundledBlueprintsRoot();
-const SCRIPT_BLUEPRINT_PATH = resolve(BUNDLED_BLUEPRINT_ROOT, 'modules/script-generator.yaml');
-const IMAGE_AUDIO_BLUEPRINT_PATH = resolve(BUNDLED_BLUEPRINT_ROOT, 'image-audio.yaml');
+const VIDEO_AUDIO_MUSIC_BLUEPRINT_PATH = resolve(
+  BUNDLED_BLUEPRINT_ROOT,
+  'video-audio-music.yaml',
+);
 
 const tmpRoots: string[] = [];
 const originalEnvConfig = process.env.TUTOPANDA_CLI_CONFIG;
@@ -50,7 +52,7 @@ describe('runQuery', () => {
     const result = await runQuery({
       inputsPath,
       nonInteractive: true,
-      usingBlueprint: SCRIPT_BLUEPRINT_PATH,
+      usingBlueprint: VIDEO_AUDIO_MUSIC_BLUEPRINT_PATH,
     });
 
     expect(result.movieId).toHaveLength(8);
@@ -70,7 +72,7 @@ describe('runQuery', () => {
     const firstJob = plan.layers.flat()[0];
     expect(firstJob.context.inputBindings.InquiryPrompt).toBe('Input:InquiryPrompt');
     expect(firstJob.context.inputs).toContain('Input:InquiryPrompt');
-    expect(firstJob.context.produces.some((id: string) => id.startsWith('Artifact:NarrationScript'))).toBe(true);
+    expect(firstJob.context.produces.some((id: string) => id.startsWith('Artifact:ScriptProducer.NarrationScript'))).toBe(true);
 
     const prompt = await readFile(join(movieDir, 'prompts', 'inquiry.txt'), 'utf8');
     expect(prompt.trim()).toBe('Tell me a story about the sea');
@@ -98,7 +100,7 @@ describe('runQuery', () => {
       inputsPath,
       dryRun: true,
       nonInteractive: true,
-      usingBlueprint: SCRIPT_BLUEPRINT_PATH,
+      usingBlueprint: VIDEO_AUDIO_MUSIC_BLUEPRINT_PATH,
     });
 
     expect(result.dryRun).toBeDefined();
@@ -108,7 +110,7 @@ describe('runQuery', () => {
     expect(result.build).toBeUndefined();
   });
 
-  it('runs the image + audio blueprint with timeline stub', async () => {
+  it('runs the video + audio + music blueprint with timeline stub', async () => {
     const root = await createTempRoot();
     const cliConfigPath = join(root, 'cli-config.json');
     process.env.TUTOPANDA_CLI_CONFIG = cliConfigPath;
@@ -121,13 +123,12 @@ describe('runQuery', () => {
       overrides: {
         VoiceId: 'timeline-voice',
         NumOfSegments: 2,
-        NumOfImagesPerNarrative: 2,
       },
     });
     const result = await runQuery({
       inputsPath,
       nonInteractive: true,
-      usingBlueprint: IMAGE_AUDIO_BLUEPRINT_PATH,
+      usingBlueprint: VIDEO_AUDIO_MUSIC_BLUEPRINT_PATH,
     });
 
     expect(result.build?.status).toBe('succeeded');
@@ -146,7 +147,7 @@ describe('runQuery', () => {
     const result = await runQuery({
       inputsPath,
       nonInteractive: true,
-      usingBlueprint: SCRIPT_BLUEPRINT_PATH,
+      usingBlueprint: VIDEO_AUDIO_MUSIC_BLUEPRINT_PATH,
       inquiryPrompt: overridePrompt,
     });
 
@@ -171,7 +172,7 @@ describe('runQuery', () => {
     await runQuery({
       inputsPath,
       nonInteractive: true,
-      usingBlueprint: SCRIPT_BLUEPRINT_PATH,
+      usingBlueprint: VIDEO_AUDIO_MUSIC_BLUEPRINT_PATH,
       concurrency: 3,
     });
 
@@ -192,23 +193,28 @@ describe('runQuery', () => {
       overrides: {
         VoiceId: 'timeline-voice',
         NumOfSegments: 2,
-        NumOfImagesPerNarrative: 2,
       },
     });
     const result = await runQuery({
       inputsPath,
       dryRun: true,
       nonInteractive: true,
-      usingBlueprint: IMAGE_AUDIO_BLUEPRINT_PATH,
+      usingBlueprint: VIDEO_AUDIO_MUSIC_BLUEPRINT_PATH,
     });
 
     expect(result.dryRun).toBeDefined();
     const jobs = result.dryRun?.jobs ?? [];
-    const timelineJob = jobs.find((job) =>
-      job.jobId.includes('TimelineComposer.TimelineProducer') || job.producer === 'TimelineProducer',
-    );
+    const timelineJob = jobs.find((job) => job.producer === 'TimelineComposer');
+    const exporterJob = jobs.find((job) => job.producer === 'VideoExporter');
     expect(timelineJob).toBeDefined();
-    const maxLayer = Math.max(...jobs.map((job) => job.layerIndex));
-    expect(timelineJob?.layerIndex).toBe(maxLayer);
+    const upstreamMax = Math.max(
+      ...jobs
+        .filter((job) => job.producer !== 'TimelineComposer' && job.producer !== 'VideoExporter')
+        .map((job) => job.layerIndex),
+    );
+    expect(timelineJob?.layerIndex).toBeGreaterThan(upstreamMax);
+    if (exporterJob) {
+      expect(timelineJob?.layerIndex).toBeLessThan(exporterJob.layerIndex);
+    }
   });
 });

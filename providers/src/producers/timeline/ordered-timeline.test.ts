@@ -67,6 +67,9 @@ function makeRequest(options: { omitAudio?: boolean; audioDurations?: number[] }
   const audioDurations = options.audioDurations ?? [12, 8];
 
   const resolvedInputs: Record<string, unknown> = {
+    'Input:StorageRoot': '/tmp/timeline-root',
+    'Input:StorageBasePath': 'builds',
+    'Input:MovieId': 'movie-abc',
     'Input:TimelineComposer.ImageSegments': { groupBy: 'segment', orderBy: 'image', groups: imageGroups },
     'TimelineComposer.ImageSegments': { groupBy: 'segment', orderBy: 'image', groups: imageGroups },
     ImageSegments: imageGroups,
@@ -110,8 +113,6 @@ function makeRequest(options: { omitAudio?: boolean; audioDurations?: number[] }
     context: {
       providerConfig: {
         config: {
-          rootFolder: '/tmp/tutopanda',
-          source: 'local',
           numTracks: 2,
           masterTrack: { kind: 'Audio' },
           clips: [
@@ -145,11 +146,14 @@ describe('TimelineProducer', () => {
     const timeline = JSON.parse(typeof payload === 'string' ? payload : '{}') as {
       duration: number;
       movieTitle?: string;
+      assetFolder?: { source?: string; rootPath?: string };
       tracks: Array<{ kind: string; clips: Array<{ startTime: number; duration: number; properties: Record<string, any> }> }>;
     };
 
     expect(timeline.duration).toBeCloseTo(20);
     expect(timeline.movieTitle).toBe('Comet Tales');
+    expect(timeline.assetFolder?.source).toBe('local');
+    expect(timeline.assetFolder?.rootPath).toBe('/tmp/timeline-root/builds/movie-abc');
     expect(timeline.tracks).toHaveLength(2);
 
     const audioTrack = timeline.tracks.find((track) => track.kind === 'Audio');
@@ -167,10 +171,18 @@ describe('TimelineProducer', () => {
     expect(imageTrack?.clips[0]?.properties.effects?.[0]?.assetId).toBe('Artifact:Image[0][0]');
   });
 
+  it('throws when storage root is missing', async () => {
+    const handler = createHandler();
+    const request = makeRequest();
+    const extras = request.context.extras as { resolvedInputs: Record<string, unknown> };
+    delete extras.resolvedInputs['Input:StorageRoot'];
+    await expect(handler.invoke(request)).rejects.toThrow(/storage root/i);
+  });
+
   it('throws when master audio segments are missing', async () => {
     const handler = createHandler();
     const request = makeRequest({ omitAudio: true });
-    await expect(handler.invoke(request)).rejects.toThrow(/AudioSegments/);
+    await expect(handler.invoke(request)).rejects.toThrow(/master track/);
   });
 
   it('loops music clips to cover the entire timeline', async () => {
@@ -258,5 +270,38 @@ describe('TimelineProducer', () => {
     expect(videoTrack?.clips[0]?.properties.fitStrategy).toBe('freeze-fade');
     expect(videoTrack?.clips[1]?.properties.originalDuration).toBeCloseTo(8);
     expect(videoTrack?.clips[1]?.properties.fitStrategy).toBe('stretch');
+  });
+
+  it('filters clips based on tracks configuration', async () => {
+    const handler = createHandler();
+    const request = makeRequest();
+    const config = request.context.providerConfig as { config: { clips: Array<Record<string, unknown>>; tracks?: string[]; masterTrack?: { kind: string } } };
+    config.config.tracks = ['Audio'];
+    config.config.masterTrack = { kind: 'Audio' };
+
+    const resolvedInputs = request.context.extras?.resolvedInputs as Record<string, unknown>;
+    delete resolvedInputs['Input:TimelineComposer.ImageSegments'];
+    delete resolvedInputs['TimelineComposer.ImageSegments'];
+    delete resolvedInputs.ImageSegments;
+
+    const result = await handler.invoke(request);
+    expect(result.status).toBe('succeeded');
+
+    const timelinePayload = result.artefacts[0]?.blob?.data;
+    const timeline = JSON.parse(typeof timelinePayload === 'string' ? timelinePayload : '{}') as {
+      tracks: Array<{ kind: string }>;
+    };
+    expect(timeline.tracks.every((track) => track.kind === 'Audio')).toBe(true);
+    expect(timeline.tracks).toHaveLength(1);
+  });
+
+  it('throws when master track is not included in configured tracks', async () => {
+    const handler = createHandler();
+    const request = makeRequest();
+    const config = request.context.providerConfig as { config: { tracks?: string[]; masterTrack?: { kind: string } } };
+    config.config.tracks = ['Audio'];
+    config.config.masterTrack = { kind: 'Video' };
+
+    await expect(handler.invoke(request)).rejects.toThrow(/Master track kind/);
   });
 });

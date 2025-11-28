@@ -605,7 +605,7 @@ describe('createReplicateAudioHandler', () => {
 
       await handler.warmStart?.({ logger: undefined });
 
-      await expect(handler.invoke(request)).rejects.toThrow('Missing required input \"Artifact:ScriptGeneration.NarrationScript[segment=0]\" for field \"text\" (alias \"TextInput\").');
+      await expect(handler.invoke(request)).rejects.toThrow('Missing required input "Artifact:ScriptGeneration.NarrationScript[segment=0]" for field "text" (requested "TextInput").');
     });
 
     it('throws error when text is empty string', async () => {
@@ -648,7 +648,7 @@ describe('createReplicateAudioHandler', () => {
 
       await handler.warmStart?.({ logger: undefined });
 
-      await expect(handler.invoke(request)).rejects.toThrow('Missing required input \"Artifact:ScriptGeneration.NarrationScript[segment=0]\" for field \"text\" (alias \"TextInput\").');
+      await expect(handler.invoke(request)).rejects.toThrow('Missing required input "Artifact:ScriptGeneration.NarrationScript[segment=0]" for field "text" (requested "TextInput").');
     });
   });
 

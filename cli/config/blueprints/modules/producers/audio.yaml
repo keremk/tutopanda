@@ -29,7 +29,7 @@ artifacts:
 models:
   - model: minimax/speech-2.6-hd
     provider: replicate
-    inputSchema: ./schemas/minimax-speech.json
+    inputSchema: ../schemas/minimax-speech.json
     inputs:
       TextInput: text
       Emotion: emotion
@@ -40,7 +40,7 @@ models:
         mimeType: audio/mp3
   - model: minimax/speech-02-hd
     provider: replicate
-    inputSchema: ./schemas/minimax-speech.json
+    inputSchema: ../schemas/minimax-speech.json
     inputs:
       TextInput: text
       Emotion: emotion
@@ -51,7 +51,7 @@ models:
         mimeType: audio/mp3
   - provider: replicate
     model: elevenlabs/v3
-    inputSchema: ./schemas/elevenlabs-speech-v3.json
+    inputSchema: ../schemas/elevenlabs-speech-v3.json
     inputs:
       TextInput: prompt
       VoiceId: voice

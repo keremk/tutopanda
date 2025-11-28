@@ -167,6 +167,15 @@ function collectLocalNodeDimensions(
     registerLocalDims(edge.from, localDims);
     registerLocalDims(edge.to, localDims);
   }
+  for (const artefact of tree.document.artefacts) {
+    if (!artefact.countInput) {
+      continue;
+    }
+    const existing = localDims.get(artefact.name);
+    if (!existing || existing.length === 0) {
+      localDims.set(artefact.name, createDimensionSymbols([artefact.countInput]));
+    }
+  }
   map.set(tree, localDims);
   for (const child of tree.children.values()) {
     collectLocalNodeDimensions(child, map);

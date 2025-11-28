@@ -46,6 +46,22 @@ function buildCatalog(): ProducerCatalog {
   return catalog;
 }
 
+function buildProviderOptions(): Map<string, {
+  sdkMapping?: Record<string, unknown>;
+  outputs?: Record<string, unknown>;
+  inputSchema?: string;
+  outputSchema?: string;
+}> {
+  const map = new Map<string, {
+    sdkMapping?: Record<string, unknown>;
+    outputs?: Record<string, unknown>;
+    inputSchema?: string;
+    outputSchema?: string;
+  }>();
+  map.set('ScriptProducer', {});
+  return map;
+}
+
 describe('planning service', () => {
   const movieId = 'movie-demo';
   let storage = createStorageContext({ kind: 'memory' });
@@ -68,10 +84,11 @@ describe('planning service', () => {
       movieId,
       blueprintTree: blueprint,
       inputValues: {
-        InquiryPrompt: 'Tell me a story',
-        NumOfSegments: 1,
+        'Input:InquiryPrompt': 'Tell me a story',
+        'Input:NumOfSegments': 1,
       },
       providerCatalog: catalog,
+      providerOptions: buildProviderOptions(),
       storage,
       manifestService,
       eventLog,
@@ -81,7 +98,7 @@ describe('planning service', () => {
     expect(result.planPath).toBe(
       storage.resolve(movieId, 'runs', `${result.targetRevision}-plan.json`),
     );
-    expect(result.resolvedInputs.InquiryPrompt).toBe('Tell me a story');
+    expect(result.resolvedInputs['Input:InquiryPrompt']).toBe('Tell me a story');
     expect(result.manifest.revision).toBe('rev-0000');
 
     const stored = await planStore.load(movieId, result.targetRevision, storage);
@@ -112,10 +129,11 @@ describe('planning service', () => {
       movieId,
       blueprintTree: blueprint,
       inputValues: {
-        InquiryPrompt: 'Hello',
-        NumOfSegments: 1,
+        'Input:InquiryPrompt': 'Hello',
+        'Input:NumOfSegments': 1,
       },
       providerCatalog: catalog,
+      providerOptions: buildProviderOptions(),
       storage,
       manifestService,
       eventLog,
@@ -159,10 +177,11 @@ describe('planning service', () => {
       movieId,
       blueprintTree: blueprint,
       inputValues: {
-        InquiryPrompt: 'Tell me a story',
-        NumOfSegments: 1,
+        'Input:InquiryPrompt': 'Tell me a story',
+        'Input:NumOfSegments': 1,
       },
       providerCatalog: catalog,
+      providerOptions: buildProviderOptions(),
       storage,
       manifestService,
       eventLog,
