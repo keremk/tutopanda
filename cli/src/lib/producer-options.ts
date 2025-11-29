@@ -105,10 +105,7 @@ function toLoadedOption(
   },
   selection?: ModelSelection,
 ): LoadedProducerOption {
-  const mergedConfig: Record<string, unknown> = {
-    ...(variant.config ?? {}),
-    ...(selection?.config ?? {}),
-  };
+  const mergedConfig = deepMergeConfig(variant.config ?? {}, selection?.config ?? {});
   const configPayload = Object.keys(mergedConfig).length > 0 ? mergedConfig : undefined;
   const selectionConfigPaths = selection?.config ? flattenConfigKeys(selection.config) : [];
   const configInputPaths = Array.from(new Set([...(variant.configInputPaths ?? []), ...selectionConfigPaths]));
@@ -268,6 +265,23 @@ function toCatalogEntry(option: LoadedProducerOption): ProducerCatalogEntry {
     providerModel: option.model,
     rateKey: `${option.provider}:${option.model}`,
   };
+}
+
+function deepMergeConfig(base: Record<string, unknown>, override: Record<string, unknown>): Record<string, unknown> {
+  const result: Record<string, unknown> = { ...base };
+  for (const [key, value] of Object.entries(override)) {
+    const existing = result[key];
+    if (isPlainObject(existing) && isPlainObject(value)) {
+      result[key] = deepMergeConfig(existing as Record<string, unknown>, value as Record<string, unknown>);
+      continue;
+    }
+    result[key] = value;
+  }
+  return result;
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
 
 function flattenConfigKeys(source: Record<string, unknown>, prefix = ''): string[] {

@@ -27,3 +27,9 @@ export {
   type GenerationOptions,
   type GenerationResult,
 } from './generation.js';
+
+// Simulation
+export {
+  simulateOpenAiGeneration,
+  type SimulationSizeHints,
+} from './simulation.js';

@@ -1,75 +1,39 @@
-import { mkdtemp, readFile, writeFile, copyFile, stat } from 'node:fs/promises';
+import { copyFile, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
-import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it, beforeEach, afterEach } from 'vitest';
 import { runQuery } from '../../src/commands/query.js';
 import { runEdit } from '../../src/commands/edit.js';
-import { writeCliConfig, type CliConfig } from '../../src/lib/cli-config.js';
-import { getBundledBlueprintsRoot, getBundledConfigRoot } from '../../src/lib/config-assets.js';
+import { getBundledBlueprintsRoot } from '../../src/lib/config-assets.js';
+import {
+  createLoggerRecorder,
+  expectFileExists,
+  findJob,
+  readPlan,
+  setupTempCliConfig,
+} from './helpers.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-function buildTempConfig(root: string): CliConfig {
-  return {
-    storage: {
-      root,
-      basePath: 'builds',
-    },
-    concurrency: 1,
-  };
-}
-
-function expectFileExists(path: string): Promise<void> {
-  return stat(path).then(() => {});
-}
-
-async function readPlan(planPath: string): Promise<any> {
-  const contents = await readFile(planPath, 'utf8');
-  return JSON.parse(contents);
-}
-
-function findJob(plan: any, producer: string) {
-  return plan.layers.flat().find((job: any) => job.producer === producer);
-}
-
 describe('end-to-end: video-audio-music dry runs', () => {
-  const originalConfigEnv = process.env.TUTOPANDA_CLI_CONFIG;
-  let tempRoot: string;
-  let tempConfigPath: string;
+  let tempRoot = '';
+  let restoreEnv: () => void = () => {};
 
   beforeEach(async () => {
-    tempRoot = await mkdtemp(join(tmpdir(), 'tutopanda-e2e-'));
-    tempConfigPath = join(tempRoot, 'cli-config.json');
-    process.env.TUTOPANDA_CLI_CONFIG = tempConfigPath;
-    await writeCliConfig(buildTempConfig(tempRoot), tempConfigPath);
+    const config = await setupTempCliConfig();
+    tempRoot = config.tempRoot;
+    restoreEnv = config.restoreEnv;
   });
 
-  afterEach(async () => {
-    if (originalConfigEnv === undefined) {
-      delete process.env.TUTOPANDA_CLI_CONFIG;
-    } else {
-      process.env.TUTOPANDA_CLI_CONFIG = originalConfigEnv;
-    }
+  afterEach(() => {
+    restoreEnv();
   });
 
   it('runs query and edit dry-runs with canonical bindings and artefacts', async () => {
     const blueprintRoot = getBundledBlueprintsRoot();
-    const configRoot = getBundledConfigRoot();
     const blueprintPath = resolve(blueprintRoot, 'video-audio-music.yaml');
-    const inputsPath = resolve(configRoot, 'inputs.yaml');
-    const warnings: unknown[] = [];
-    const errors: unknown[] = [];
-    const logger = {
-      debug: () => {},
-      info: () => {},
-      warn: (message: unknown) => {
-        warnings.push(message);
-      },
-      error: (message: unknown) => {
-        errors.push(message);
-      },
-    };
+    const inputsPath = resolve(__dirname, 'fixtures', 'video-audio-music-inputs.yaml');
+    const { logger, warnings, errors } = createLoggerRecorder();
 
     // Run query dry-run
     const queryResult = await runQuery({
@@ -83,7 +47,9 @@ describe('end-to-end: video-audio-music dry runs', () => {
     if (queryResult.dryRun?.status !== 'succeeded') {
       throw new Error(`dryRun failed: ${JSON.stringify(queryResult.dryRun, null, 2)}`);
     }
+    expect(queryResult.dryRun?.jobCount).toBe(11);
     expect(queryResult.dryRun?.statusCounts.failed).toBe(0);
+    expect(queryResult.dryRun?.jobs.every((job) => job.status === 'succeeded')).toBe(true);
     // Debug helpers if warnings/errors appear
     if (warnings.length > 0 || errors.length > 0) {
       // eslint-disable-next-line no-console
@@ -103,13 +69,17 @@ describe('end-to-end: video-audio-music dry runs', () => {
     expect(scriptJob?.context?.inputBindings?.Language).toBe('Input:Language');
     expect(scriptJob?.context?.inputBindings?.Audience).toBe('Input:Audience');
 
-    const audioJob0 = findJob(plan, 'AudioProducer');
+    const audioJobs = plan.layers.flat().filter((job: any) => job.producer === 'AudioProducer');
+    expect(audioJobs).toHaveLength(2);
+    const audioJob0 = audioJobs[0];
     expect(audioJob0?.context?.inputBindings?.TextInput).toMatch(/^Artifact:ScriptProducer\.NarrationScript\[0]/);
     expect(audioJob0?.inputs.some((id: string) => id.startsWith('Artifact:ScriptProducer.NarrationScript'))).toBe(
       true,
     );
 
-    const videoPromptJob0 = findJob(plan, 'VideoPromptProducer');
+    const videoPromptJobs = plan.layers.flat().filter((job: any) => job.producer === 'VideoPromptProducer');
+    expect(videoPromptJobs).toHaveLength(2);
+    const videoPromptJob0 = videoPromptJobs[0];
     expect(videoPromptJob0?.inputs.some((id: string) => id.startsWith('Artifact:ScriptProducer.NarrationScript'))).toBe(
       true,
     );
@@ -117,11 +87,42 @@ describe('end-to-end: video-audio-music dry runs', () => {
       /^Artifact:ScriptProducer\.NarrationScript\[0]/,
     );
 
+    const videoJobs = plan.layers.flat().filter((job: any) => job.producer === 'VideoProducer');
+    expect(videoJobs).toHaveLength(2);
+    for (const job of videoJobs) {
+      expect(job.context?.inputBindings?.Prompt).toMatch(
+        /^Artifact:VideoPromptProducer\.VideoPrompt\[\d+]/,
+      );
+      expect(job.inputs.some((id: string) => id.startsWith('Artifact:VideoPromptProducer.VideoPrompt'))).toBe(true);
+    }
+
     const musicPromptJob = findJob(plan, 'MusicPromptProducer');
     expect(musicPromptJob?.context?.fanIn?.['Input:MusicPromptProducer.NarrationScript']?.members?.length).toBeGreaterThan(
       0,
     );
     expect(musicPromptJob?.context?.inputBindings?.NarrationScript).toBe('Input:MusicPromptProducer.NarrationScript');
+
+    const musicJob = findJob(plan, 'MusicProducer');
+    expect(musicJob?.context?.inputBindings?.Prompt).toBe('Artifact:MusicPromptProducer.MusicPrompt');
+    expect(musicJob?.context?.inputBindings?.Duration).toBe('Input:Duration');
+
+    const timelineJob = findJob(plan, 'TimelineComposer');
+    expect(timelineJob).toBeDefined();
+    if (!timelineJob) {
+      throw new Error('TimelineComposer job missing from plan');
+    }
+    expect(timelineJob.inputs).toEqual(
+      expect.arrayContaining([
+        'Input:TimelineComposer.VideoSegments',
+        'Input:TimelineComposer.AudioSegments',
+        'Input:TimelineComposer.Music',
+        'Input:Duration',
+      ]),
+    );
+    expect(timelineJob.context?.fanIn?.['Input:TimelineComposer.ImageSegments']).toBeUndefined();
+    expect(timelineJob.context?.fanIn?.['Input:TimelineComposer.VideoSegments']?.members?.length).toBe(2);
+    expect(timelineJob.context?.fanIn?.['Input:TimelineComposer.AudioSegments']?.members?.length).toBe(2);
+    expect(timelineJob.context?.fanIn?.['Input:TimelineComposer.Music']?.members?.length).toBe(1);
 
     // Ensure plan artifacts stored under storage root
     await expectFileExists(resolve(queryResult.storagePath, 'runs', `${queryResult.targetRevision}-plan.json`));
@@ -133,7 +134,7 @@ describe('end-to-end: video-audio-music dry runs', () => {
     const edited = await readFile(editedInputsPath, 'utf8');
     await writeFile(
       editedInputsPath,
-      edited.replace('Tell me about Darwin and Galapagos islands', 'Describe the solar system'),
+      edited.replace('Chart the rise of reusable rockets', 'Chronicle deep-sea exploration technology'),
       'utf8',
     );
 
@@ -147,6 +148,7 @@ describe('end-to-end: video-audio-music dry runs', () => {
     });
 
     expect(editResult.dryRun?.status).toBe('succeeded');
+    expect(editResult.dryRun?.jobCount).toBe(11);
     expect(editResult.dryRun?.statusCounts.failed).toBe(0);
     expect(warnings).toHaveLength(0);
     expect(errors).toHaveLength(0);
@@ -156,5 +158,8 @@ describe('end-to-end: video-audio-music dry runs', () => {
     expect(editAudioJob0?.context?.inputBindings?.TextInput).toMatch(
       /^Artifact:ScriptProducer\.NarrationScript\[0]/,
     );
+    const editTimelineJob = findJob(editPlan, 'TimelineComposer');
+    expect(editTimelineJob?.context?.fanIn?.['Input:TimelineComposer.VideoSegments']?.members?.length).toBe(2);
+    expect(editTimelineJob?.context?.fanIn?.['Input:TimelineComposer.AudioSegments']?.members?.length).toBe(2);
   });
 });

@@ -136,12 +136,9 @@ const SIMULATED_OUTPUT_PREFIX = 'simulated-output:';
 function canonicalizeClips(
   config: TimelineProducerConfig,
   availableInputs: string[],
-  inputs: ResolvedInputsAccessor,
+  allowedKinds: Set<ClipKind>,
 ): TimelineClipConfig[] {
-  const allowedKinds = resolveAllowedTracks(config, inputs);
-  const filtered = allowedKinds
-    ? config.clips.filter((clip) => allowedKinds.has(clip.kind))
-    : config.clips;
+  const filtered = config.clips.filter((clip) => allowedKinds.has(clip.kind));
   if (filtered.length === 0) {
     return [];
   }
@@ -154,19 +151,22 @@ function canonicalizeClips(
 function resolveAllowedTracks(
   config: TimelineProducerConfig,
   inputs: ResolvedInputsAccessor,
-): Set<ClipKind> | undefined {
+): Set<ClipKind> {
   if (config.tracks && config.tracks.length > 0) {
     return new Set(config.tracks);
   }
-  const fromInputs =
-    inputs.getByNodeId<ClipKind[] | ClipKind>('Input:TimelineComposer.tracks');
+  const fromInputs = inputs.getByNodeId<ClipKind[] | ClipKind>('Input:TimelineComposer.tracks');
   if (Array.isArray(fromInputs) && fromInputs.length > 0) {
     return new Set(fromInputs);
   }
   if (typeof fromInputs === 'string' && fromInputs.length > 0) {
     return new Set([fromInputs as ClipKind]);
   }
-  return undefined;
+  throw createProviderError('TimelineProducer requires tracks to be specified.', {
+    code: 'invalid_config',
+    kind: 'user_input',
+    causedByUser: true,
+  });
 }
 
 function resolveMasterClip(
@@ -193,8 +193,26 @@ export function createTimelineProducerHandler(): HandlerFactory {
       const baseConfig = runtime.config.parse<TimelineProducerConfig>(parseTimelineConfig);
       const overrides = readConfigOverrides(runtime.inputs, request);
       const config = mergeConfig(baseConfig, overrides);
+      const allowedKinds = resolveAllowedTracks(config, runtime.inputs);
+      if (!config.masterTrack || typeof config.masterTrack.kind !== 'string' || config.masterTrack.kind.length === 0) {
+        throw createProviderError('TimelineProducer requires masterTrack.kind to be specified.', {
+          code: 'invalid_config',
+          kind: 'user_input',
+          causedByUser: true,
+        });
+      }
+      if (!allowedKinds.has(config.masterTrack.kind)) {
+        throw createProviderError(
+          `Master track kind "${config.masterTrack.kind}" is not included in configured tracks.`,
+          {
+            code: 'invalid_config',
+            kind: 'user_input',
+            causedByUser: true,
+          },
+        );
+      }
       const canonicalInputs = request.inputs.filter((input) => input.startsWith('Input:'));
-      const clips = canonicalizeClips(config, canonicalInputs, runtime.inputs);
+      const clips = canonicalizeClips(config, canonicalInputs, allowedKinds);
       if (clips.length === 0) {
         throw createProviderError('TimelineProducer config must define at least one clip.', {
           code: 'invalid_config',
@@ -205,18 +223,7 @@ export function createTimelineProducerHandler(): HandlerFactory {
 
       const resolvedInputs = runtime.inputs.all();
       const assetDurationCache = new Map<string, number>();
-      const allowedKinds = resolveAllowedTracks(config, runtime.inputs);
-      if (allowedKinds && config.masterTrack && !allowedKinds.has(config.masterTrack.kind)) {
-        throw createProviderError(
-          `Master track kind "${config.masterTrack.kind}" is not included in configured tracks.`,
-          {
-            code: 'invalid_config',
-            kind: 'user_input',
-            causedByUser: true,
-          },
-        );
-      }
-      const masterKind = config.masterTrack?.kind ?? clips[0]!.kind;
+      const masterKind = config.masterTrack.kind;
       const fanInByInput = new Map<string, FanInValue>();
 
       for (const clip of clips) {

@@ -1,0 +1,45 @@
+inputs:
+  InquiryPrompt: "Chart the rise of reusable rockets"
+  Duration: 24
+  NumOfSegments: 2
+  SegmentDuration: 12
+  Audience: "Adult"
+  Language: "en"
+  Style: "Documentary realism"
+  AspectRatio: "16:9"
+  Resolution: "720p"
+  VoiceId: "Wise_Woman"
+  Emotion: neutral
+  MusicalStyle: "Cinematic orchestral score"
+
+models:
+  - model: gpt-5-mini
+    provider: openai
+    producerId: ScriptProducer
+  - model: gpt-5-mini
+    provider: openai
+    producerId: VideoPromptProducer
+  - model: bytedance/seedance-1-pro-fast
+    provider: replicate
+    producerId: VideoProducer
+  - model: minimax/speech-2.6-hd
+    provider: replicate
+    producerId: AudioProducer
+  - model: gpt-5-mini
+    provider: openai
+    producerId: MusicPromptProducer
+  - model: stability-ai/stable-audio-2.5
+    provider: replicate
+    producerId: MusicProducer
+  - model: OrderedTimeline
+    provider: tutopanda
+    producerId: TimelineComposer
+    config:
+      masterTrack:
+        kind: Audio
+      tracks: ["Video", "Audio", "Music"]
+      musicClip:
+        volume: 0.4
+  - model: Mp4Exporter
+    provider: tutopanda
+    producerId: VideoExporter

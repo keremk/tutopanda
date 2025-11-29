@@ -1,0 +1,35 @@
+inputs:
+  InquiryPrompt: "Sketch an expedition to Europa's ice oceans"
+  Duration: 20
+  NumOfSegments: 2
+  NumOfImagesPerNarrative: 3
+  Style: "Illustrated sci-fi field notes"
+  Size: "1K"
+  AspectRatio: "16:9"
+  Audience: "Adult"
+  VoiceId: "Wise_Woman"
+  Emotion: neutral
+
+models:
+  - model: gpt-5-mini
+    provider: openai
+    producerId: ScriptProducer
+  - model: gpt-5-mini
+    provider: openai
+    producerId: ImagePromptProducer
+  - model: bytedance/seedream-4
+    provider: replicate
+    producerId: ImageProducer
+  - model: minimax/speech-2.6-hd
+    provider: replicate
+    producerId: AudioProducer
+  - model: OrderedTimeline
+    provider: tutopanda
+    producerId: TimelineComposer
+    config:
+      tracks: ["Image", "Audio"]
+      masterTrack:
+        kind: Audio
+      numTracks: 2
+      audioClip:
+        volume: 0.9

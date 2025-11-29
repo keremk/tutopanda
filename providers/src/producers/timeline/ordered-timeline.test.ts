@@ -111,18 +111,19 @@ function makeRequest(options: { omitAudio?: boolean; audioDurations?: number[] }
     ],
     produces: ['Artifact:TimelineComposer.Timeline'],
     context: {
+      extras: {
+        resolvedInputs,
+      },
       providerConfig: {
         config: {
           numTracks: 2,
           masterTrack: { kind: 'Audio' },
+          tracks: ['Image', 'Audio'],
           clips: [
             { kind: 'Image', inputs: 'ImageSegments[segment]', effect: 'KenBurns' },
             { kind: 'Audio', inputs: 'AudioSegments' },
           ],
         },
-      },
-      extras: {
-        resolvedInputs,
       },
     },
   };
@@ -185,13 +186,30 @@ describe('TimelineProducer', () => {
     await expect(handler.invoke(request)).rejects.toThrow(/master track/);
   });
 
+  it('throws when tracks are not provided', async () => {
+    const handler = createHandler();
+    const request = makeRequest();
+    const config = request.context.providerConfig as { config: Record<string, unknown> };
+    delete config.config.tracks;
+    await expect(handler.invoke(request)).rejects.toThrow(/tracks/i);
+  });
+
+  it('throws when masterTrack is missing', async () => {
+    const handler = createHandler();
+    const request = makeRequest();
+    const config = request.context.providerConfig as { config: Record<string, unknown> };
+    delete config.config.masterTrack;
+    await expect(handler.invoke(request)).rejects.toThrow(/masterTrack/i);
+  });
+
   it('loops music clips to cover the entire timeline', async () => {
     const handler = createHandler();
     const request = makeRequest();
     const resolvedInputs = request.context.extras?.resolvedInputs as Record<string, unknown>;
-    const config = request.context.providerConfig as { config: { clips: Array<Record<string, unknown>>; numTracks: number } };
+    const config = request.context.providerConfig as { config: { clips: Array<Record<string, unknown>>; numTracks: number; tracks: string[] } };
     config.config.clips.push({ kind: 'Music', inputs: 'MusicSegments', play: 'loop', duration: 'full', volume: 0.2 });
     config.config.numTracks = 3;
+    config.config.tracks = ['Image', 'Audio', 'Music'];
     request.inputs.push('Input:TimelineComposer.MusicSegments');
 
     const musicFanIn = { groupBy: 'music', groups: [['Artifact:Music[0]']] };
@@ -215,9 +233,10 @@ describe('TimelineProducer', () => {
     const handler = createHandler();
     const request = makeRequest();
     const resolvedInputs = request.context.extras?.resolvedInputs as Record<string, unknown>;
-    const config = request.context.providerConfig as { config: { clips: Array<Record<string, unknown>>; numTracks: number } };
+    const config = request.context.providerConfig as { config: { clips: Array<Record<string, unknown>>; numTracks: number; tracks: string[] } };
     config.config.clips.push({ kind: 'Music', inputs: 'MusicSegments', play: 'no-loop', duration: 'full' });
     config.config.numTracks = 3;
+    config.config.tracks = ['Image', 'Audio', 'Music'];
     request.inputs.push('Input:TimelineComposer.MusicSegments');
 
     const musicFanIn = { groupBy: 'music', groups: [['Artifact:Music[0]']] };
@@ -240,9 +259,10 @@ describe('TimelineProducer', () => {
     const handler = createHandler();
     const request = makeRequest();
     const resolvedInputs = request.context.extras?.resolvedInputs as Record<string, unknown>;
-    const config = request.context.providerConfig as { config: { clips: Array<Record<string, unknown>>; numTracks: number } };
+    const config = request.context.providerConfig as { config: { clips: Array<Record<string, unknown>>; numTracks: number; tracks: string[] } };
     config.config.clips.push({ kind: 'Video', inputs: 'VideoSegments', fitStrategy: 'auto' });
     config.config.numTracks = 3;
+    config.config.tracks = ['Image', 'Audio', 'Video'];
     request.inputs.push('Input:TimelineComposer.VideoSegments');
 
     const videoFanIn = {
