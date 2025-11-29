@@ -18,7 +18,10 @@
     "dev": "tsc --watch",
     "lint": "eslint src",
     "type-check": "tsc --noEmit",
-    "test": "vitest",
+    "test": "pnpm test:unit && pnpm test:integration && pnpm test:e2e",
+    "test:unit": "vitest run --pool=threads --poolOptions.threads.singleThread --exclude tests/end-to-end/** --exclude tests/integration/**",
+    "test:integration": "vitest run tests/integration --pool=threads --poolOptions.threads.singleThread",
+    "test:e2e": "vitest run tests/end-to-end --pool=threads --poolOptions.threads.singleThread",
     "test:typecheck": "tsc --project tsconfig.vitest.json --noEmit",
     "test:ui": "vitest --ui",
     "test:run": "vitest run"

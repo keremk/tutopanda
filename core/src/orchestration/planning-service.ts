@@ -1,12 +1,14 @@
 import { buildBlueprintGraph } from '../resolution/canonical-graph.js';
 import { expandBlueprintGraph } from '../resolution/canonical-expander.js';
+import { createProducerGraph } from '../resolution/producer-graph.js';
+import { createPlanAdapter, type PlanAdapterOptions } from '../planning/adapter.js';
+import { applyBlueprintInputDefaults } from '../parsing/input-defaults.js';
+import { isCanonicalInputId } from '../parsing/canonical-ids.js';
 import type { EventLog } from '../event-log.js';
 import { hashPayload } from '../hashing.js';
 import { ManifestNotFoundError, type ManifestService } from '../manifest.js';
-import { createProducerGraph, createPlanner, type PlannerLogger } from './planner.js';
 import { nextRevisionId } from '../revisions.js';
 import { planStore, type StorageContext } from '../storage.js';
-import { formatCanonicalInputId, isCanonicalInputId } from '../canonical-ids.js';
 import type { Clock } from '../types.js';
 import type {
   ArtefactEvent,
@@ -65,8 +67,7 @@ export interface GeneratePlanResult {
   resolvedInputs: Record<string, unknown>;
 }
 
-export interface PlanningServiceOptions {
-  logger?: PlannerLogger;
+export interface PlanningServiceOptions extends PlanAdapterOptions {
   clock?: Clock;
 }
 
@@ -76,7 +77,7 @@ export interface PlanningService {
 }
 
 export function createPlanningService(options: PlanningServiceOptions = {}): PlanningService {
-  const planner = createPlanner({
+  const adapter = createPlanAdapter({
     logger: options.logger,
     clock: options.clock,
   });
@@ -104,7 +105,7 @@ export function createPlanningService(options: PlanningServiceOptions = {}): Pla
         await args.eventLog.appendInput(args.movieId, event);
       }
       const resolvedInputs = buildResolvedInputMap(inputEvents);
-      seedBlueprintInputDefaults(args.blueprintTree, resolvedInputs);
+      applyBlueprintInputDefaults(args.blueprintTree, resolvedInputs);
 
       const artefactEvents = (args.pendingArtefacts ?? []).map((draft) =>
         makeArtefactEvent(draft, targetRevision, now()),
@@ -121,7 +122,7 @@ export function createPlanningService(options: PlanningServiceOptions = {}): Pla
         args.providerOptions,
       );
 
-      const plan = await planner.computePlan({
+      const plan = await adapter.compute({
         movieId: args.movieId,
         manifest,
         eventLog: args.eventLog,
@@ -244,25 +245,6 @@ async function ensureUniquePlanRevision(
     candidate = nextRevisionId(candidate);
   }
   return candidate;
-}
-
-function seedBlueprintInputDefaults(
-  tree: BlueprintTreeNode,
-  resolvedInputs: Record<string, unknown>,
-): void {
-  const namespace = tree.namespacePath;
-  for (const input of tree.document.inputs) {
-    if (input.defaultValue === undefined) {
-      continue;
-    }
-    const canonicalId = formatCanonicalInputId(namespace, input.name);
-    if (resolvedInputs[canonicalId] === undefined) {
-      resolvedInputs[canonicalId] = input.defaultValue;
-    }
-  }
-  for (const child of tree.children.values()) {
-    seedBlueprintInputDefaults(child, resolvedInputs);
-  }
 }
 
 async function planExists(

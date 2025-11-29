@@ -1,4 +1,4 @@
-import { formatCanonicalInputId, formatQualifiedName } from '../canonical-ids.js';
+import { formatCanonicalInputId, formatQualifiedName } from './canonical-ids.js';
 import type { BlueprintTreeNode } from '../types.js';
 
 export interface ParsedNodeInventory {

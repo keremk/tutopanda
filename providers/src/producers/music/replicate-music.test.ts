@@ -61,7 +61,7 @@ describe('createReplicateMusicHandler', () => {
           extras: {
             resolvedInputs: {
               'Artifact:MusicPromptGenerator.MusicPrompt': 'Upbeat electronic music with a modern feel',
-              Duration: 60,
+              'Input:Duration': 60,
             },
           },
         },
@@ -126,7 +126,7 @@ describe('createReplicateMusicHandler', () => {
           extras: {
             resolvedInputs: {
               'Artifact:MusicPromptGenerator.MusicPrompt': 'Epic orchestral soundtrack',
-              Duration: 300, // Exceeds max
+              'Input:Duration': 300, // Exceeds max
             },
           },
         },
@@ -197,7 +197,7 @@ describe('createReplicateMusicHandler', () => {
           extras: {
             resolvedInputs: {
               'Artifact:MusicPromptGenerator.MusicPrompt': 'Calm ambient music',
-              Duration: 120,
+              'Input:Duration': 120,
             },
           },
         },
@@ -265,7 +265,7 @@ describe('createReplicateMusicHandler', () => {
           extras: {
             resolvedInputs: {
               'Artifact:MusicPromptGenerator.MusicPrompt': 'Jazzy piano piece',
-              Duration: 60,
+              'Input:Duration': 60,
             },
           },
         },
@@ -329,7 +329,7 @@ describe('createReplicateMusicHandler', () => {
           extras: {
             resolvedInputs: {
               'Artifact:MusicPromptGenerator.MusicPrompt': 'Rock anthem',
-              Duration: 400, // Exceeds max when converted
+              'Input:Duration': 400, // Exceeds max when converted
             },
           },
         },
@@ -390,7 +390,7 @@ describe('createReplicateMusicHandler', () => {
           extras: {
             resolvedInputs: {
               'Artifact:MusicPromptGenerator.MusicPrompt': 'Classical symphony',
-              Duration: 90,
+              'Input:Duration': 90,
             },
           },
         },
@@ -449,7 +449,7 @@ describe('createReplicateMusicHandler', () => {
           extras: {
             resolvedInputs: {
               'Artifact:MusicPromptGenerator.MusicPrompt': 'Relaxing lofi beats',
-              Duration: 120,
+              'Input:Duration': 120,
             },
           },
         },
@@ -505,7 +505,7 @@ describe('createReplicateMusicHandler', () => {
           observability: undefined,
           extras: {
             resolvedInputs: {
-              Duration: 60,
+              'Input:Duration': 60,
             },
           },
         },
@@ -547,7 +547,7 @@ describe('createReplicateMusicHandler', () => {
           extras: {
             resolvedInputs: {
               'Artifact:MusicPromptGenerator.MusicPrompt': '   ',
-              Duration: 60,
+              'Input:Duration': 60,
             },
           },
         },
@@ -630,7 +630,7 @@ describe('createReplicateMusicHandler', () => {
           extras: {
             resolvedInputs: {
               'Artifact:MusicPromptGenerator.MusicPrompt': 'Happy tune',
-              Duration: 0,
+              'Input:Duration': 0,
             },
           },
         },
@@ -674,7 +674,7 @@ describe('createReplicateMusicHandler', () => {
           extras: {
             resolvedInputs: {
               'Artifact:MusicPromptGenerator.MusicPrompt': 'Test music',
-              Duration: 60,
+              'Input:Duration': 60,
             },
           },
         },
@@ -720,7 +720,7 @@ describe('createReplicateMusicHandler', () => {
           extras: {
             resolvedInputs: {
               'Artifact:MusicPromptGenerator.MusicPrompt': 'Test music',
-              Duration: 60,
+              'Input:Duration': 60,
             },
           },
         },
@@ -779,7 +779,7 @@ describe('createReplicateMusicHandler', () => {
           extras: {
             resolvedInputs: {
               'Artifact:MusicPromptGenerator.MusicPrompt': 'Dance track',
-              Duration: 90,
+              'Input:Duration': 90,
             },
           },
         },

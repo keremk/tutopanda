@@ -10,7 +10,7 @@ import type {
   ProducerConfig,
   FanInDescriptor,
 } from '../types.js';
-import { formatCanonicalInputId } from '../canonical-ids.js';
+import { formatCanonicalInputId, formatQualifiedName } from '../parsing/canonical-ids.js';
 
 export interface CanonicalNodeInstance {
   id: string;
@@ -631,13 +631,6 @@ function getDimensionIndex(node: CanonicalNodeInstance, label: string): number |
     }
   }
   return undefined;
-}
-
-function formatQualifiedName(namespacePath: string[], name: string): string {
-  if (namespacePath.length === 0) {
-    return name;
-  }
-  return `${namespacePath.join('.')}.${name}`;
 }
 
 function formatQualifiedNameForNode(node: BlueprintGraphNode): string {

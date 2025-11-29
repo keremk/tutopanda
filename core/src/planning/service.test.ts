@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { createPlanningService, type PendingArtefactDraft } from './service.js';
+import { createPlanningService, type PendingArtefactDraft } from '../orchestration/planning-service.js';
 import { createStorageContext, initializeMovieStorage, planStore } from '../storage.js';
 import { createManifestService } from '../manifest.js';
 import { createEventLog } from '../event-log.js';

@@ -5,7 +5,7 @@ import {
   createInputIdResolver,
   type CanonicalInputEntry,
   formatProducerScopedInputId,
-} from '../canonical-ids.js';
+} from './canonical-ids.js';
 import type {
   BlueprintTreeNode,
   ProducerModelVariant,

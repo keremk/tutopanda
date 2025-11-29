@@ -1,7 +1,3 @@
-import type {
-  CanonicalBlueprint,
-  CanonicalNodeInstance,
-} from '../resolution/canonical-expander.js';
 import type { EventLog } from '../event-log.js';
 import { hashPayload } from '../hashing.js';
 import {
@@ -10,18 +6,9 @@ import {
   type InputEvent,
   type Manifest,
   type ArtefactEvent,
-  type BlueprintProducerOutputDefinition,
-  type BlueprintProducerSdkMappingField,
-  type ProducerJobContext,
-  type ProducerCatalog,
   type ProducerGraph,
-  type ProducerGraphEdge,
-  type ProducerGraphNode,
-  type ProducerKind,
   type RevisionId,
-  type FanInDescriptor,
 } from '../types.js';
-import { formatProducerScopedInputId, parseQualifiedProducerName } from '../canonical-ids.js';
 import type { Logger } from '../logger.js';
 
 interface PlannerOptions {
@@ -42,7 +29,7 @@ interface ComputePlanArgs {
 }
 
 interface GraphMetadata {
-  node: ProducerGraphNode;
+  node: ProducerGraph['nodes'][number];
   inputBases: Set<string>;
   artefactInputs: Set<string>;
 }
@@ -93,128 +80,6 @@ export function createPlanner(options: PlannerOptions = {}) {
   };
 }
 
-export function createProducerGraph(
-  canonical: CanonicalBlueprint,
-  catalog: ProducerCatalog,
-  options: Map<string, {
-    sdkMapping?: Record<string, BlueprintProducerSdkMappingField>;
-    outputs?: Record<string, BlueprintProducerOutputDefinition>;
-    inputSchema?: string;
-    outputSchema?: string;
-    config?: Record<string, unknown>;
-    selectionInputKeys?: string[];
-    configInputPaths?: string[];
-  }>,
-): ProducerGraph {
-  const nodeMap = new Map(canonical.nodes.map((node) => [node.id, node]));
-  const artefactProducers = computeArtefactProducers(canonical, nodeMap);
-
-  const nodes: ProducerGraphNode[] = [];
-  const edges: ProducerGraphEdge[] = [];
-  const edgeSet = new Set<string>();
-
-  for (const node of canonical.nodes) {
-    if (node.type !== 'Producer') {
-      continue;
-    }
-
-    const inboundInputs = canonical.edges.filter((edge) => edge.to === node.id).map((edge) => edge.from);
-    const producedArtefacts = canonical.edges
-      .filter((edge) => edge.from === node.id)
-      .map((edge) => edge.to)
-      .filter((id) => id.startsWith('Artifact:'));
-
-    const qualifiedProducerName = node.qualifiedName;
-    const baseProducerName = node.producer?.name ?? node.name;
-    const catalogEntry =
-      resolveCatalogEntry(qualifiedProducerName, catalog)
-      ?? resolveCatalogEntry(baseProducerName, catalog);
-    if (!catalogEntry) {
-      throw new Error(`Missing producer catalog entry for ${qualifiedProducerName}`);
-    }
-    const option =
-      options.get(qualifiedProducerName) ??
-      options.get(baseProducerName);
-    if (!option) {
-      throw new Error(`Missing producer option for ${qualifiedProducerName}`);
-    }
-    const { namespacePath: producerNamespace, producerName: resolvedProducerName } = parseQualifiedProducerName(
-      qualifiedProducerName,
-    );
-    const selectionInputs = option.selectionInputKeys ?? [];
-    const configInputs = option.configInputPaths ?? [];
-    const extraInputs = [...selectionInputs, ...configInputs].map((key) =>
-      formatProducerScopedInputId(producerNamespace, resolvedProducerName, key),
-    );
-    const allInputs = Array.from(new Set([...inboundInputs, ...extraInputs]));
-
-    const fanInSpecs = canonical.fanIn;
-    const fanInForJob: Record<string, FanInDescriptor> = {};
-    if (fanInSpecs) {
-      for (const inputId of allInputs) {
-        const spec = fanInSpecs[inputId];
-        if (spec) {
-          fanInForJob[inputId] = spec;
-        }
-      }
-    }
-
-    const dependencyKeys = new Set(allInputs.filter((key) => key.startsWith('Artifact:')));
-    for (const spec of Object.values(fanInForJob)) {
-      for (const member of spec.members) {
-        dependencyKeys.add(member.id);
-      }
-    }
-
-    for (const dependencyKey of dependencyKeys) {
-      const upstream = artefactProducers.get(dependencyKey);
-      if (upstream && upstream !== node.id) {
-        const edgeKey = `${upstream}->${node.id}`;
-        if (!edgeSet.has(edgeKey)) {
-          edges.push({ from: upstream, to: node.id });
-          edgeSet.add(edgeKey);
-        }
-      }
-    }
-
-    const inputBindings = canonical.inputBindings[node.id];
-    const canonicalSdkMapping = normalizeSdkMapping(
-      option.sdkMapping ?? node.producer?.sdkMapping,
-      node.namespacePath,
-    );
-
-    const nodeContext: ProducerJobContext = {
-      namespacePath: node.namespacePath,
-      indices: node.indices,
-      qualifiedName: qualifiedProducerName,
-      inputs: allInputs,
-      produces: producedArtefacts,
-      inputBindings: inputBindings && Object.keys(inputBindings).length > 0 ? inputBindings : undefined,
-      sdkMapping: canonicalSdkMapping,
-      outputs: option.outputs ?? node.producer?.outputs,
-      fanIn: Object.keys(fanInForJob).length > 0 ? fanInForJob : undefined,
-      extras: {
-        schema: {
-          input: option.inputSchema,
-          output: option.outputSchema,
-        },
-      },
-    };
-    nodes.push({
-      jobId: node.id,
-      producer: baseProducerName,
-      inputs: allInputs,
-      produces: producedArtefacts,
-      provider: catalogEntry.provider,
-      providerModel: catalogEntry.providerModel,
-      rateKey: catalogEntry.rateKey,
-      context: nodeContext,
-    });
-  }
-
-  return { nodes, edges };
-}
-
 function buildGraphMetadata(blueprint: ProducerGraph): Map<string, GraphMetadata> {
   const metadata = new Map<string, GraphMetadata>();
   for (const node of blueprint.nodes) {
@@ -230,14 +95,6 @@ function buildGraphMetadata(blueprint: ProducerGraph): Map<string, GraphMetadata
     });
   }
   return metadata;
-}
-
-function resolveCatalogEntry(id: string, catalog: ProducerCatalog) {
-  if (catalog[id as ProducerKind]) {
-    return catalog[id as ProducerKind];
-  }
-  const baseId = id.includes('.') ? id.split('.').pop() : id;
-  return baseId ? catalog[baseId as ProducerKind] : undefined;
 }
 
 function determineInitialDirtyJobs(
@@ -468,35 +325,6 @@ function createEmptyManifest(): Manifest {
     artefacts: {},
     timeline: {},
   };
-}
-
-function computeArtefactProducers(
-  canonical: CanonicalBlueprint,
-  nodeMap: Map<string, CanonicalNodeInstance>,
-): Map<string, string> {
-  const map = new Map<string, string>();
-  for (const edge of canonical.edges) {
-    const fromNode = nodeMap.get(edge.from);
-    const toNode = nodeMap.get(edge.to);
-    if (!fromNode || !toNode) {
-      continue;
-    }
-    if (fromNode.type === 'Producer' && toNode.type === 'Artifact') {
-      map.set(edge.to, edge.from);
-    }
-  }
-  return map;
-}
-
-function canonicalInputId(alias: string, namespacePath: string[]): string {
-  return alias;
-}
-
-function normalizeSdkMapping(
-  mapping: Record<string, BlueprintProducerSdkMappingField> | undefined,
-  namespacePath: string[],
-): Record<string, BlueprintProducerSdkMappingField> {
-  return mapping ?? {};
 }
 
 function extractInputBaseId(input: string): string | null {

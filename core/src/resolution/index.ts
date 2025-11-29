@@ -1,0 +1,16 @@
+export {
+  buildBlueprintGraph,
+} from './canonical-graph.js';
+export type {
+  BlueprintGraph,
+  BlueprintGraphCollector,
+  BlueprintGraphEdge,
+  BlueprintGraphEdgeEndpoint,
+  BlueprintGraphNode,
+} from './canonical-graph.js';
+export {
+  expandBlueprintGraph,
+} from './canonical-expander.js';
+export {
+  createProducerGraph,
+} from './producer-graph.js';

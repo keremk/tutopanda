@@ -1,10 +1,3 @@
-export { buildBlueprintGraph } from '../../resolution/canonical-graph.js';
-export type {
-  BlueprintGraph,
-  BlueprintGraphEdge,
-  BlueprintGraphEdgeEndpoint,
-  BlueprintGraphNode,
-} from '../../resolution/canonical-graph.js';
 export {
   createFlyStorageBlueprintReader,
   loadYamlBlueprintTree,
