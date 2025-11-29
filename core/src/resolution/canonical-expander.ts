@@ -9,8 +9,8 @@ import type {
   BlueprintInputDefinition,
   ProducerConfig,
   FanInDescriptor,
-} from './types.js';
-import { formatCanonicalInputId } from './canonical-ids.js';
+} from '../types.js';
+import { formatCanonicalInputId } from '../canonical-ids.js';
 
 export interface CanonicalNodeInstance {
   id: string;
@@ -560,7 +560,7 @@ function collapseInputNodes(
     if (node.type !== 'Input') {
       continue;
     }
-    const aliasName = node.qualifiedName || node.name;
+    const aliasName = node.name;
     if (!aliasName) {
       continue;
     }

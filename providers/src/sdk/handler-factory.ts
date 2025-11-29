@@ -43,6 +43,7 @@ export function createProducerHandlerFactory(
           request,
           logger: init.logger,
           configValidator: options.configValidator,
+          mode: init.mode,
         });
         return options.invoke({
           request,

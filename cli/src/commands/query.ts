@@ -115,6 +115,7 @@ export async function runQuery(options: QueryOptions): Promise<QueryResult> {
         movieId: storageMovieId,
         plan: planResult.plan,
         manifest: planResult.manifest,
+        manifestHash: planResult.manifestHash,
         providerOptions: planResult.providerOptions,
         resolvedInputs: planResult.resolvedInputs,
         concurrency,

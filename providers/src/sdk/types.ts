@@ -5,6 +5,7 @@ import type {
   ProviderAttachment,
   ProviderDescriptor,
   ProviderLogger,
+  ProviderMode,
 } from '../types.js';
 import type { BlueprintProducerSdkMappingField } from '@tutopanda/core';
 
@@ -60,6 +61,7 @@ export interface ArtefactRegistry {
 export interface ProducerRuntime {
   descriptor: ProviderDescriptor;
   domain: ProducerDomain;
+  mode: ProviderMode;
   config: ProducerRuntimeConfig;
   attachments: AttachmentReader;
   inputs: ResolvedInputsAccessor;

@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { dirname, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { resolve } from 'node:path';
 import { FileStorage } from '@flystorage/file-storage';
 import { LocalStorageAdapter } from '@flystorage/local-fs';
 import {
@@ -8,10 +7,10 @@ import {
   loadYamlBlueprintTree,
   parseYamlBlueprintFile,
 } from './yaml-parser.js';
+import { getBundledBlueprintsRoot, getBundledConfigRoot } from '../../../../cli/src/lib/config-assets.js';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const repoRoot = resolve(__dirname, '../../..');
-const yamlRoot = resolve(repoRoot, 'cli/config/blueprints');
+const configRoot = getBundledConfigRoot();
+const yamlRoot = getBundledBlueprintsRoot();
 
 describe('parseYamlBlueprintFile', () => {
   it('parses module producers and loads prompt/schema files', async () => {
@@ -52,8 +51,8 @@ describe('parseYamlBlueprintFile', () => {
 
 describe('loadYamlBlueprintTree', () => {
   it('loads entire blueprint hierarchy using FlyStorage reader', async () => {
-    const storage = new FileStorage(new LocalStorageAdapter(repoRoot));
-    const reader = createFlyStorageBlueprintReader(storage, repoRoot);
+    const storage = new FileStorage(new LocalStorageAdapter(configRoot));
+    const reader = createFlyStorageBlueprintReader(storage, configRoot);
     const entry = resolve(yamlRoot, 'audio-only.yaml');
     const { root } = await loadYamlBlueprintTree(entry, { reader });
     expect(root.id).toBe('audio');

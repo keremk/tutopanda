@@ -1,9 +1,9 @@
 import type {
   CanonicalBlueprint,
   CanonicalNodeInstance,
-} from './canonical-expander.js';
-import type { EventLog } from './event-log.js';
-import { hashPayload } from './hashing.js';
+} from '../resolution/canonical-expander.js';
+import type { EventLog } from '../event-log.js';
+import { hashPayload } from '../hashing.js';
 import {
   type Clock,
   type ExecutionPlan,
@@ -20,9 +20,9 @@ import {
   type ProducerKind,
   type RevisionId,
   type FanInDescriptor,
-} from './types.js';
-import { formatProducerScopedInputId, parseQualifiedProducerName } from './canonical-ids.js';
-import type { Logger } from './logger.js';
+} from '../types.js';
+import { formatProducerScopedInputId, parseQualifiedProducerName } from '../canonical-ids.js';
+import type { Logger } from '../logger.js';
 
 interface PlannerOptions {
   logger?: PlannerLogger;
@@ -182,17 +182,14 @@ export function createProducerGraph(
       option.sdkMapping ?? node.producer?.sdkMapping,
       node.namespacePath,
     );
-    const mergedBindings: Record<string, string> = inputBindings ? { ...inputBindings } : {};
-    for (const key of Object.keys(canonicalSdkMapping)) {
-      mergedBindings[key] = key;
-    }
+
     const nodeContext: ProducerJobContext = {
       namespacePath: node.namespacePath,
       indices: node.indices,
       qualifiedName: qualifiedProducerName,
       inputs: allInputs,
       produces: producedArtefacts,
-      inputBindings: Object.keys(mergedBindings).length > 0 ? mergedBindings : undefined,
+      inputBindings: inputBindings && Object.keys(inputBindings).length > 0 ? inputBindings : undefined,
       sdkMapping: canonicalSdkMapping,
       outputs: option.outputs ?? node.producer?.outputs,
       fanIn: Object.keys(fanInForJob).length > 0 ? fanInForJob : undefined,
@@ -206,7 +203,7 @@ export function createProducerGraph(
     nodes.push({
       jobId: node.id,
       producer: baseProducerName,
-      inputs: inboundInputs,
+      inputs: allInputs,
       produces: producedArtefacts,
       provider: catalogEntry.provider,
       providerModel: catalogEntry.providerModel,
@@ -492,26 +489,14 @@ function computeArtefactProducers(
 }
 
 function canonicalInputId(alias: string, namespacePath: string[]): string {
-  if (alias.startsWith('Input:') || alias.startsWith('Artifact:')) {
-    return alias;
-  }
-  const qualified = namespacePath.length ? `${namespacePath.join('.')}.${alias}` : alias;
-  return `Input:${qualified}`;
+  return alias;
 }
 
 function normalizeSdkMapping(
   mapping: Record<string, BlueprintProducerSdkMappingField> | undefined,
   namespacePath: string[],
 ): Record<string, BlueprintProducerSdkMappingField> {
-  if (!mapping) {
-    return {};
-  }
-  const normalized: Record<string, BlueprintProducerSdkMappingField> = {};
-  for (const [key, value] of Object.entries(mapping)) {
-    const canonicalKey = canonicalInputId(key, namespacePath);
-    normalized[canonicalKey] = value;
-  }
-  return normalized;
+  return mapping ?? {};
 }
 
 function extractInputBaseId(input: string): string | null {

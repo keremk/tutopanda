@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { createPlanner } from './planner.js';
-import { createEventLog } from './event-log.js';
-import { createStorageContext, initializeMovieStorage } from './storage.js';
-import { createManifestService, ManifestNotFoundError } from './manifest.js';
-import { hashArtefactOutput, hashPayload } from './hashing.js';
-import { nextRevisionId } from './revisions.js';
+import { createEventLog } from '../event-log.js';
+import { createStorageContext, initializeMovieStorage } from '../storage.js';
+import { createManifestService, ManifestNotFoundError } from '../manifest.js';
+import { hashArtefactOutput, hashPayload } from '../hashing.js';
+import { nextRevisionId } from '../revisions.js';
 import type {
   InputEvent,
   Manifest,
@@ -12,7 +12,7 @@ import type {
   ProducerGraphNode,
   ProducerGraphEdge,
   RevisionId,
-} from './types.js';
+} from '../types.js';
 
 function memoryContext(basePath = 'builds') {
   return createStorageContext({ kind: 'memory', basePath });

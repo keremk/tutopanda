@@ -1,5 +1,5 @@
 inputs:
-  InquiryPrompt: "Describe the solar system"
+  InquiryPrompt: "Tell me about Darwin and Galapagos islands"
   Duration: 30
   NumOfSegments: 3
   VoiceId: Wise_Woman

@@ -42,6 +42,7 @@ interface ExecuteDryRunArgs {
   movieId: string;
   plan: ExecutionPlan;
   manifest: Manifest;
+  manifestHash?: string | null;
   providerOptions: ProducerOptionsMap;
   resolvedInputs: Record<string, unknown>;
   concurrency?: number;
@@ -112,6 +113,12 @@ export async function executeDryRun(args: ExecuteDryRunArgs): Promise<DryRunSumm
     },
     { concurrency },
   );
+  const builtManifest = await runResult.buildManifest();
+  await manifestService.saveManifest(builtManifest, {
+    movieId: args.movieId,
+    previousHash: args.manifestHash ?? null,
+    clock: { now: () => new Date().toISOString() },
+  });
   return summarizeRun(runResult, args.plan);
 }
 

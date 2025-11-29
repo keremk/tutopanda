@@ -14,6 +14,11 @@ Run `pnpm install` once to hydrate the workspaces. Use `pnpm dev` for the combin
 
 > **EXTREMELY IMPORTANT** DO NOT JUST ADD default fallbacks just to make sure that you have something, especially for inputs that are expected. Than you are silently failing and making some random assumptions. Always throw, fail fast and so those can be fixed.
 
+> **EXTREMELY IMPORTANT** When running vitest, make sure to cd into the project and run it there, here is how to do for CLI for example.
+```bash
+cd cli && pnpm vitest run --pool=threads --poolOptions.threads.singleThread
+```
+
 > **Important**: Do not write overly defensive code. Do production quality checking but do not write it in an overly defensive way. Clear and readable code is the key. Don’t add speculative guards, elaborate null checks, or fallback branches that handle scenarios we don’t actually expect today. Stick to the known contract, keep control flow straightforward, and only handle concrete failure modes we already understand (e.g., validation errors that truly happen).
 
 > **Important**: Do **not** run `pnpm install` as a build step or during routine development tasks—only run it when specifically instructed to hydrate dependencies.
@@ -23,11 +28,6 @@ Run `pnpm install` once to hydrate the workspaces. Use `pnpm dev` for the combin
 > **Agent Rule**: Never use `git checkout` or other destructive git commands to reset files. Always coordinate with the user if a revert is needed.
 
 > **Agent Rule**: When you see an /* eslint-disable no-unused-vars */ Do NOT delete it. It is there for a reason to turn off an overeager rule trying it on Interfaces.
-
-> **Agent Rule**: When running vitest, make sure to cd into the project and run it there, here is how to do for CLI
-```bash
-cd cli && pnpm vitest run --pool=threads --poolOptions.threads.singleThread
-```
 
 > **Agent Rule**: Providers Vitest runs must stay on the threads pool; run `pnpm --filter tutopanda-providers test` from the repo root (the config already pins `pool: 'threads'`). If you need to run it manually inside the package use:
 ```bash
@@ -45,6 +45,8 @@ cd providers && pnpm vitest run --config vitest.config.ts --pool=threads
 > **Agent Rule**: Always propagate and consume the canonical node IDs (`Input:…`, `Artifact:…`, `Producer:…`). Do not introduce alias-based fallbacks or heuristic lookups—if a canonical binding is missing, throw a descriptive error so the blueprint or plan can be fixed explicitly.
 
 > **Agent Rule**: Canonical IDs must flow end-to-end. The planner emits a single canonical artefact/input ID (e.g. `Artifact:MusicPromptGenerator.MusicPrompt`). The runner copies those exact IDs into each job’s context (`job.context.inputs`, `inputBindings`, `fanIn`, and `resolvedInputs`). Providers must read only that canonical ID (via `runtime.sdk.buildPayload`, `runtime.inputs.getByNodeId`, or fan-in descriptors) and never look up aliases or “best guesses”. If a canonical ID is missing, fail immediately so the upstream blueprint/plan can be fixed instead of synthesizing a fallback. This applies to every artefact, prompt variable, and attachment across the CLI/core/provider boundary.
+
+> **Agent Rule**: When resolving blueprint/config paths (e.g., locating `config/blueprints`), use the shared helpers in `cli/src/lib/config-assets.ts` (`getBundledBlueprintsRoot`, `getCliConfigRoot`, `resolveBlueprintSpecifier`, etc.) instead of hardcoded paths.
 
 ## Coding Style & Naming Conventions
 Write strict TypeScript and prefer functional React components with kebab-case filenames. Route segment folders in `src/app` should follow Next.js rules (`(group)`, `[param]`, etc.). Use Tailwind utilities and the design tokens defined in `tailwind.config.ts` instead of ad-hoc CSS. Internal imports should use the configured aliases such as `@/components/*` and `@/lib/*`. Reuse helpers from `src/lib` before adding new utilities, and keep new files two-space indented to match the existing style.

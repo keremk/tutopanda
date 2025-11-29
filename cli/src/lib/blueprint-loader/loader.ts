@@ -1,6 +1,6 @@
 import { resolve } from 'node:path';
 import type { BlueprintTreeNode } from '@tutopanda/core';
-import { loadYamlBlueprintTree } from '@tutopanda/core/blueprint-loader';
+import { loadYamlBlueprintTree } from '@tutopanda/core';
 
 export interface BlueprintBundle {
   root: BlueprintTreeNode;

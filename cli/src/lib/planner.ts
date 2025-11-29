@@ -102,9 +102,10 @@ export async function generatePlan(options: GeneratePlanOptions): Promise<Genera
     pendingArtefacts: options.pendingArtefacts,
   });
   logger.debug('[planner] resolved inputs', { inputs: Object.keys(planResult.resolvedInputs) });
+  const absolutePlanPath = resolve(storageRoot, planResult.planPath);
 
   return {
-    planPath: planResult.planPath,
+    planPath: absolutePlanPath,
     targetRevision: planResult.targetRevision,
     inputEvents: planResult.inputEvents,
     manifest: planResult.manifest,

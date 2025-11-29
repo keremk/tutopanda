@@ -51,6 +51,7 @@ describe('integration: canonical inputs persist across query/edit', () => {
       movieId,
       plan: trimmedPlan,
       manifest: planResult.manifest,
+      manifestHash: planResult.manifestHash,
       providerOptions: planResult.providerOptions,
       resolvedInputs: planResult.resolvedInputs,
       storage: { rootDir: storageRoot, basePath: 'builds' },

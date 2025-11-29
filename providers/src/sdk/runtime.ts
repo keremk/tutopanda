@@ -3,6 +3,7 @@ import type {
   ProviderDescriptor,
   ProviderJobContext,
   ProviderLogger,
+  ProviderMode,
 } from '../types.js';
 import type {
   ProducerRuntime,
@@ -28,10 +29,11 @@ interface RuntimeInit {
   request: ProviderJobContext;
   logger?: ProviderLogger;
   configValidator?: ConfigValidator;
+  mode: ProviderMode;
 }
 
 export function createProducerRuntime(init: RuntimeInit): ProducerRuntime {
-  const { descriptor, domain, request, logger, configValidator } = init;
+  const { descriptor, domain, request, logger, configValidator, mode } = init;
   const config = createRuntimeConfig(request.context.providerConfig, configValidator);
   const attachments = createAttachmentReader(request.context.rawAttachments ?? []);
   const resolvedInputs = resolveInputs(request.context.extras);
@@ -43,6 +45,7 @@ export function createProducerRuntime(init: RuntimeInit): ProducerRuntime {
   return {
     descriptor,
     domain,
+    mode,
     config,
     attachments,
     inputs,
@@ -131,7 +134,7 @@ function createSdkHelper(
       }
       const payload: Record<string, unknown> = {};
       for (const [alias, fieldDef] of Object.entries(effectiveMapping)) {
-        const canonicalId = jobContext?.inputBindings?.[alias];
+        const canonicalId = jobContext?.inputBindings?.[alias] ?? (isCanonicalId(alias) ? alias : undefined);
         if (!canonicalId) {
           throw new Error(`Missing canonical input mapping for "${alias}".`);
         }
@@ -164,4 +167,8 @@ function createArtefactRegistry(produces: string[]): ArtefactRegistry {
       return ensure(artefactId);
     },
   };
+}
+
+function isCanonicalId(id: string): boolean {
+  return typeof id === 'string' && (id.startsWith('Input:') || id.startsWith('Artifact:'));
 }

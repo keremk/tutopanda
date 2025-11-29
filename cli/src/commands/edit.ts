@@ -139,6 +139,7 @@ export async function runEdit(options: EditOptions): Promise<EditResult> {
         movieId: storageMovieId,
         plan: planResult.plan,
         manifest: planResult.manifest,
+        manifestHash: planResult.manifestHash,
         providerOptions: planResult.providerOptions,
         resolvedInputs: planResult.resolvedInputs,
         concurrency,

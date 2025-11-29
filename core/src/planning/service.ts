@@ -1,9 +1,9 @@
-import { buildBlueprintGraph } from '../canonical-graph.js';
-import { expandBlueprintGraph } from '../canonical-expander.js';
+import { buildBlueprintGraph } from '../resolution/canonical-graph.js';
+import { expandBlueprintGraph } from '../resolution/canonical-expander.js';
 import type { EventLog } from '../event-log.js';
 import { hashPayload } from '../hashing.js';
 import { ManifestNotFoundError, type ManifestService } from '../manifest.js';
-import { createProducerGraph, createPlanner, type PlannerLogger } from '../planner.js';
+import { createProducerGraph, createPlanner, type PlannerLogger } from './planner.js';
 import { nextRevisionId } from '../revisions.js';
 import { planStore, type StorageContext } from '../storage.js';
 import { formatCanonicalInputId, isCanonicalInputId } from '../canonical-ids.js';

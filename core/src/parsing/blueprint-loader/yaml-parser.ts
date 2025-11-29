@@ -14,7 +14,7 @@ import type {
   ProducerModelVariant,
   ProducerConfig,
   SubBlueprintDefinition,
-} from '../types.js';
+} from '../../types.js';
 
 export interface BlueprintResourceReader {
   // eslint-disable-next-line no-unused-vars

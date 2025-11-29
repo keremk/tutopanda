@@ -34,8 +34,13 @@ export function collectCanonicalInputs(tree: BlueprintTreeNode): CanonicalInputE
 }
 
 export interface InputIdResolver {
-  resolve(raw: string): string;
+  // eslint-disable-next-line no-unused-vars
+  resolve(key: string): string;
   entries: CanonicalInputEntry[];
+}
+
+export function formatQualifiedName(namespacePath: string[], name: string): string {
+  return namespacePath.length > 0 ? `${namespacePath.join('.')}.${name}` : name;
 }
 
 export function createInputIdResolver(
@@ -57,28 +62,28 @@ export function createInputIdResolver(
     baseNameToCanonical.set(entry.name, list);
   }
 
-  const resolve = (raw: string): string => {
-    if (typeof raw !== 'string' || raw.trim().length === 0) {
+  const resolve = (key: string): string => {
+    if (typeof key !== 'string' || key.trim().length === 0) {
       throw new Error('Input keys must be non-empty strings.');
     }
-    const key = raw.trim();
-    if (isCanonicalInputId(key)) {
-      if (!canonicalIds.has(key)) {
-        throw new Error(`Unknown canonical input id "${key}".`);
+    const trimmed = key.trim();
+    if (isCanonicalInputId(trimmed)) {
+      if (!canonicalIds.has(trimmed)) {
+        throw new Error(`Unknown canonical input id "${trimmed}".`);
       }
-      return key;
+      return trimmed;
     }
-    const qualified = qualifiedToCanonical.get(key);
+    const qualified = qualifiedToCanonical.get(trimmed);
     if (qualified) {
       return qualified;
     }
-    const baseMatches = baseNameToCanonical.get(key);
+    const baseMatches = baseNameToCanonical.get(trimmed);
     if (!baseMatches || baseMatches.length === 0) {
-      throw new Error(`Unknown input "${key}".`);
+      throw new Error(`Unknown input "${trimmed}".`);
     }
     if (baseMatches.length > 1) {
       throw new Error(
-        `Input "${key}" is ambiguous. Use a fully-qualified name (e.g., ${baseMatches[0]?.slice('Input:'.length)}).`,
+        `Input "${trimmed}" is ambiguous. Use a fully-qualified name (e.g., ${baseMatches[0]?.slice('Input:'.length)}).`,
       );
     }
     return baseMatches[0]!;

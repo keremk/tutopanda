@@ -358,9 +358,3 @@ export function formatBlobFileName(hash: string, mimeType?: string): string {
   }
   return `${hash}.${extension}`;
 }
-
-interface ArtefactManifestEntry {
-  hash: string;
-  blob: BlobRef;
-  producedBy: string;
-}

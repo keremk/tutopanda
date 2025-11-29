@@ -109,10 +109,6 @@ describe('runEdit', () => {
       usingBlueprint: VIDEO_AUDIO_MUSIC_BLUEPRINT_PATH,
     });
 
-    // Debug snapshot for dry-run summary during test failure investigation.
-    // eslint-disable-next-line no-console
-    console.log('dryRunSummary', editResult.dryRun);
-
     expect(editResult.dryRun).toBeDefined();
     expect(editResult.dryRun?.jobCount).toBeGreaterThan(0);
     expect(editResult.dryRun?.statusCounts.succeeded).toBeGreaterThan(0);

@@ -1,12 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { resolve } from 'node:path';
+import { fileURLToPath, URL } from 'node:url';
 import { loadBlueprintBundle } from '../blueprint-loader/index.js';
 import { buildProducerOptionsFromBlueprint } from '../producer-options.js';
 import { resolveBlueprintSpecifier } from '../config-assets.js';
 import type { ModelSelection } from '../producer-options.js';
 import type { BlueprintTreeNode } from '@tutopanda/core';
 
-const CLI_ROOT = resolve(__dirname, '../../..');
+const CLI_ROOT = resolve(fileURLToPath(new URL('../../..', import.meta.url)));
 
 describe('producer options', () => {
   it('includes prompt metadata for LLM producers (system/user/variables)', async () => {

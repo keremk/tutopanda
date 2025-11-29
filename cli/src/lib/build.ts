@@ -415,7 +415,12 @@ function validateResolvedInputs(
   }
   const config = option.config as Record<string, unknown> | undefined;
   const required = Array.isArray(config?.variables) ? (config?.variables as string[]) : [];
-  const missing = required.filter((key) => inputs[key] === undefined);
+  const missing = required.filter((key) => {
+    if (key.startsWith('Input:') || key.startsWith('Artifact:')) {
+      return inputs[key] === undefined;
+    }
+    return false;
+  });
   if (missing.length > 0) {
     logger.warn(
       `[provider.invoke.inputs] ${producerName} missing resolved input(s): ${missing.join(', ')}.`,

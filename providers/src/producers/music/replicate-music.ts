@@ -221,7 +221,7 @@ function resolveMusicPrompt(resolvedInputs: Record<string, unknown>): string | u
 }
 
 function resolveDuration(resolvedInputs: Record<string, unknown>): number | undefined {
-  const durationInput = resolvedInputs['Duration'];
+  const durationInput = resolvedInputs['Input:Duration'];
 
   // Handle single number value (music is per-movie, not per-segment)
   if (typeof durationInput === 'number' && durationInput > 0) {

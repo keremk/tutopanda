@@ -5,7 +5,7 @@ import type {
   BlueprintTreeNode,
   NodeKind,
   ProducerConfig,
-} from './types.js';
+} from '../types.js';
 
 export interface BlueprintGraphNode {
   id: string;
