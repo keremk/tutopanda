@@ -41,8 +41,15 @@ export interface CanonicalBlueprint {
 export function expandBlueprintGraph(
   graph: BlueprintGraph,
   inputValues: Record<string, unknown>,
+  inputSources: Map<string, string>,
 ): CanonicalBlueprint {
-  const dimensionSizes = resolveDimensionSizes(graph.nodes, inputValues, graph.edges, graph.dimensionLineage);
+  const dimensionSizes = resolveDimensionSizes(
+    graph.nodes,
+    inputValues,
+    graph.edges,
+    graph.dimensionLineage,
+    inputSources,
+  );
   const instancesByNodeId = new Map<string, CanonicalNodeInstance[]>();
   const allNodes: CanonicalNodeInstance[] = [];
   const instanceByCanonicalId = new Map<string, CanonicalNodeInstance>();
@@ -78,6 +85,7 @@ function resolveDimensionSizes(
   inputValues: Record<string, unknown>,
   edges: BlueprintGraphEdge[],
   lineage: Map<string, string | null>,
+  inputSources: Map<string, string>,
 ): Map<string, number> {
   const sizes = new Map<string, number>();
 
@@ -97,7 +105,7 @@ function resolveDimensionSizes(
     }
     const symbol = node.dimensions[node.dimensions.length - 1];
     const size = readPositiveInteger(
-      readInputValue(inputValues, node.namespacePath, definition.countInput),
+      readInputValue(inputValues, node.namespacePath, definition.countInput, inputSources),
       definition.countInput,
     );
     assignDimensionSize(sizes, symbol, size);
@@ -648,21 +656,17 @@ function readInputValue(
   values: Record<string, unknown>,
   namespacePath: string[],
   name: string,
+  inputSources: Map<string, string>,
 ): unknown {
-  if (name in values) {
-    return values[name];
-  }
   const canonicalId = formatCanonicalInputId(namespacePath, name);
-  if (canonicalId in values) {
-    return values[canonicalId];
+  const sourceId = inputSources.get(canonicalId);
+  if (!sourceId) {
+    throw new Error(`Missing input source mapping for "${canonicalId}".`);
   }
-  if (namespacePath.length > 0) {
-    const rootId = formatCanonicalInputId([], name);
-    if (rootId in values) {
-      return values[rootId];
-    }
+  if (!(sourceId in values)) {
+    throw new Error(`Input "${sourceId}" is required but missing a value.`);
   }
-  return undefined;
+  return values[sourceId];
 }
 
 function readPositiveInteger(value: unknown, field: string): number {

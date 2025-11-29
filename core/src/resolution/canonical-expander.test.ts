@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { buildBlueprintGraph } from './canonical-graph.js';
 import { expandBlueprintGraph } from './canonical-expander.js';
-import type { BlueprintTreeNode, BlueprintDocument } from './types.js';
+import { buildInputSourceMapFromCanonical, normalizeInputValues } from './input-sources.js';
+import type { BlueprintTreeNode, BlueprintDocument } from '../types.js';
 
 describe('expandBlueprintGraph', () => {
   it('expands nodes with indices and collapses input aliases', () => {
@@ -57,10 +58,12 @@ describe('expandBlueprintGraph', () => {
     };
 
     const graph = buildBlueprintGraph(tree);
-    const canonical = expandBlueprintGraph(graph, {
-      InquiryPrompt: 'Hello',
-      NumOfSegments: 2,
-    });
+    const inputSources = buildInputSourceMapFromCanonical(graph);
+    const canonicalInputs = normalizeInputValues({
+      'Input:InquiryPrompt': 'Hello',
+      'Input:NumOfSegments': 2,
+    }, inputSources);
+    const canonical = expandBlueprintGraph(graph, canonicalInputs, inputSources);
 
     const producerNodes = canonical.nodes.filter((node) => node.type === 'Producer');
     expect(producerNodes).toHaveLength(1);

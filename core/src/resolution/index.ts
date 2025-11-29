@@ -12,5 +12,9 @@ export {
   expandBlueprintGraph,
 } from './canonical-expander.js';
 export {
+  buildInputSourceMapFromCanonical,
+  normalizeInputValues,
+} from './input-sources.js';
+export {
   createProducerGraph,
 } from './producer-graph.js';

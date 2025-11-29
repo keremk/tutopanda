@@ -1,5 +1,6 @@
 import { buildBlueprintGraph } from '../resolution/canonical-graph.js';
 import { expandBlueprintGraph } from '../resolution/canonical-expander.js';
+import { buildInputSourceMapFromCanonical, normalizeInputValues } from '../resolution/input-sources.js';
 import { createProducerGraph } from '../resolution/producer-graph.js';
 import { createPlanAdapter, type PlanAdapterOptions } from '../planning/adapter.js';
 import { applyBlueprintInputDefaults } from '../parsing/input-defaults.js';
@@ -95,8 +96,12 @@ export function createPlanningService(options: PlanningServiceOptions = {}): Pla
       let targetRevision = nextRevisionId(manifest.revision ?? null);
       targetRevision = await ensureUniquePlanRevision(args.storage, args.movieId, targetRevision);
 
+      const blueprintGraph = buildBlueprintGraph(args.blueprintTree);
+      const inputSources = buildInputSourceMapFromCanonical(blueprintGraph);
+      const normalizedInputs = normalizeInputValues(args.inputValues, inputSources);
+
       const inputEvents = createInputEvents(
-        args.inputValues,
+        normalizedInputs,
         targetRevision,
         args.inputSource ?? 'user',
         now(),
@@ -105,7 +110,7 @@ export function createPlanningService(options: PlanningServiceOptions = {}): Pla
         await args.eventLog.appendInput(args.movieId, event);
       }
       const resolvedInputs = buildResolvedInputMap(inputEvents);
-      applyBlueprintInputDefaults(args.blueprintTree, resolvedInputs);
+      applyBlueprintInputDefaults(args.blueprintTree, resolvedInputs, inputSources);
 
       const artefactEvents = (args.pendingArtefacts ?? []).map((draft) =>
         makeArtefactEvent(draft, targetRevision, now()),
@@ -114,8 +119,7 @@ export function createPlanningService(options: PlanningServiceOptions = {}): Pla
         await args.eventLog.appendArtefact(args.movieId, artefactEvent);
       }
 
-      const blueprintGraph = buildBlueprintGraph(args.blueprintTree);
-      const canonicalBlueprint = expandBlueprintGraph(blueprintGraph, args.inputValues);
+      const canonicalBlueprint = expandBlueprintGraph(blueprintGraph, normalizedInputs, inputSources);
       const producerGraph = createProducerGraph(
         canonicalBlueprint,
         args.providerCatalog,

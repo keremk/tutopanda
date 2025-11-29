@@ -7,7 +7,7 @@ import type {
   BlueprintTreeNode,
   ProducerConfig,
   SubBlueprintDefinition,
-} from './types.js';
+} from '../types.js';
 import { buildBlueprintGraph } from './canonical-graph.js';
 
 describe('buildBlueprintGraph', () => {

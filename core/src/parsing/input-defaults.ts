@@ -9,6 +9,7 @@ import type { BlueprintTreeNode } from '../types.js';
 export function applyBlueprintInputDefaults(
   tree: BlueprintTreeNode,
   resolvedInputs: Record<string, unknown>,
+  inputSources?: Map<string, string>,
 ): void {
   const namespace = tree.namespacePath;
   for (const input of tree.document.inputs) {
@@ -16,11 +17,17 @@ export function applyBlueprintInputDefaults(
       continue;
     }
     const canonicalId = formatCanonicalInputId(namespace, input.name);
+    if (inputSources) {
+      const sourceId = inputSources.get(canonicalId);
+      if (sourceId && sourceId !== canonicalId) {
+        continue;
+      }
+    }
     if (resolvedInputs[canonicalId] === undefined) {
       resolvedInputs[canonicalId] = input.defaultValue;
     }
   }
   for (const child of tree.children.values()) {
-    applyBlueprintInputDefaults(child, resolvedInputs);
+    applyBlueprintInputDefaults(child, resolvedInputs, inputSources);
   }
 }

@@ -92,7 +92,8 @@ export function createReplicateTextToImageHandler(): HandlerFactory {
             plannerContext,
           });
         } catch (error) {
-          throw createProviderError('Replicate prediction failed.', {
+          const rawMessage = error instanceof Error ? error.message : String(error);
+          throw createProviderError(`Replicate prediction failed: ${rawMessage}`, {
             code: 'replicate_prediction_failed',
             kind: 'transient',
             retryable: true,
