@@ -77,7 +77,7 @@ function generateFromSchema(
     const itemSchema = (schema.items as JSONSchema7) ?? {};
     const nextLengths = activeLengths && activeLengths.length > 1 ? activeLengths.slice(1) : [];
     return Array.from({ length }, (_, index) => {
-      const itemName = propertyName ?? `item_${index}`;
+      const itemName = propertyName ? `${propertyName} segment ${index + 1}` : `item_${index}`;
       return generateFromSchema(itemSchema, context, itemName, nextLengths.length > 0 ? nextLengths : undefined);
     });
   }

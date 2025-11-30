@@ -105,7 +105,13 @@ describe('createProviderRegistry', () => {
         inputs: [],
         produces: ['Artifact:TimelineComposer.Timeline'],
         context: {
-          providerConfig: {},
+          providerConfig: {
+            tracks: ['Audio'],
+            masterTrack: {
+              kind: 'Audio',
+            },
+            clips: [],
+          },
         },
       }),
     ).rejects.toThrow(/TimelineProducer config must define at least one clip/);

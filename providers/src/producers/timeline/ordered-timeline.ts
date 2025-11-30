@@ -148,19 +148,9 @@ function canonicalizeClips(
   }));
 }
 
-function resolveAllowedTracks(
-  config: TimelineProducerConfig,
-  inputs: ResolvedInputsAccessor,
-): Set<ClipKind> {
+function resolveAllowedTracks(config: TimelineProducerConfig): Set<ClipKind> {
   if (config.tracks && config.tracks.length > 0) {
     return new Set(config.tracks);
-  }
-  const fromInputs = inputs.getByNodeId<ClipKind[] | ClipKind>('Input:TimelineComposer.tracks');
-  if (Array.isArray(fromInputs) && fromInputs.length > 0) {
-    return new Set(fromInputs);
-  }
-  if (typeof fromInputs === 'string' && fromInputs.length > 0) {
-    return new Set([fromInputs as ClipKind]);
   }
   throw createProviderError('TimelineProducer requires tracks to be specified.', {
     code: 'invalid_config',
@@ -193,7 +183,7 @@ export function createTimelineProducerHandler(): HandlerFactory {
       const baseConfig = runtime.config.parse<TimelineProducerConfig>(parseTimelineConfig);
       const overrides = readConfigOverrides(runtime.inputs, request);
       const config = mergeConfig(baseConfig, overrides);
-      const allowedKinds = resolveAllowedTracks(config, runtime.inputs);
+      const allowedKinds = resolveAllowedTracks(config);
       if (!config.masterTrack || typeof config.masterTrack.kind !== 'string' || config.masterTrack.kind.length === 0) {
         throw createProviderError('TimelineProducer requires masterTrack.kind to be specified.', {
           code: 'invalid_config',
