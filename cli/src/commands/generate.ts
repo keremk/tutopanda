@@ -10,7 +10,6 @@ export interface GenerateOptions {
   useLast?: boolean;
   inputsPath?: string;
   blueprint?: string;
-  inquiryPrompt?: string;
   dryRun?: boolean;
   nonInteractive?: boolean;
   concurrency?: number;
@@ -130,7 +129,6 @@ export async function runGenerate(options: GenerateOptions): Promise<GenerateRes
 
   const queryResult = await runQuery({
     inputsPath: options.inputsPath,
-    inquiryPrompt: options.inquiryPrompt,
     dryRun: options.dryRun,
     nonInteractive: options.nonInteractive,
     usingBlueprint: options.blueprint,

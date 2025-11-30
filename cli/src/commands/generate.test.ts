@@ -1,7 +1,7 @@
 /* eslint-env node */
 import process from 'node:process';
 import './__testutils__/mock-providers.js';
-import { mkdtemp, readFile, rm, stat } from 'node:fs/promises';
+import { copyFile, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -11,8 +11,10 @@ import { formatMovieId } from './query.js';
 import { readCliConfig } from '../lib/cli-config.js';
 import { createInputsFile } from './__testutils__/inputs.js';
 import { getBundledBlueprintsRoot } from '../lib/config-assets.js';
+import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 
 const BUNDLED_BLUEPRINT_ROOT = getBundledBlueprintsRoot();
+const CLI_ROOT = resolve(BUNDLED_BLUEPRINT_ROOT, '..', '..');
 const VIDEO_AUDIO_MUSIC_BLUEPRINT_PATH = resolve(
   BUNDLED_BLUEPRINT_ROOT,
   'video-audio-music.yaml',
@@ -20,6 +22,10 @@ const VIDEO_AUDIO_MUSIC_BLUEPRINT_PATH = resolve(
 const AUDIO_ONLY_BLUEPRINT_PATH = resolve(
   BUNDLED_BLUEPRINT_ROOT,
   'audio-only.yaml',
+);
+const IMAGE_AUDIO_BLUEPRINT_PATH = resolve(
+  BUNDLED_BLUEPRINT_ROOT,
+  'image-audio.yaml',
 );
 const AUDIO_ONLY_MODELS = [
   { producerId: 'ScriptProducer', provider: 'openai', model: 'gpt-5-mini' },
@@ -181,22 +187,13 @@ describe('runGenerate (new runs)', () => {
       includeDefaults: false,
       overrides: AUDIO_ONLY_OVERRIDES,
     });
-    const overridePrompt = 'Tell me about inline overrides';
     const result = await runGenerate({
       inputsPath,
       nonInteractive: true,
       blueprint: AUDIO_ONLY_BLUEPRINT_PATH,
-      inquiryPrompt: overridePrompt,
     });
 
     expect(result.build?.status).toBe('succeeded');
-
-    const cliConfig = await readCliConfig(cliConfigPath);
-    expect(cliConfig).not.toBeNull();
-    const storageMovieId = formatMovieId(result.movieId);
-    const movieDir = resolve(cliConfig!.storage.root, cliConfig!.storage.basePath, storageMovieId);
-    const storedPrompt = await readFile(join(movieDir, 'prompts', 'inquiry.txt'), 'utf8');
-    expect(storedPrompt.trim()).toBe(overridePrompt);
   });
 
   it('persists concurrency overrides into the CLI config', async () => {
@@ -222,6 +219,57 @@ describe('runGenerate (new runs)', () => {
 
     const cliConfig = await readCliConfig(cliConfigPath);
     expect(cliConfig?.concurrency).toBe(3);
+  });
+
+  it('reruns only image layer when ImageProducer model changes on edit', async () => {
+    const root = await createTempRoot();
+    const cliConfigPath = join(root, 'cli-config.json');
+    process.env.TUTOPANDA_CLI_CONFIG = cliConfigPath;
+
+    await runInit({ rootFolder: root, configPath: cliConfigPath });
+
+    const baselineInputsPath = join(root, 'inputs-image.yaml');
+    await copyFile(resolve(CLI_ROOT, 'config/inputs-image.yaml'), baselineInputsPath);
+
+    const initialDoc = parseYaml(await readFile(baselineInputsPath, 'utf8')) as { inputs?: Record<string, unknown>; models?: Array<Record<string, unknown>> };
+    const initialImageModel = initialDoc.models?.find((entry) => entry.producerId === 'ImageProducer');
+    expect(initialImageModel).toBeDefined();
+    if (!initialImageModel) {
+      throw new Error('ImageProducer model entry missing from inputs file.');
+    }
+    initialImageModel.model = 'bytedance/seedream-4';
+    await writeFile(baselineInputsPath, stringifyYaml(initialDoc), 'utf8');
+
+    const first = await runGenerate({
+      inputsPath: baselineInputsPath,
+      nonInteractive: true,
+      blueprint: IMAGE_AUDIO_BLUEPRINT_PATH,
+    });
+    expect(first.build?.status).toBe('succeeded');
+
+    const doc = parseYaml(await readFile(baselineInputsPath, 'utf8')) as { inputs?: Record<string, unknown>; models?: Array<Record<string, unknown>> };
+    const imageModel = doc.models?.find((entry) => entry.producerId === 'ImageProducer');
+    expect(imageModel).toBeDefined();
+    if (!imageModel) {
+      throw new Error('ImageProducer model entry missing from inputs file.');
+    }
+    imageModel.model = 'google/nano-banana';
+    await writeFile(baselineInputsPath, stringifyYaml(doc), 'utf8');
+
+    const second = await runGenerate({
+      useLast: true,
+      inputsPath: baselineInputsPath,
+      nonInteractive: true,
+      blueprint: IMAGE_AUDIO_BLUEPRINT_PATH,
+      dryRun: true,
+    });
+    expect(second.dryRun?.status).toBe('succeeded');
+
+    const plan = JSON.parse(await readFile(second.planPath, 'utf8')) as { layers: Array<unknown[]> };
+    expect(plan.layers[0]?.length ?? 0).toBe(0);
+    expect(plan.layers[1]?.length ?? 0).toBe(0);
+    expect(plan.layers[2]?.length ?? 0).toBeGreaterThan(0);
+    expect(plan.layers[3]?.length ?? 0).toBeGreaterThan(0);
   });
 
   it('schedules TimelineProducer after upstream image/audio jobs', async () => {

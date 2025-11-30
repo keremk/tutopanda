@@ -39,7 +39,6 @@ export interface GeneratePlanOptions {
   isNew: boolean;
   inputsPath: string;
   usingBlueprint: string; // Path to blueprint YAML file
-  inquiryPromptOverride?: string;
   pendingArtefacts?: PendingArtefactDraft[];
   logger?: Logger;
 }
@@ -83,7 +82,6 @@ export async function generatePlan(options: GeneratePlanOptions): Promise<Genera
   const { values: inputValues, providerOptions } = await loadInputsFromYaml(
     options.inputsPath,
     blueprintRoot,
-    options.inquiryPromptOverride,
   );
   applyProviderDefaults(inputValues, providerOptions);
   await persistInputs(movieDir, inputValues);
@@ -132,6 +130,8 @@ function buildProviderMetadata(options: ProducerOptionsMap): Map<string, {
   inputSchema?: string;
   outputSchema?: string;
   config?: Record<string, unknown>;
+  selectionInputKeys?: string[];
+  configInputPaths?: string[];
 }> {
   const map = new Map<string, {
     sdkMapping?: Record<string, BlueprintProducerSdkMappingField>;
@@ -139,6 +139,8 @@ function buildProviderMetadata(options: ProducerOptionsMap): Map<string, {
     inputSchema?: string;
     outputSchema?: string;
     config?: Record<string, unknown>;
+    selectionInputKeys?: string[];
+    configInputPaths?: string[];
   }>();
   for (const [key, entries] of options) {
     const primary = entries[0];
@@ -151,6 +153,8 @@ function buildProviderMetadata(options: ProducerOptionsMap): Map<string, {
       inputSchema: primary.inputSchema,
       outputSchema: primary.outputSchema,
       config: primary.config,
+      selectionInputKeys: primary.selectionInputKeys,
+      configInputPaths: primary.configInputPaths,
     });
   }
   return map;

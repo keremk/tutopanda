@@ -19,7 +19,6 @@ import type { Logger } from '@tutopanda/core';
 
 export interface QueryOptions {
   inputsPath?: string;
-  inquiryPrompt?: string;
   dryRun?: boolean;
   nonInteractive?: boolean;
   usingBlueprint: string;
@@ -79,7 +78,6 @@ export async function runQuery(options: QueryOptions): Promise<QueryResult> {
     isNew: true,
     inputsPath,
     usingBlueprint: blueprintPath,
-    inquiryPromptOverride: options.inquiryPrompt,
     logger,
   });
 

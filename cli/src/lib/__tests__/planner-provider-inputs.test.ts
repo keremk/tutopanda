@@ -1,0 +1,40 @@
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { describe, expect, it } from 'vitest';
+import { generatePlan } from '../planner.js';
+import { resolveBlueprintSpecifier } from '../config-assets.js';
+import type { CliConfig } from '../cli-config.js';
+
+const TEST_DIR = dirname(fileURLToPath(import.meta.url));
+const REPO_ROOT = resolve(TEST_DIR, '../../../..');
+const CLI_ROOT = resolve(REPO_ROOT, 'cli');
+
+describe('planner provider inputs', () => {
+  it('includes provider/model inputs for ImageProducer jobs', async () => {
+    const tempRoot = await mkdtemp(resolve(tmpdir(), 'tutopanda-plan-'));
+    const cliConfig: CliConfig = { storage: { root: tempRoot, basePath: 'builds' } };
+    const blueprintPath = await resolveBlueprintSpecifier('image-audio.yaml', { cliRoot: CLI_ROOT });
+    const inputsPath = resolve(CLI_ROOT, 'config/inputs-image.yaml');
+
+    try {
+      const { plan } = await generatePlan({
+        cliConfig,
+        movieId: 'movie-test',
+        isNew: true,
+        inputsPath,
+        usingBlueprint: blueprintPath,
+      });
+
+      const imageJobs = plan.layers.flat().filter((job) => job.producer === 'ImageProducer');
+      expect(imageJobs.length).toBeGreaterThan(0);
+      for (const job of imageJobs) {
+        expect(job.inputs).toContain('Input:ImageProducer.ImageProducer.provider');
+        expect(job.inputs).toContain('Input:ImageProducer.ImageProducer.model');
+      }
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true });
+    }
+  });
+});

@@ -34,7 +34,6 @@ export interface LoadedInputs {
 export async function loadInputsFromYaml(
   filePath: string,
   blueprint: BlueprintTreeNode,
-  inquiryPromptOverride?: string,
 ): Promise<LoadedInputs> {
   validateYamlExtension(filePath);
   const contents = await readFile(filePath, 'utf8');
@@ -49,11 +48,6 @@ export async function loadInputsFromYaml(
   ];
   const resolver = createInputIdResolver(blueprint, syntheticInputs);
   const values = canonicalizeInputs(rawInputs, resolver);
-
-  if (inquiryPromptOverride && typeof inquiryPromptOverride === 'string' && inquiryPromptOverride.trim()) {
-    const canonical = resolver.resolve('InquiryPrompt');
-    values[canonical] = inquiryPromptOverride;
-  }
 
   const missingRequired = resolver.entries
     .filter((entry) => entry.namespacePath.length === 0 && entry.definition.required)

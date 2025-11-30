@@ -66,7 +66,7 @@ import { createCliLogger, type CliLogger } from './lib/logger.js';
 type ProviderListOutputEntry = Awaited<ReturnType<typeof runProvidersList>>['entries'][number];
 
 const cli = meow(
-  `\nUsage\n  $ tutopanda <command> [options]\n\nCommands\n  install             Guided setup (alias for init)\n  init                Initialize Tutopanda CLI configuration\n  generate            Create or continue a movie generation\n  clean               Remove friendly view and build artefacts for a movie\n  inspect             Export prompts or timeline data for a movie\n  viewer:start        Start the bundled viewer server in the foreground\n  viewer:view         Open the viewer for a movie id (starts server if needed)\n  viewer:stop         Stop the background viewer server\n  providers:list      Show providers defined in a blueprint\n  blueprints:list     List available blueprint YAML files\n  blueprints:describe <path>  Show details for a blueprint YAML file\n  blueprints:validate <path>  Validate a blueprint YAML file\n  mcp                 Run the Tutopanda MCP server over stdio\n\nExamples\n  $ tutopanda install --rootFolder=~/media/tutopanda\n  $ tutopanda generate --inputs=~/movies/my-inputs.yaml --blueprint=audio-only.yaml\n  $ tutopanda generate "Explain black holes" --inputs=~/movies/my-inputs.yaml --blueprint=audio-only.yaml --concurrency=3\n  $ tutopanda generate --last --up-to-layer=1\n  $ tutopanda providers:list --blueprint=image-audio.yaml\n  $ tutopanda blueprints:list\n  $ tutopanda blueprints:describe audio-only.yaml\n  $ tutopanda blueprints:validate image-audio.yaml\n  $ tutopanda inspect --movie-id=movie-q123456 --prompts\n  $ tutopanda clean --movie-id=movie-q123456\n  $ tutopanda viewer:start\n  $ tutopanda viewer:view --movie-id=movie-q123456\n  $ tutopanda mcp --defaultBlueprint=image-audio.yaml\n`,
+  `\nUsage\n  $ tutopanda <command> [options]\n\nCommands\n  install             Guided setup (alias for init)\n  init                Initialize Tutopanda CLI configuration\n  generate            Create or continue a movie generation\n  clean               Remove friendly view and build artefacts for a movie\n  inspect             Export prompts or timeline data for a movie\n  viewer:start        Start the bundled viewer server in the foreground\n  viewer:view         Open the viewer for a movie id (starts server if needed)\n  viewer:stop         Stop the background viewer server\n  providers:list      Show providers defined in a blueprint\n  blueprints:list     List available blueprint YAML files\n  blueprints:describe <path>  Show details for a blueprint YAML file\n  blueprints:validate <path>  Validate a blueprint YAML file\n  mcp                 Run the Tutopanda MCP server over stdio\n\nExamples\n  $ tutopanda install --rootFolder=~/media/tutopanda\n  $ tutopanda generate --inputs=~/movies/my-inputs.yaml --blueprint=audio-only.yaml\n  $ tutopanda generate --inputs=~/movies/my-inputs.yaml --blueprint=audio-only.yaml --concurrency=3\n  $ tutopanda generate --last --up-to-layer=1\n  $ tutopanda providers:list --blueprint=image-audio.yaml\n  $ tutopanda blueprints:list\n  $ tutopanda blueprints:describe audio-only.yaml\n  $ tutopanda blueprints:validate image-audio.yaml\n  $ tutopanda inspect --movie-id=movie-q123456 --prompts\n  $ tutopanda clean --movie-id=movie-q123456\n  $ tutopanda viewer:start\n  $ tutopanda viewer:view --movie-id=movie-q123456\n  $ tutopanda mcp --defaultBlueprint=image-audio.yaml\n`,
   {
     importMeta: import.meta,
     flags: {
@@ -151,6 +151,12 @@ async function main(): Promise<void> {
       const inputsFlag = flags.inputs ?? flags.in;
       const upToLayer = flags.upToLayer ?? flags.up;
 
+      if (positionalInquiry !== undefined) {
+        logger.error('Error: inline inquiry prompt is no longer supported. Provide it in your inputs.yaml.');
+        process.exitCode = 1;
+        return;
+      }
+
       if (flags.last && movieIdFlag) {
         logger.error('Error: use either --last or --movie-id/--id, not both.');
         process.exitCode = 1;
@@ -171,19 +177,12 @@ async function main(): Promise<void> {
         }
       }
 
-      if (movieIdFlag && positionalInquiry) {
-        logger.error('Error: inline inquiry prompt is only supported for new generations without --movie-id.');
-        process.exitCode = 1;
-        return;
-      }
-
       try {
         const result = await runGenerate({
           movieId: movieIdFlag,
           useLast: Boolean(flags.last),
           inputsPath: inputsFlag,
           blueprint: blueprintFlag,
-          inquiryPrompt: positionalInquiry,
           dryRun: Boolean(flags.dryRun),
           nonInteractive: Boolean(flags.nonInteractive),
           concurrency: flags.concurrency,

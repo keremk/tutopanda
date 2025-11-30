@@ -17,10 +17,9 @@ export type { InputMap, ModelSelection };
 export async function loadInputsFromYaml(
   filePath: string,
   blueprint: BlueprintTreeNode,
-  inquiryPromptOverride?: string,
   allowAmbiguousDefault = false,
 ): Promise<LoadedInputs> {
-  const base = await coreLoadInputsFromYaml(filePath, blueprint, inquiryPromptOverride);
+  const base = await coreLoadInputsFromYaml(filePath, blueprint);
   const providerOptions = buildProducerOptionsFromBlueprint(blueprint, base.modelSelections, allowAmbiguousDefault);
   return {
     ...base,
