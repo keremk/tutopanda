@@ -47,7 +47,7 @@ export async function runQuery(options: QueryOptions): Promise<QueryResult> {
   }
 
   if (!options.usingBlueprint || options.usingBlueprint.trim().length === 0) {
-    throw new Error('Blueprint path is required. Provide --usingBlueprint=/path/to/blueprint.yaml');
+    throw new Error('Blueprint path is required. Provide --blueprint=/path/to/blueprint.yaml');
   }
 
   const configPath = getDefaultCliConfigPath();

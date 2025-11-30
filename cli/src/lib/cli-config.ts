@@ -10,6 +10,8 @@ export interface CliConfig {
     basePath: string;
   };
   concurrency?: number;
+  lastMovieId?: string;
+  lastGeneratedAt?: string;
   viewer?: {
     port?: number;
     host?: string;
@@ -36,6 +38,8 @@ export async function readCliConfig(configPath?: string): Promise<CliConfig | nu
     return {
       storage: parsed.storage,
       concurrency: normalizeConcurrency(parsed.concurrency),
+      lastMovieId: parsed.lastMovieId,
+      lastGeneratedAt: parsed.lastGeneratedAt,
       viewer: parsed.viewer,
     };
   } catch {
@@ -66,6 +70,21 @@ export function getDefaultRoot(): string {
 }
 
 export const DEFAULT_CONCURRENCY = 1;
+
+export async function persistLastMovieId(movieId: string, configPath?: string): Promise<CliConfig> {
+  const targetPath = resolve(configPath ?? getDefaultCliConfigPath());
+  const existing = await readCliConfig(targetPath);
+  if (!existing) {
+    throw new Error('Tutopanda CLI is not initialized. Run "tutopanda init" first.');
+  }
+  const updated: CliConfig = {
+    ...existing,
+    lastMovieId: movieId,
+    lastGeneratedAt: new Date().toISOString(),
+  };
+  await writeCliConfig(updated, targetPath);
+  return updated;
+}
 
 export function normalizeConcurrency(value: number | undefined): number {
   if (value === undefined) {

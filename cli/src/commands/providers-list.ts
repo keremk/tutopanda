@@ -23,7 +23,7 @@ export interface ProvidersListResult {
 export async function runProvidersList(options: ProvidersListOptions): Promise<ProvidersListResult> {
   const normalizedBlueprint = options.blueprintPath?.trim();
   if (!normalizedBlueprint) {
-    throw new Error('Blueprint path is required for providers:list. Provide --usingBlueprint=/path/to/blueprint.yaml.');
+    throw new Error('Blueprint path is required for providers:list. Provide --blueprint=/path/to/blueprint.yaml.');
   }
   const blueprintPath = expandPath(normalizedBlueprint);
   const { root } = await loadBlueprintBundle(blueprintPath);

@@ -9,7 +9,7 @@ import type { ReadResourceResult, ListResourcesResult, Resource } from '@modelco
 import { z } from 'zod';
 import { stringify as stringifyYaml } from 'yaml';
 import type { Manifest } from '@tutopanda/core';
-import { runQuery, type QueryResult } from '../commands/query.js';
+import { runGenerate, type GenerateResult } from '../commands/generate.js';
 import { runViewerView } from '../commands/viewer.js';
 import { readCliConfig } from '../lib/cli-config.js';
 import { INPUT_FILE_NAME } from '../lib/input-files.js';
@@ -48,7 +48,7 @@ export interface CreateTutopandaMcpServerOptions {
 }
 
 export interface TutopandaMcpServerDeps {
-  runQuery?: typeof runQuery;
+  runGenerate?: typeof runGenerate;
   runViewerView?: typeof runViewerView;
   readCliConfig?: typeof readCliConfig;
 }
@@ -57,7 +57,7 @@ export function createTutopandaMcpServer(
   options: CreateTutopandaMcpServerOptions,
   deps: TutopandaMcpServerDeps = {},
 ): McpServer {
-  const runQueryImpl = deps.runQuery ?? runQuery;
+  const runGenerateImpl = deps.runGenerate ?? runGenerate;
   const runViewerImpl = deps.runViewerView ?? runViewerView;
   const readCliConfigImpl = deps.readCliConfig ?? readCliConfig;
 
@@ -122,11 +122,11 @@ Before you start the generation, always provide a summary for what you are gener
         data: { message: `generate_story invoked (blueprint=${pathLabel(resolvedBlueprint, options.blueprintDir)})` },
       });
 
-      let result: QueryResult | undefined;
+      let result: GenerateResult | undefined;
       try {
-        result = await runQueryImpl({
+        result = await runGenerateImpl({
           inputsPath,
-          usingBlueprint: resolvedBlueprint,
+          blueprint: resolvedBlueprint,
           nonInteractive: true,
         });
       } finally {

@@ -33,7 +33,7 @@ export async function runMcpServer(options: RunMcpServerOptions = {}): Promise<v
     throw new Error('Tutopanda CLI is not initialized. Run "tutopanda init" before starting the MCP server.');
   }
 
-  // Ensure downstream helpers (runQuery, viewer commands) use the same config file.
+  // Ensure downstream helpers (runGenerate, viewer commands) use the same config file.
   process.env.TUTOPANDA_CLI_CONFIG = resolvedConfigPath;
 
   const blueprintDirectory = await resolveBlueprintDirectory({

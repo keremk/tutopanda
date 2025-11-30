@@ -17,7 +17,7 @@ models:
   - model: gpt-5-mini
     provider: openai
     producerId: ImagePromptProducer
-  - model: bytedance/seedream-4
+  - model: google/nano-banana
     provider: replicate
     producerId: ImageProducer
   - model: minimax/speech-2.6-hd

@@ -97,7 +97,7 @@ export async function exportWorkspace(args: {
   const blueprintPath = blueprintOverride ?? metadata.blueprintPath;
 
   if (!blueprintPath) {
-    console.warn('Warning: Could not locate blueprint path. Provide --usingBlueprint when exporting.');
+    console.warn('Warning: Could not locate blueprint path. Provide --blueprint when exporting.');
   } else {
     await copyBlueprintFile(blueprintPath, workspaceDir);
   }

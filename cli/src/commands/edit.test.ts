@@ -6,15 +6,25 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { runInit } from './init.js';
-import { runQuery, formatMovieId } from './query.js';
+import { runGenerate } from './generate.js';
+import { formatMovieId } from './query.js';
 import { runEdit } from './edit.js';
 import { createInputsFile } from './__testutils__/inputs.js';
 import { getBundledBlueprintsRoot } from '../lib/config-assets.js';
 
-const VIDEO_AUDIO_MUSIC_BLUEPRINT_PATH = resolve(
-  getBundledBlueprintsRoot(),
-  'video-audio-music.yaml',
-);
+const AUDIO_ONLY_BLUEPRINT_PATH = resolve(getBundledBlueprintsRoot(), 'audio-only.yaml');
+const AUDIO_ONLY_MODELS = [
+  { producerId: 'ScriptProducer', provider: 'openai', model: 'gpt-5-mini' },
+  { producerId: 'AudioProducer', provider: 'replicate', model: 'minimax/speech-2.6-hd' },
+];
+const AUDIO_ONLY_OVERRIDES = {
+  Duration: 60,
+  NumOfSegments: 3,
+  VoiceId: 'default-voice',
+  Audience: 'Adult',
+  Emotion: 'neutral',
+  Language: 'en',
+};
 
 const tmpRoots: string[] = [];
 const originalEnvConfig = process.env.TUTOPANDA_CLI_CONFIG;
@@ -36,7 +46,17 @@ async function createTempRoot(): Promise<string> {
 }
 
 async function createInputsFixture(root: string, prompt: string, fileName: string, overrides?: Record<string, string | number>): Promise<string> {
-  return createInputsFile({ root, prompt, fileName, overrides });
+  return createInputsFile({
+    root,
+    prompt,
+    fileName,
+    overrides: {
+      ...AUDIO_ONLY_OVERRIDES,
+      ...(overrides ?? {}),
+    },
+    includeDefaults: false,
+    models: AUDIO_ONLY_MODELS,
+  });
 }
 
 describe('runEdit', () => {
@@ -51,10 +71,10 @@ describe('runEdit', () => {
 
     await runInit({ rootFolder: root, configPath: cliConfigPath });
     const queryInputsPath = await createInputsFixture(root, 'Describe the planets', 'query-inputs.yaml');
-    const queryResult = await runQuery({
+    const queryResult = await runGenerate({
       inputsPath: queryInputsPath,
       nonInteractive: true,
-      usingBlueprint: VIDEO_AUDIO_MUSIC_BLUEPRINT_PATH,
+      blueprint: AUDIO_ONLY_BLUEPRINT_PATH,
     });
 
     const movieInputsPath = resolve(queryResult.storagePath, 'inputs.yaml');
@@ -64,7 +84,7 @@ describe('runEdit', () => {
     const editResult = await runEdit({
       movieId: queryResult.movieId,
       nonInteractive: true,
-      usingBlueprint: VIDEO_AUDIO_MUSIC_BLUEPRINT_PATH,
+      usingBlueprint: AUDIO_ONLY_BLUEPRINT_PATH,
     });
 
     expect(editResult.targetRevision).toBe('rev-0002');
@@ -91,22 +111,22 @@ describe('runEdit', () => {
 
     await runInit({ rootFolder: root, configPath: cliConfigPath });
     const queryInputsPath = await createInputsFixture(root, 'Describe oceans', 'query-inputs.yaml');
-    const queryResult = await runQuery({
+    const queryResult = await runGenerate({
       inputsPath: queryInputsPath,
       nonInteractive: true,
-      usingBlueprint: VIDEO_AUDIO_MUSIC_BLUEPRINT_PATH,
+      blueprint: AUDIO_ONLY_BLUEPRINT_PATH,
     });
 
     const movieInputsPath = resolve(queryResult.storagePath, 'inputs.yaml');
     const editInputsPath = await createInputsFixture(root, 'Describe oceans with drama', 'edit-inputs.yaml', {
-      Style: 'storybook',
+      Emotion: 'dramatic',
     });
     await copyFile(editInputsPath, movieInputsPath);
 
     const editResult = await runEdit({
       movieId: queryResult.movieId,
       dryRun: true,
-      usingBlueprint: VIDEO_AUDIO_MUSIC_BLUEPRINT_PATH,
+      usingBlueprint: AUDIO_ONLY_BLUEPRINT_PATH,
     });
 
     expect(editResult.dryRun).toBeDefined();

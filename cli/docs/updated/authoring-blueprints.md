@@ -182,5 +182,5 @@ collectors:
 
 ### Testing Your Blueprint
 - Validate YAML: `pnpm --filter tutopanda-cli run blueprints:validate <path>`
-- Dry-run from repo root (honor sandbox root): `TUTOPANDA_CLI_CONFIG=/path/to/cli-config.json node cli/dist/cli.js query --inputs=<inputs.yaml> --usingBlueprint=<blueprint.yaml> --dryrun`
+- Dry-run from repo root (honor sandbox root): `TUTOPANDA_CLI_CONFIG=/path/to/cli-config.json node cli/dist/cli.js generate --inputs=<inputs.yaml> --blueprint=<blueprint.yaml> --dry-run`
 - Inspect the plan in `<builds>/<movie>/runs/rev-0001-plan.json` to confirm inputs/fan-in are present (`Input:TimelineComposer.*` with `fanIn` entries).

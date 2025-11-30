@@ -33,7 +33,7 @@ import type { Logger } from '@tutopanda/core';
 
 export interface EditOptions {
   movieId: string;
-  inputsPath?: string; // internal override (workspace); CLI no longer accepts --inputs
+  inputsPath?: string; // optional override (workspace submissions or CLI --inputs during edits)
   dryRun?: boolean;
   nonInteractive?: boolean;
   usingBlueprint?: string;
@@ -84,7 +84,7 @@ export async function runEdit(options: EditOptions): Promise<EditResult> {
   const blueprintInput = options.usingBlueprint ?? metadata?.blueprintPath;
   if (!blueprintInput) {
     throw new Error(
-      'Blueprint path is required for edit. Provide --usingBlueprint=/path/to/blueprint.yaml or re-run the initial query to capture blueprint metadata.',
+      'Blueprint path is required for edit. Provide --blueprint=/path/to/blueprint.yaml or re-run the initial generation to capture blueprint metadata.',
     );
   }
   const blueprintPath = await resolveBlueprintSpecifier(blueprintInput, {
@@ -257,7 +257,7 @@ export async function runWorkspaceSubmit(options: WorkspaceSubmitOptions): Promi
   const blueprintSource = options.usingBlueprint ?? state.blueprintPath;
   if (!blueprintSource) {
     throw new Error(
-      'No blueprint recorded in workspace. Provide --usingBlueprint=/path/to/blueprint.yaml when submitting.',
+      'No blueprint recorded in workspace. Provide --blueprint=/path/to/blueprint.yaml when submitting.',
     );
   }
   const blueprintPath = await resolveBlueprintSpecifier(blueprintSource, {

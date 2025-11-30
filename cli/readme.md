@@ -17,7 +17,7 @@ npx tutopanda viewer:view --movieId movie-123
 - `viewer:view --movieId …` opens the browser at the correct `/movies/<id>` URL (starts the server in the background if needed).
 - `viewer:stop` stops the background server started by `viewer:view`.
 
-All other commands (`query`, `inspect`, `edit`, `providers:list`, etc.) behave exactly like before.
+All other commands (`generate`, `inspect`, `clean`, `providers:list`, etc.) behave exactly like before.
 
 ## MCP install (Claude Desktop & Claude Code)
 
@@ -62,7 +62,7 @@ The MCP server lets an LLM client call `generate_story`, inspect blueprints, and
 
 3. **Usage** – In either client you can now ask:  
    > “Use Tutopanda to generate a 30-second story about the Roman Empire.”  
-   The MCP tool handles input validation, runs `tutopanda query`, exposes artefacts/timeline as resources, and opens the viewer (unless you pass `--openViewer=false` in the MCP command).
+   The MCP tool handles input validation, runs `tutopanda generate`, exposes artefacts/timeline as resources, and opens the viewer (unless you pass `--openViewer=false` in the MCP command).
 
 
 ## Packaging for release (maintainers)

@@ -43,9 +43,9 @@ function silenceStdout(): () => void {
   };
 }
 import { runInit } from './commands/init.js';
-import { runQuery } from './commands/query.js';
+import { runGenerate } from './commands/generate.js';
 import { runInspect } from './commands/inspect.js';
-import { runEditRun, runEditClean } from './commands/edit-run.js';
+import { runClean } from './commands/edit-run.js';
 import { runProvidersList } from './commands/providers-list.js';
 import { runBlueprintsList } from './commands/blueprints-list.js';
 import { runBlueprintsDescribe } from './commands/blueprints-describe.js';
@@ -61,24 +61,27 @@ import {
   resolveBlueprintSpecifier,
 } from './lib/config-assets.js';
 import { createCliLogger, type CliLogger } from './lib/logger.js';
-import { buildFriendlyView, loadCurrentManifest } from './lib/friendly-view.js';
 
 
 type ProviderListOutputEntry = Awaited<ReturnType<typeof runProvidersList>>['entries'][number];
 
 const cli = meow(
-  `\nUsage\n  $ tutopanda <command> [options]\n\nCommands\n  install             Guided setup (alias for init)\n  init                Initialize Tutopanda CLI configuration\n  query               Generate a plan using a blueprint (YAML) and inputs YAML\n  inspect             Export prompts or timeline data for a movie\n  edit                Regenerate a movie with edited inputs\n  viewer:start        Start the bundled viewer server in the foreground\n  viewer:view         Open the viewer for a movie id (starts server if needed)\n  viewer:stop         Stop the background viewer server\n  providers:list      Show providers defined in a blueprint\n  blueprints:list     List available blueprint YAML files\n  blueprints:describe <path>  Show details for a blueprint YAML file\n  blueprints:validate <path>  Validate a blueprint YAML file\n  mcp                 Run the Tutopanda MCP server over stdio\n\nExamples\n  $ tutopanda install --rootFolder=~/media/tutopanda\n  $ tutopanda query --inputs=~/movies/my-inputs.yaml --using-blueprint=audio-only.yaml\n  $ tutopanda query --inputs=~/movies/my-inputs.yaml --using-blueprint=audio-only.yaml --concurrency=3\n  $ tutopanda query --inputs=~/movies/my-inputs.yaml --using-blueprint=audio-only.yaml --upToLayer=1\n  $ tutopanda providers:list --using-blueprint=image-audio.yaml\n  $ tutopanda blueprints:list\n  $ tutopanda blueprints:describe audio-only.yaml\n  $ tutopanda blueprints:validate image-audio.yaml\n  $ tutopanda inspect --movieId=q123456 --prompts\n  $ tutopanda edit --movieId=q123456\n  $ tutopanda viewer:start\n  $ tutopanda viewer:view --movieId=q123456\n  $ tutopanda mcp --defaultBlueprint=image-audio.yaml\n`,
+  `\nUsage\n  $ tutopanda <command> [options]\n\nCommands\n  install             Guided setup (alias for init)\n  init                Initialize Tutopanda CLI configuration\n  generate            Create or continue a movie generation\n  clean               Remove friendly view and build artefacts for a movie\n  inspect             Export prompts or timeline data for a movie\n  viewer:start        Start the bundled viewer server in the foreground\n  viewer:view         Open the viewer for a movie id (starts server if needed)\n  viewer:stop         Stop the background viewer server\n  providers:list      Show providers defined in a blueprint\n  blueprints:list     List available blueprint YAML files\n  blueprints:describe <path>  Show details for a blueprint YAML file\n  blueprints:validate <path>  Validate a blueprint YAML file\n  mcp                 Run the Tutopanda MCP server over stdio\n\nExamples\n  $ tutopanda install --rootFolder=~/media/tutopanda\n  $ tutopanda generate --inputs=~/movies/my-inputs.yaml --blueprint=audio-only.yaml\n  $ tutopanda generate "Explain black holes" --inputs=~/movies/my-inputs.yaml --blueprint=audio-only.yaml --concurrency=3\n  $ tutopanda generate --last --up-to-layer=1\n  $ tutopanda providers:list --blueprint=image-audio.yaml\n  $ tutopanda blueprints:list\n  $ tutopanda blueprints:describe audio-only.yaml\n  $ tutopanda blueprints:validate image-audio.yaml\n  $ tutopanda inspect --movie-id=movie-q123456 --prompts\n  $ tutopanda clean --movie-id=movie-q123456\n  $ tutopanda viewer:start\n  $ tutopanda viewer:view --movie-id=movie-q123456\n  $ tutopanda mcp --defaultBlueprint=image-audio.yaml\n`,
   {
     importMeta: import.meta,
     flags: {
       config: { type: 'string' },
       rootFolder: { type: 'string' },
       movieId: { type: 'string' },
+      id: { type: 'string' },
       prompts: { type: 'boolean', default: true },
       inputs: { type: 'string' },
-      dryRun: { type: 'boolean', aliases: ['dryrun'] },
+      in: { type: 'string' },
+      dryRun: { type: 'boolean' },
       nonInteractive: { type: 'boolean' },
-      usingBlueprint: { type: 'string' },
+      blueprint: { type: 'string' },
+      bp: { type: 'string' },
+      last: { type: 'boolean' },
       concurrency: { type: 'number' },
       movie: { type: 'string' },
       viewerHost: { type: 'string' },
@@ -88,6 +91,7 @@ const cli = meow(
       openViewer: { type: 'boolean' },
       verbose: { type: 'boolean', default: false },
       upToLayer: { type: 'number' },
+      up: { type: 'number' },
       all: { type: 'boolean' },
     },
   },
@@ -95,18 +99,22 @@ const cli = meow(
 
 async function main(): Promise<void> {
   const [command, ...rest] = cli.input;
-  const positionalInquiry = command === 'query' ? rest[0] : undefined;
+  const positionalInquiry = command === 'generate' ? rest[0] : undefined;
   const remaining = positionalInquiry !== undefined ? rest.slice(1) : rest;
   const flags = cli.flags as {
     config?: string;
     rootFolder?: string;
     configPath?: string;
     movieId?: string;
+    id?: string;
     prompts?: boolean;
     inputs?: string;
+    in?: string;
       dryRun?: boolean;
       nonInteractive?: boolean;
-      usingBlueprint?: string;
+      blueprint?: string;
+      bp?: string;
+      last?: boolean;
       concurrency?: number;
       movie?: string;
       viewerHost?: string;
@@ -116,6 +124,7 @@ async function main(): Promise<void> {
       openViewer?: boolean;
       verbose?: boolean;
       upToLayer?: number;
+      up?: number;
       all?: boolean;
   };
   const logger = createCliLogger({ verbose: Boolean(flags.verbose) });
@@ -131,51 +140,73 @@ async function main(): Promise<void> {
       logger.info(`Builds directory: ${result.buildsFolder}`);
       return;
     }
-    case 'query': {
+    case 'generate': {
       if (remaining.length > 0) {
-        logger.error('Error: query accepts at most one positional argument for the inquiry prompt.');
+        logger.error('Error: generate accepts at most one positional argument for the inquiry prompt.');
         process.exitCode = 1;
         return;
       }
-      if (!flags.inputs) {
-        logger.error('Error: --inputs is required for query.');
+      const movieIdFlag = flags.movieId ?? flags.id;
+      const blueprintFlag = flags.blueprint ?? flags.bp;
+      const inputsFlag = flags.inputs ?? flags.in;
+      const upToLayer = flags.upToLayer ?? flags.up;
+
+      if (flags.last && movieIdFlag) {
+        logger.error('Error: use either --last or --movie-id/--id, not both.');
         process.exitCode = 1;
         return;
       }
-      if (!flags.usingBlueprint) {
-        logger.error('Error: --usingBlueprint is required for query.');
-        process.exitCode = 1;
-        return;
-      }
-      const result = await runQuery({
-        inputsPath: flags.inputs,
-        inquiryPrompt: positionalInquiry,
-        dryRun: Boolean(flags.dryRun),
-        nonInteractive: Boolean(flags.nonInteractive),
-        usingBlueprint: flags.usingBlueprint,
-        concurrency: flags.concurrency,
-        upToLayer: flags.upToLayer,
-        logger,
-      });
-      logger.info(`Movie created with id = ${result.movieId}`);
-      logger.info(`Plan saved to ${result.planPath}`);
-      if (result.dryRun) {
-        printDryRunSummary(logger, result.dryRun, result.storagePath);
-      } else if (result.build) {
-        printBuildSummary(logger, result.build, result.manifestPath);
-        logger.info(`Manifests and artefacts stored under: ${result.storagePath}`);
-        const cliConfig = await readCliConfig();
-        if (cliConfig) {
-          const { manifest } = await loadCurrentManifest(cliConfig, result.storageMovieId);
-          const friendly = await buildFriendlyView({ cliConfig, movieId: result.storageMovieId, manifest });
-          logger.info(`Friendly view: ${friendly.friendlyRoot}`);
+
+      const targetingExisting = Boolean(flags.last || movieIdFlag);
+      if (!targetingExisting) {
+        if (!inputsFlag) {
+          logger.error('Error: --inputs/--in is required for a new generation.');
+          process.exitCode = 1;
+          return;
+        }
+        if (!blueprintFlag) {
+          logger.error('Error: --blueprint/--bp is required for a new generation.');
+          process.exitCode = 1;
+          return;
         }
       }
-      return;
+
+      if (movieIdFlag && positionalInquiry) {
+        logger.error('Error: inline inquiry prompt is only supported for new generations without --movie-id.');
+        process.exitCode = 1;
+        return;
+      }
+
+      try {
+        const result = await runGenerate({
+          movieId: movieIdFlag,
+          useLast: Boolean(flags.last),
+          inputsPath: inputsFlag,
+          blueprint: blueprintFlag,
+          inquiryPrompt: positionalInquiry,
+          dryRun: Boolean(flags.dryRun),
+          nonInteractive: Boolean(flags.nonInteractive),
+          concurrency: flags.concurrency,
+          upToLayer,
+          logger,
+        });
+        printGenerateSummary(logger, result);
+        if (result.dryRun) {
+          printDryRunSummary(logger, result.dryRun, result.storagePath);
+        } else if (result.build) {
+          printBuildSummary(logger, result.build, result.manifestPath);
+        }
+        return;
+      } catch (error) {
+        logger.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
+        process.exitCode = 1;
+        return;
+      }
     }
     case 'providers:list': {
-      if (!flags.usingBlueprint) {
-        logger.error('Error: --usingBlueprint is required for providers:list.');
+      const blueprintFlag = flags.blueprint ?? flags.bp;
+      if (!blueprintFlag) {
+        logger.error('Error: --blueprint/--bp is required for providers:list.');
         process.exitCode = 1;
         return;
       }
@@ -185,7 +216,7 @@ async function main(): Promise<void> {
         process.exitCode = 1;
         return;
       }
-      const blueprintPath = await resolveBlueprintSpecifier(flags.usingBlueprint, {
+      const blueprintPath = await resolveBlueprintSpecifier(blueprintFlag, {
         cliRoot: cliConfig.storage.root,
       });
       const result = await runProvidersList({
@@ -346,13 +377,14 @@ async function main(): Promise<void> {
       return;
     }
     case 'inspect': {
-      if (!flags.movieId) {
-        logger.error('Error: --movieId is required for inspect.');
+      const movieIdFlag = flags.movieId ?? flags.id;
+      if (!movieIdFlag) {
+        logger.error('Error: --movie-id/--id is required for inspect.');
         process.exitCode = 1;
         return;
       }
       const result = await runInspect({
-        movieId: flags.movieId,
+        movieId: movieIdFlag,
         prompts: flags.prompts,
       });
       if (result.promptsToml) {
@@ -362,41 +394,14 @@ async function main(): Promise<void> {
       }
       return;
     }
-    case 'edit:run': {
-      const movieId = rest[0] ?? flags.movieId;
+    case 'clean': {
+      const movieId = rest[0] ?? flags.movieId ?? flags.id;
       if (!movieId) {
-        logger.error('Error: movieId is required for edit:run (pass as first argument).');
+        logger.error('Error: --movie-id/--id is required for clean (pass as first argument).');
         process.exitCode = 1;
         return;
       }
-      const result = await runEditRun({
-        movieId,
-        dryRun: Boolean(flags.dryRun),
-        nonInteractive: Boolean(flags.nonInteractive),
-        usingBlueprint: flags.usingBlueprint,
-        concurrency: flags.concurrency,
-        upToLayer: flags.upToLayer,
-        logger,
-      });
-      logger.info(`Updated prompts for movie ${movieId}. New revision: ${result.targetRevision}`);
-      logger.info(`Plan saved to ${result.planPath}`);
-      if (result.dryRun) {
-        printDryRunSummary(logger, result.dryRun, result.storagePath);
-      } else if (result.build) {
-        printBuildSummary(logger, result.build, result.manifestPath);
-        logger.info(`Manifests and artefacts stored under: ${result.storagePath}`);
-        logger.info(`Friendly view: ${result.friendlyRoot}`);
-      }
-      return;
-    }
-    case 'edit:clean': {
-      const movieId = rest[0] ?? flags.movieId;
-      if (!movieId) {
-        logger.error('Error: movieId is required for edit:clean (pass as first argument).');
-        process.exitCode = 1;
-        return;
-      }
-      await runEditClean({ movieId, logger });
+      await runClean({ movieId, logger });
       return;
     }
     case 'viewer:start': {
@@ -409,7 +414,7 @@ async function main(): Promise<void> {
     }
     case 'viewer:view': {
       await runViewerView({
-        movieId: flags.movieId ?? flags.movie,
+        movieId: flags.movieId ?? flags.id ?? flags.movie,
         host: flags.viewerHost,
         port: flags.viewerPort,
         logger,
@@ -437,6 +442,26 @@ async function main(): Promise<void> {
 }
 
 void main();
+
+function printGenerateSummary(logger: CliLogger, result: Awaited<ReturnType<typeof runGenerate>>): void {
+  const modeLabel = result.isNew ? 'New movie' : 'Updated movie';
+  const statusLabel = result.dryRun
+    ? `Dry run: ${result.dryRun.status} (${result.dryRun.jobCount} jobs)`
+    : result.build
+      ? `Build: ${result.build.status} (${result.build.jobCount} jobs)`
+      : 'No execution performed.';
+
+  logger.info(`${modeLabel}: ${result.storageMovieId} (rev ${result.targetRevision})`);
+  logger.info(statusLabel);
+  logger.info(`Plan: ${result.planPath}`);
+  if (result.manifestPath) {
+    logger.info(`Manifest: ${result.manifestPath}`);
+  }
+  logger.info(`Storage: ${result.storagePath}`);
+  if (result.friendlyRoot) {
+    logger.info(`Friendly view: ${result.friendlyRoot}`);
+  }
+}
 
 function printDryRunSummary(logger: CliLogger, summary: DryRunSummary, storagePath: string): void {
   const counts = summary.statusCounts;

@@ -5,7 +5,7 @@ This document describes how the Tutopanda CLI resolves providers, orchestrates b
 ## Overview
 
 ```
-tutopanda query / tutopanda edit
+tutopanda generate (new run or --movie-id/--last)
     ↓
 load CLI config (default-settings.json + overrides)
     ↓
@@ -36,10 +36,10 @@ The CLI never talks to provider SDKs directly. All interactions flow through the
    - Subsequent commands read settings, prompt the user for overrides if needed, and prepare runtime context (logger, telemetry ids, etc.).
 
 2. **Plan Loading**
-   - Whenever the user runs `tutopanda query <prompt>` or `tutopanda edit --movieId=<id>`, the CLI invokes `generatePlan` from `tutopanda-core` to produce the fresh `ExecutionPlan` + manifest snapshot that will seed the run.
+   - Whenever the user runs `tutopanda generate` (new run with inputs/blueprint or continuation via `--movie-id`/`--last`), the CLI invokes `generatePlan` from `tutopanda-core` to produce the fresh `ExecutionPlan` + manifest snapshot that will seed the run.
   - The CLI reads the active settings JSON, merges overrides, and eagerly loads every referenced provider config file (TOML/JSON/text) so each producer has a concrete `(provider, model, config)` tuple available at runtime. The CLI tags every variant with `environment: 'local'` today (cloud runs will reuse the same mechanism later). These selections are written to `providers.json` alongside the movie manifest for subsequent edits.
-   - `query` creates a brand-new movie directory, applies shortcut overrides, and stores the computed plan as the initial state before any providers run.
-   - `edit` reloads the stored `config.json` / `providers.json`, applies additional overrides (including edited TOML), and regenerates the plan so revisions start from the current manifest.
+   - New runs create a brand-new movie directory, apply shortcut overrides, and store the computed plan as the initial state before any providers run.
+   - Continuation runs reload the stored `config.json` / `providers.json`, apply additional overrides (including edited TOML), and regenerate the plan so revisions start from the current manifest.
 
 3. **Provider Resolution**
   - CLI maps each producer in the plan to the concrete `(provider, model)` entry defined in settings (primary + fallbacks), stamps `environment: 'local'`, and attaches the parsed configuration payload plus raw attachment contents.
@@ -88,7 +88,7 @@ interface ProviderOption {
 }
 ```
 
-- Query/edit persist this map to `providers.json` so subsequent runs reuse the exact same settings unless overrides are provided.
+- Generate persists this map to `providers.json` so subsequent runs reuse the exact same settings unless overrides are provided.
 - When invoking handlers the CLI merges `config` + `customAttributes`, replays the raw attachment contents, forwards any planner metadata under `context.extras.plannerContext`, and provides a `resolvedInputs` dictionary containing the latest CLI input values (prompt, audience, duration, etc.).
 
 ## Execution Flow Example
@@ -125,7 +125,7 @@ interface ProviderOption {
 
 ## Dry Runs
 
-- The `--dryrun` flag on `tutopanda query` and `tutopanda edit` executes the full planning/resolution pipeline but swaps the provider registry into mock mode so no external APIs are called.
+- The `--dry-run` flag on `tutopanda generate` executes the full planning/resolution pipeline but swaps the provider registry into mock mode so no external APIs are called.
 - Dry runs still initialise the movie’s storage folder when invoked from the CLI so users can inspect the generated plan, manifest snapshot, and mock artefacts in `builds/movie-{id}`.
 - Mock handlers produce deterministic, zero-cost artefacts that mimic provider outputs; the rest of the runner flow (event log, manifest building) remains unchanged.
 - When `executeDryRun` is used from automated tests (no storage path supplied) the storage context is in-memory, preventing any file system writes while keeping the behaviour consistent.

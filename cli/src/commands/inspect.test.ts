@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { runInit } from './init.js';
-import { runQuery } from './query.js';
+import { runGenerate } from './generate.js';
 import { runInspect } from './inspect.js';
 import { createInputsFile } from './__testutils__/inputs.js';
 import { getBundledBlueprintsRoot } from '../lib/config-assets.js';
@@ -51,10 +51,10 @@ describe('runInspect', () => {
       prompt: 'Describe the solar system',
       fileName: 'query-inputs.yaml',
     });
-    const queryResult = await runQuery({
+    const queryResult = await runGenerate({
       inputsPath,
       nonInteractive: true,
-      usingBlueprint: VIDEO_AUDIO_MUSIC_BLUEPRINT_PATH,
+      blueprint: VIDEO_AUDIO_MUSIC_BLUEPRINT_PATH,
     });
 
     const inspectResult = await runInspect({ movieId: queryResult.movieId, prompts: true });

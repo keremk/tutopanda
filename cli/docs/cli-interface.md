@@ -26,6 +26,8 @@ The system operates on three core components:
 
 All configuration is file-based. The CLI does not use runtime flags for overriding provider settings or workflow parameters—everything is declared in version-controlled YAML and TOML files.
 
+> **Note:** Commands have been consolidated. Use `tutopanda generate` for both new runs and continuations (`--movie-id`/`--last`). Flags are now kebab-case with aliases: `--movie-id`/`--id`, `--blueprint`/`--bp`, `--inputs`/`--in`, `--up-to-layer`/`--up`, and `--dry-run`.
+
 ---
 
 ## Getting Started
@@ -93,18 +95,18 @@ inputs:
   ImageStyle: "Scientific illustration"
 ```
 
-2. **Run the query command**:
+2. **Run the generate command**:
 
 ```bash
-tutopanda query \
+tutopanda generate \
   --inputs=my-inputs.yaml \
-  --using-blueprint=~/.tutopanda/config/blueprints/image-audio.yaml
+  --blueprint=~/.tutopanda/config/blueprints/image-audio.yaml
 ```
 
 3. **View the result**:
 
 ```bash
-tutopanda viewer --movie=movie-a1b2c3d4
+tutopanda viewer:view --movie-id=movie-a1b2c3d4
 ```
 
 ---
@@ -259,97 +261,57 @@ tutopanda init --rootFolder=/Users/alice/tutopanda-storage
 
 ---
 
-### `tutopanda query`
+### `tutopanda generate`
 
-Generate and execute a new movie using a blueprint and inputs.
+Create a new movie or continue an existing one.
 
-**Usage:**
+**Usage (new run):**
 ```bash
-tutopanda query --inputs=<path> --using-blueprint=<path> [--dryrun] [--nonInteractive]
+tutopanda generate [<inquiry-prompt>] --inputs=<path> --blueprint=<path> [--dry-run] [--nonInteractive] [--up-to-layer=<n>]
+```
+
+**Usage (continue an existing movie):**
+```bash
+tutopanda generate --movie-id=<movie-id> [--blueprint=<path>] [--dry-run] [--nonInteractive] [--up-to-layer=<n>]
+tutopanda generate --last [--dry-run] [--nonInteractive] [--up-to-layer=<n>]
 ```
 
 **Options:**
-- `--inputs` (required): Path to inputs YAML file
-- `--using-blueprint` (required): Path to blueprint YAML file copied by `tutopanda init`
-- `--dryrun` (optional): Execute a mocked run without calling providers
-- `--nonInteractive` (optional): Skip confirmation prompt
+- `--inputs` / `--in` (required for new runs): Path to inputs YAML file
+- `--blueprint` / `--bp` (required for new runs): Path to blueprint YAML file
+- `--movie-id` / `--id` (mutually exclusive with `--last`): Continue a specific movie
+- `--last` (mutually exclusive with `--movie-id`): Continue the most recent movie (fails if none recorded)
+- `--dry-run`: Execute a mocked run without calling providers
+- `--nonInteractive`: Skip confirmation prompt
+- `--up-to-layer` / `--up`: Stop execution after the specified layer (live runs only)
 
 **Behavior:**
-1. Loads and validates the blueprint and inputs
-2. Generates a unique movie ID (8-character UUID prefix, e.g., `q123456`)
-3. Creates movie directory: `~/.tutopanda/builds/movie-{id}/`
-4. Executes the workflow, invoking configured providers
-5. Stores all artifacts, manifests, and metadata
+1. New runs: validate inputs/blueprint, generate a new movie id, create `builds/movie-{id}/`, and execute the workflow.
+2. Continuing runs: load the existing manifest and friendly workspace, apply any friendly edits, regenerate the plan, and execute with the stored blueprint (or an explicit override).
+3. Friendly view under `movies/<id>` stays in sync after successful runs.
+4. The CLI records the latest movie id so `--last` can target it explicitly; if missing, the command fails with an error.
 
-**Example:**
+**Examples:**
 ```bash
-tutopanda query \
-  --inputs=~/.tutopanda/config/inputs.yaml \
-  --using-blueprint=~/.tutopanda/config/blueprints/image-audio.yaml
-```
+# New run with inline prompt
+tutopanda generate "Explain black holes" --inputs=~/inputs.yaml --blueprint=~/config/blueprints/audio-only.yaml
 
-**Output:**
-```
-Movie ID: movie-q123456
-Outputs stored in: ~/.tutopanda/builds/movie-q123456/
+# Continue a specific movie
+tutopanda generate --movie-id=movie-q123456 --up-to-layer=1
+
+# Continue the most recent movie
+tutopanda generate --last --dry-run
 ```
 
 ---
 
-### `tutopanda edit`
+### `tutopanda clean`
 
-Modify an existing movie with new inputs or interactive editing.
+Remove the friendly view and build artefacts for a movie.
 
-**Three Modes:**
-
-#### 1. Direct Re-execution
-Re-run the workflow with new inputs:
-
+**Usage:**
 ```bash
-tutopanda edit \
-  --movieId=movie-q123456 \
-  --inputs=edited-inputs.yaml \
-  [--using-blueprint=<path>]
-```
-
-**Options:**
-- `--movieId` (required): Movie ID to edit
-- `--inputs` (required): Path to updated inputs YAML file
-- `--using-blueprint` (optional): New blueprint to use
-
-#### 2. Interactive Setup
-Create a workspace for manual artifact editing:
-
-```bash
-tutopanda edit --movieId=movie-q123456 --interactiveEdit
-```
-
-**Behavior:**
-- Opens a menu to select artifacts
-- Exports selected artifacts to `workspaces/movie-{id}/`
-- Allows manual editing of files
-
-#### 3. Interactive Submit
-Apply edited artifacts and replay the workflow:
-
-```bash
-tutopanda edit --movieId=movie-q123456 --submitEdits
-```
-
-**Behavior:**
-- Validates edited artifacts
-- Re-executes the workflow from the edited node onward
-- Updates movie with new outputs
-
-**Example Workflow:**
-```bash
-# 1. Create workspace
-tutopanda edit --movieId=movie-q123456 --interactiveEdit
-
-# 2. Manually edit files in workspaces/movie-q123456/
-
-# 3. Submit edits
-tutopanda edit --movieId=movie-q123456 --submitEdits
+tutopanda clean --movie-id=<movie-id>
 ```
 
 ---
@@ -360,11 +322,11 @@ Export movie data (prompts, artifacts, metadata) for inspection.
 
 **Usage:**
 ```bash
-tutopanda inspect --movieId=<id>
+tutopanda inspect --movie-id=<id>
 ```
 
 **Options:**
-- `--movieId` (required): Movie ID to inspect
+- `--movie-id` / `--id` (required): Movie ID to inspect
 
 **Behavior:**
 Displays:
@@ -375,7 +337,7 @@ Displays:
 
 **Example:**
 ```bash
-tutopanda inspect --movieId=movie-q123456
+tutopanda inspect --movie-id=movie-q123456
 ```
 
 ---
@@ -386,11 +348,11 @@ Show configured providers and their readiness status.
 
 **Usage:**
 ```bash
-tutopanda providers:list --using-blueprint=<path>
+tutopanda providers:list --blueprint=<path>
 ```
 
 **Options:**
-- `--using-blueprint` (required): Path to the blueprint YAML file whose providers should be inspected
+- `--blueprint` / `--bp` (required): Path to the blueprint YAML file whose providers should be inspected
 
 **Behavior:**
 1. Loads the blueprint
@@ -400,7 +362,7 @@ tutopanda providers:list --using-blueprint=<path>
 
 **Example:**
 ```bash
-tutopanda providers:list --using-blueprint=~/.tutopanda/config/blueprints/image-audio.yaml
+tutopanda providers:list --blueprint=~/.tutopanda/config/blueprints/image-audio.yaml
 ```
 
 **Output:**
@@ -498,27 +460,26 @@ tutopanda blueprints:validate ~/.tutopanda/config/blueprints/image-audio.yaml
 
 ---
 
-### `tutopanda viewer`
+### `tutopanda viewer:view`
 
-Launch the Remotion-based viewer for playback.
+Open the viewer for a movie (starts the server if needed).
 
 **Usage:**
 ```bash
-tutopanda viewer [--movie=<id>]
+tutopanda viewer:view --movie-id=<id>
 ```
 
 **Options:**
-- `--movie` (optional): Movie ID to load on startup
+- `--movie-id` / `--id` (required): Movie ID to open
+- `--viewerHost`, `--viewerPort` (optional): Override host/port
 
 **Behavior:**
-- Launches a local web server with the Remotion viewer
-- Loads the specified movie (if provided)
-- Displays timeline with images, audio, and composition
+- Starts the bundled viewer server if not running, then opens the movie page.
+- Displays timeline with images, audio, and composition.
 
-**Example:**
-```bash
-tutopanda viewer --movie=movie-q123456
-```
+**Related commands:**
+- `tutopanda viewer:start` — start the server in the foreground.
+- `tutopanda viewer:stop` — stop the background server.
 
 ---
 
@@ -994,36 +955,34 @@ Node IDs are deterministic and derived from:
 
 ## Advanced Topics
 
-### Interactive Editing Workflow
+### Iteration Workflow
 
-The interactive editing feature allows manual modification of generated artifacts.
+Continuing work on an existing movie uses the same `generate` command with a target movie ID.
 
 **Workflow:**
 
-1. **Create workspace:**
+1. **Generate once to seed the movie:**
    ```bash
-   tutopanda edit --movieId=movie-q123456 --interactiveEdit
+   tutopanda generate --inputs=./inputs.yaml --blueprint=./config/blueprints/audio-only.yaml
+   # Output: movie-q123456
    ```
-   - Presents a menu of artifacts
-   - Exports selected artifacts to `workspaces/movie-q123456/`
 
-2. **Edit artifacts:**
-   - Manually edit files in the workspace
-   - Modify text, replace images, adjust audio
+2. **Apply edits locally:**
+   - Update `builds/movie-q123456/inputs.yaml` (or edit artefacts in the friendly `movies/movie-q123456/` folder).
 
-3. **Submit edits:**
+3. **Re-run generation against the same movie:**
    ```bash
-   tutopanda edit --movieId=movie-q123456 --submitEdits
+   tutopanda generate --movie-id=movie-q123456
    ```
-   - Validates edited artifacts
-   - Re-executes workflow from edited node onward
-   - Generates new downstream artifacts
+
+4. **Review:**
+   - Friendly view is refreshed under `movies/movie-q123456/`.
+   - Use `tutopanda viewer:view --movie-id=movie-q123456` to open the viewer.
 
 **Use Cases:**
-- Fix LLM-generated script errors
-- Replace unsatisfactory images
-- Adjust audio narration
-- Tweak timeline composition
+- Fix LLM-generated script errors by editing inputs and rerunning.
+- Replace unsatisfactory artefacts from friendly edits.
+- Regenerate partial workflows with `--up-to-layer` to limit execution.
 
 ### Blueprint Modules
 
@@ -1116,7 +1075,7 @@ Dry run mode executes a mocked workflow without calling providers.
 
 **Usage:**
 ```bash
-tutopanda query --inputs=my-inputs.yaml --dryrun
+tutopanda generate --inputs=my-inputs.yaml --blueprint=./blueprints/audio-only.yaml --dry-run
 ```
 
 **Behavior:**
@@ -1138,7 +1097,7 @@ Non-interactive mode skips confirmation prompts.
 
 **Usage:**
 ```bash
-tutopanda query --inputs=my-inputs.yaml --nonInteractive
+tutopanda generate --inputs=my-inputs.yaml --blueprint=./blueprints/audio-only.yaml --nonInteractive
 ```
 
 **Use Cases:**
@@ -1166,9 +1125,9 @@ inputs:
 
 **Command:**
 ```bash
-tutopanda query \
+tutopanda generate \
   --inputs=audio-inputs.yaml \
-  --using-blueprint=~/.tutopanda/config/blueprints/audio-only.yaml
+  --blueprint=~/.tutopanda/config/blueprints/audio-only.yaml
 ```
 
 **Outputs:**
@@ -1199,9 +1158,9 @@ inputs:
 
 **Command:**
 ```bash
-tutopanda query \
+tutopanda generate \
   --inputs=image-audio-inputs.yaml \
-  --using-blueprint=~/.tutopanda/config/blueprints/image-audio.yaml
+  --blueprint=~/.tutopanda/config/blueprints/image-audio.yaml
 ```
 
 **Outputs:**
@@ -1212,47 +1171,34 @@ tutopanda query \
 
 **View Result:**
 ```bash
-tutopanda viewer --movie=movie-{id}
+tutopanda viewer:view --movie-id=movie-{id}
 ```
 
 ---
 
-### Example 3: Interactive Editing
+### Example 3: Iterate on an existing movie
 
-**Scenario:** Fix a typo in the generated script.
+**Scenario:** Regenerate after updating inputs.
 
 **Step 1: Generate movie**
 ```bash
-tutopanda query --inputs=my-inputs.yaml
+tutopanda generate --inputs=my-inputs.yaml --blueprint=~/.tutopanda/config/blueprints/image-audio.yaml
 # Output: movie-a1b2c3d4
 ```
 
-**Step 2: Inspect artifacts**
+**Step 2: Update inputs**
 ```bash
-tutopanda inspect --movieId=movie-a1b2c3d4
+# Edit builds/movie-a1b2c3d4/inputs.yaml with new values
 ```
 
-**Step 3: Create workspace**
+**Step 3: Re-run generation against the same movie**
 ```bash
-tutopanda edit --movieId=movie-a1b2c3d4 --interactiveEdit
-# Select "NarrationScript[0]" from menu
-```
-
-**Step 4: Edit artifact**
-```bash
-# Edit workspaces/movie-a1b2c3d4/NarrationScript-0.txt
-# Fix typo: "The Romen Empire" → "The Roman Empire"
-```
-
-**Step 5: Submit edits**
-```bash
-tutopanda edit --movieId=movie-a1b2c3d4 --submitEdits
+tutopanda generate --movie-id=movie-a1b2c3d4
 ```
 
 **Result:**
-- Updated narration text
-- Re-generated audio for segment 0
-- Timeline updated with new audio
+- Updated plan and outputs for the same movie ID
+- Friendly view refreshed under `movies/movie-a1b2c3d4`
 
 ---
 
@@ -1354,24 +1300,24 @@ Error: Invalid sdkMapping for Replicate producer
 
 Set environment variable for verbose logging:
 ```bash
-DEBUG=tutopanda:* tutopanda query --inputs=my-inputs.yaml
+DEBUG=tutopanda:* tutopanda generate --inputs=my-inputs.yaml --blueprint=./config/blueprints/audio-only.yaml
 ```
 
 ### Validation Commands
 
 **Validate blueprint:**
 ```bash
-tutopanda blueprints:validate --using-blueprint=my-blueprint.yaml
+tutopanda blueprints:validate my-blueprint.yaml
 ```
 
 **Check providers:**
 ```bash
-tutopanda providers:list --using-blueprint=my-blueprint.yaml
+tutopanda providers:list --blueprint=my-blueprint.yaml
 ```
 
 **Dry run:**
 ```bash
-tutopanda query --inputs=my-inputs.yaml --dryrun
+tutopanda generate --inputs=my-inputs.yaml --blueprint=./config/blueprints/audio-only.yaml --dry-run
 ```
 
 ---
@@ -1402,7 +1348,7 @@ Movie IDs are 8-character prefixes of UUIDs:
 
 ### Default Values
 
-- **Blueprint:** *(none – always pass `--using-blueprint`)*
+- **Blueprint:** *(none – always pass `--blueprint`/`--bp`)*
 - **Config Path:** `~/.tutopanda/`
 - **Storage Base Path:** `builds/`
 - **Environment:** `local`

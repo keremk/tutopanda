@@ -20,7 +20,7 @@
 
   Phase 3: CLI Integration
 
-  - Added --using-blueprint flag to query command
+  - Added blueprint flag to the generate command
   - Created 3 example blueprints: audio-only, full-video, text-to-video
   - Implemented 3 new CLI commands:
     - blueprints:list - Show available sections
@@ -31,7 +31,7 @@
   🚀 How to Use
 
   # Use a custom blueprint
-  tutopanda query "Tell me about TypeScript" --using-blueprint=./cli/config/blueprints/audio-only.json
+  tutopanda generate "Tell me about TypeScript" --blueprint=./cli/config/blueprints/audio-only.json
 
   # List available sections
   tutopanda blueprints:list
