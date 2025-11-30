@@ -93,36 +93,7 @@ const size = resolveSize(resolvedInputs);   // '720p'
 
 #### 2. Provider Settings Flow
 
-```typescript
-// CLI: Provider settings define models and their configurations
-// (cli/src/lib/producer-options.ts)
-{
-  producer: 'AudioProducer',
-  providers: [
-    {
-      priority: 'main',
-      provider: 'replicate',
-      model: 'minimax/speech-02-hd',
-      customAttributes: {
-        // Model-specific attributes that DON'T come from projectConfig
-        speed: 1.0,
-        pitch: 0,
-        // voice_id is NOT here - comes from projectConfig via resolvedInputs
-      }
-    }
-  ]
-}
-
-// Provider: Handler receives both customAttributes and resolvedInputs
-const input = mergeInputs(config.defaults ?? {}, customAttributes);
-input[config.textKey] = text; // from resolvedInputs
-
-// Values from resolvedInputs OVERRIDE customAttributes
-if (voice) {
-  const voiceFieldName = getVoiceFieldName(request.model);
-  input[voiceFieldName] = voice; // Takes precedence
-}
-```
+Replicate producers are now schema-first: the blueprint supplies `sdkMapping` and `inputBindings`, the runtime builds the payload via `runtime.sdk.buildPayload()`, and the payload is validated against `extras.schema.input`. Provider config defaults/customAttributes are intentionally ignored—inputs must come from the mapped, canonical IDs so failures surface immediately.
 
 ### Why This Architecture?
 
@@ -221,28 +192,9 @@ if (voice) {
 }
 ```
 
-### 4. Configuration Merging Strategy
+### 4. Schema-first Input Construction
 
-Inputs are built by merging defaults and customAttributes, then projectConfig values override:
-
-```typescript
-// 1. Merge defaults with customAttributes
-const customAttributes = isRecord(request.context.providerConfig)
-  ? (request.context.providerConfig as Record<string, unknown>).customAttributes
-  : undefined;
-const input = mergeInputs(config.defaults ?? {}, customAttributes);
-
-// 2. Set required fields from resolvedInputs
-input[config.textKey] = text;
-
-// 3. Override with projectConfig values (takes precedence)
-if (voice) {
-  input[getVoiceFieldName(request.model)] = voice;
-}
-if (size) {
-  input[getSizeFieldName(request.model)] = size;
-}
-```
+Inputs now come solely from `runtime.sdk.buildPayload()` using the mapping provided by the blueprint (sdkMapping + inputBindings). The payload is validated against `extras.schema.input` before calling Replicate. Provider config defaults/customAttributes are ignored—if a mapped value is missing or invalid, the handler throws immediately instead of supplying a fallback.
 
 ---
 
@@ -267,12 +219,11 @@ import { createProducerHandlerFactory } from '../../sdk/handler-factory.js';
 import type { HandlerFactory } from '../../types.js';
 import { createProviderError } from '../../sdk/errors.js';
 import {
+  createSchemaFirstReplicateHandler,
   createReplicateClientManager,
   normalizeReplicateOutput,
   buildArtefactsFromUrls,
   extractPlannerContext,
-  mergeInputs,
-  isRecord,
   type PlannerContext,
 } from '../../sdk/replicate/index.js';
 
@@ -310,37 +261,19 @@ export function createReplicateYourDomainHandler(): HandlerFactory {
 
       // 4. Implement invoke (core logic)
       invoke: async ({ request, runtime }) => {
-        // Get resolved inputs and config
+        // Schema-first input
         const replicate = await clientManager.ensure();
-        const config = runtime.config.parse<ReplicateYourDomainConfig>(parseConfig);
-        const resolvedInputs = runtime.inputs.all();
         const plannerContext = extractPlannerContext(request);
-
-        // Resolve required inputs
-        const requiredInput = resolveRequiredInput(resolvedInputs, plannerContext);
-        if (!requiredInput) {
-          throw createProviderError('Missing required input', {
-            code: 'missing_input',
-            kind: 'user_input',
-            causedByUser: true,
+        const inputSchema = (request.context.extras as any)?.schema?.input;
+        if (!inputSchema) {
+          throw createProviderError('Missing input schema for model.', {
+            code: 'missing_input_schema',
+            kind: 'unknown',
           });
         }
 
-        // Build Replicate input
-        const customAttributes = isRecord(request.context.providerConfig)
-          ? (request.context.providerConfig as Record<string, unknown>).customAttributes
-          : undefined;
-        const input = mergeInputs(config.defaults ?? {}, customAttributes);
-
-        // Set required fields
-        input[config.promptKey] = requiredInput;
-
-        // Map projectConfig values (if applicable)
-        const projectConfigValue = resolveProjectConfigValue(resolvedInputs);
-        if (projectConfigValue) {
-          const fieldName = getFieldName(request.model);
-          input[fieldName] = projectConfigValue;
-        }
+        const input = runtime.sdk.buildPayload();
+        validatePayload(inputSchema, input, 'input');
 
         // Call Replicate API
         let predictionOutput: unknown;
@@ -980,9 +913,8 @@ export function createReplicateAudioHandler(): HandlerFactory {
         // Resolve voice from projectConfig
         const voice = resolveVoice(resolvedInputs);
 
-        // Build input
-        const input = mergeInputs(config.defaults ?? {}, customAttributes);
-        input[config.textKey] = text;
+        // Build input from sdk mapping
+        const input = runtime.sdk.buildPayload();
 
         // Map voice to model-specific field name
         if (voice) {
@@ -1061,51 +993,12 @@ The video producer generates videos for each segment:
 // - Optionally handles images (SegmentStartImage, LastFrameImage)
 
 export function createReplicateVideoHandler(): HandlerFactory {
-  return (init) => {
-    return createProducerHandlerFactory({
-      domain: 'media',
-      configValidator: parseReplicateVideoConfig,
-      warmStart: async () => {
-        await clientManager.ensure();
-      },
-      invoke: async ({ request, runtime }) => {
-        const resolvedInputs = runtime.inputs.all();
-        const plannerContext = extractPlannerContext(request);
-
-        // Resolve required prompt
-        const prompt = resolvePrompt(resolvedInputs, plannerContext);
-        if (!prompt) {
-          throw createProviderError('No prompt available');
-        }
-
-        // Build input
-        const input = mergeInputs(config.defaults ?? {}, customAttributes);
-        input[config.promptKey] = prompt;
-
-        // Optionally add image for image-to-video
-        const image = resolveOptionalImage(resolvedInputs, plannerContext);
-        if (image && config.imageKey) {
-          input[config.imageKey] = toBufferIfNeeded(image);
-        }
-
-        // Map size from projectConfig
-        const size = resolveSize(resolvedInputs);
-        if (size) {
-          input[getSizeFieldName(request.model)] = size;
-        }
-
-        // Map aspect ratio from projectConfig
-        const aspectRatio = resolveAspectRatio(resolvedInputs);
-        if (aspectRatio) {
-          input[getAspectRatioFieldName(request.model)] = aspectRatio;
-        }
-
-        // Call API and build artefacts
-        const predictionOutput = await replicate.run(modelIdentifier, { input });
-        // ... rest of implementation
-      },
-    })(init);
-  };
+  return createSchemaFirstReplicateHandler({
+    outputMimeType: 'video/mp4',
+    logKey: 'video',
+    missingSchemaMessage: 'Missing input schema for Replicate video provider.',
+    predictionFailedMessage: 'Replicate video prediction failed.',
+  });
 }
 
 // Resolution functions
@@ -1153,63 +1046,14 @@ The music producer generates a single music track for the entire movie:
 // - No segment index needed
 
 export function createReplicateMusicHandler(): HandlerFactory {
-  return (init) => {
-    const factory = createProducerHandlerFactory({
-      domain: 'media',
-      configValidator: parseReplicateMusicConfig,
-      warmStart: async () => {
-        await clientManager.ensure();
-      },
-      invoke: async ({ request, runtime }) => {
-        const resolvedInputs = runtime.inputs.all();
-
-        // Resolve music prompt (no segment index needed)
-        const prompt = resolveMusicPrompt(resolvedInputs);
-        if (!prompt) {
-          throw createProviderError('No music prompt available');
-        }
-
-        // Resolve duration from projectConfig
-        const duration = resolveDuration(resolvedInputs);
-        if (duration === undefined) {
-          throw createProviderError('No duration available');
-        }
-
-        // Build input
-        const input = mergeInputs(config.defaults ?? {}, customAttributes);
-        input[config.promptKey] = prompt;
-
-        // Map duration with model-specific multiplier and cap
-        const mappedDuration = capDuration(
-          duration,
-          config.durationMultiplier,
-          config.maxDuration
-        );
-        input[config.durationKey] = mappedDuration;
-
-        // Call API and build artefacts
-        const predictionOutput = await replicate.run(modelIdentifier, { input });
-        // ... rest of implementation
-
-        return {
-          status: 'succeeded',
-          artefacts,
-          diagnostics: {
-            provider: 'replicate',
-            model: request.model,
-            input,
-            outputUrls,
-            duration, // Original duration
-            mappedDuration, // After multiplier and cap
-          },
-        };
-      },
-    });
-    return factory(init);
-  };
+  return createSchemaFirstReplicateHandler({
+    outputMimeType: 'audio/mpeg',
+    logKey: 'music',
+    missingSchemaMessage: 'Missing input schema for Replicate music provider.',
+    predictionFailedMessage: 'Replicate music prediction failed.',
+  });
 }
 
-// Resolution functions
 function resolveMusicPrompt(resolvedInputs: Record<string, unknown>): string | undefined {
   const promptInput = resolvedInputs['MusicPrompt'];
 
@@ -1260,65 +1104,14 @@ The image producer generates images for each segment:
 // - May produce multiple images per segment
 
 export function createReplicateTextToImageHandler(): HandlerFactory {
-  return (init) => {
-    const factory = createProducerHandlerFactory({
-      domain: 'media',
-      configValidator: parseReplicateTextToImageConfig,
-      warmStart: async () => {
-        await clientManager.ensure();
-      },
-      invoke: async ({ request, runtime }) => {
-        const resolvedInputs = runtime.inputs.all();
-        const plannerContext = extractPlannerContext(request);
-
-        // Resolve prompt using segment index
-        const prompt = resolvePrompt(resolvedInputs, plannerContext);
-        if (!prompt) {
-          throw createProviderError('No prompt available');
-        }
-
-        // Build input
-        const input = mergeInputs(config.defaults ?? {}, customAttributes);
-        input[config.promptKey] = prompt;
-
-        // Map size from projectConfig
-        const size = resolveSize(resolvedInputs);
-        if (size) {
-          const sizeFieldName = getSizeFieldName(request.model);
-          input[sizeFieldName] = size;
-        }
-
-        // Map aspect ratio from projectConfig
-        const aspectRatio = resolveAspectRatio(resolvedInputs);
-        if (aspectRatio) {
-          const aspectRatioFieldName = getAspectRatioFieldName(request.model);
-          input[aspectRatioFieldName] = aspectRatio;
-        }
-
-        // Call API and build artefacts
-        const predictionOutput = await replicate.run(modelIdentifier, { input });
-        // ... rest of implementation
-      },
-    });
-    return factory(init);
-  };
+  return createSchemaFirstReplicateHandler({
+    outputMimeType: 'image/png',
+    logKey: 'image',
+    missingSchemaMessage: 'Missing input schema for Replicate image provider.',
+    predictionFailedMessage: 'Replicate prediction failed',
+  });
 }
 
-// Model-specific field mapping
-function getSizeFieldName(model: string): string {
-  if (model.includes('seedream')) {
-    return 'size'; // bytedance/seedream uses 'size'
-  }
-  if (model.includes('imagen')) {
-    return 'image_size'; // google/imagen uses 'image_size'
-  }
-  return 'size'; // Default
-}
-
-function getAspectRatioFieldName(model: string): string {
-  // Most models use 'aspect_ratio'
-  return 'aspect_ratio';
-}
 ```
 
 ---

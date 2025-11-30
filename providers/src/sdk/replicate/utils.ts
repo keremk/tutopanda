@@ -16,24 +16,3 @@ export function extractPlannerContext(request: ProviderJobContext): PlannerConte
   const planner = extras && typeof extras === 'object' ? (extras as Record<string, unknown>).plannerContext : null;
   return planner && typeof planner === 'object' ? (planner as PlannerContext) : {};
 }
-
-/**
- * Merges default values with custom attributes/overrides.
- * Custom attributes take precedence over defaults.
- */
-export function mergeInputs(
-  defaults: Record<string, unknown>,
-  customAttributes?: Record<string, unknown> | null,
-): Record<string, unknown> {
-  return {
-    ...defaults,
-    ...(customAttributes ?? {}),
-  };
-}
-
-/**
- * Type guard to check if value is a record object.
- */
-export function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
-}
