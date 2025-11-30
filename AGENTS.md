@@ -14,10 +14,14 @@ Run `pnpm install` once to hydrate the workspaces. Use `pnpm dev` for the combin
 
 > **EXTREMELY IMPORTANT** DO NOT JUST ADD default fallbacks just to make sure that you have something, especially for inputs that are expected. Than you are silently failing and making some random assumptions. Always throw, fail fast and so those can be fixed.
 
+> **EXTREMELY IMPORTANT** Absolutely no fallbacks: never quietly substitute defaults or best guesses when inputs or mappings are missing. Fail fast, surface the missing value, and stop before calling any SDK so issues can be fixed explicitly.
+
 > **EXTREMELY IMPORTANT** When running vitest, make sure to cd into the project and run it there, here is how to do for CLI for example.
 ```bash
 cd cli && pnpm vitest run --pool=threads --poolOptions.threads.singleThread
 ```
+
+> **VERY IMPORTANT** Do not add “extra defensive” guards (e.g. `typeof source.durationMultiplier === 'number' ? ...` as a silent fallback). Trust the defined schema/mapping; if a value is absent or malformed, throw immediately instead of guessing or defaulting.
 
 > **Important**: Do not write overly defensive code. Do production quality checking but do not write it in an overly defensive way. Clear and readable code is the key. Don’t add speculative guards, elaborate null checks, or fallback branches that handle scenarios we don’t actually expect today. Stick to the known contract, keep control flow straightforward, and only handle concrete failure modes we already understand (e.g., validation errors that truly happen).
 
