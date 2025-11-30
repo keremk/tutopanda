@@ -6,17 +6,11 @@ import {
   normalizeReplicateOutput,
   buildArtefactsFromUrls,
   extractPlannerContext,
-  mergeInputs,
-  isRecord,
   runReplicateWithRetries,
 } from '../../sdk/replicate/index.js';
 import { validatePayload } from '../../sdk/schema-validator.js';
 
-interface ReplicateAudioConfig {
-  textKey: string;
-  defaults?: Record<string, unknown>;
-  outputMimeType: string;
-}
+const OUTPUT_MIME_TYPE = 'audio/mpeg';
 
 export function createReplicateAudioHandler(): HandlerFactory {
   return (init) => {
@@ -25,7 +19,6 @@ export function createReplicateAudioHandler(): HandlerFactory {
 
     const factory = createProducerHandlerFactory({
       domain: 'media',
-      configValidator: parseReplicateAudioConfig,
       warmStart: async () => {
         try {
           await clientManager.ensure();
@@ -40,46 +33,29 @@ export function createReplicateAudioHandler(): HandlerFactory {
       },
       invoke: async ({ request, runtime }) => {
         const replicate = await clientManager.ensure();
-        const config = runtime.config.parse<ReplicateAudioConfig>(parseReplicateAudioConfig);
         const plannerContext = extractPlannerContext(request);
-        const sdkPayload = runtime.sdk.buildPayload();
         const inputSchema = readInputSchema(request);
+        if (!inputSchema) {
+          throw createProviderError('Missing input schema for Replicate audio provider.', {
+            code: 'missing_input_schema',
+            kind: 'unknown',
+          });
+        }
+
+        const sdkPayload = runtime.sdk.buildPayload();
         validatePayload(inputSchema, sdkPayload, 'input');
-        const text = sdkPayload[config.textKey] as string | undefined;
-        const voice = sdkPayload.voice_id ?? sdkPayload.voice;
-
-        if (!text) {
-          logger?.warn?.('providers.replicate.audio.missingText', {
-            producer: request.jobId,
-            keys: Object.keys(runtime.inputs.all()),
-            plannerContext,
-          });
-          throw createProviderError('No text available for audio generation.', {
-            code: 'missing_text',
-            kind: 'user_input',
-            causedByUser: true,
-          });
-        }
-
-        // Build input by merging defaults with customAttributes
-        const customAttributes = isRecord(request.context.providerConfig)
-          ? (request.context.providerConfig as Record<string, unknown>).customAttributes
-          : undefined;
-
-        const input = mergeInputs(config.defaults ?? {}, customAttributes as Record<string, unknown> | undefined);
-        Object.assign(input, sdkPayload);
-        input[config.textKey] = text;
-
-        // Map voice from input if provided (takes precedence over customAttributes)
-        if (voice) {
-          const voiceFieldName = getVoiceFieldName(request.model);
-          if (!input[voiceFieldName]) {
-            input[voiceFieldName] = voice;
-          }
-        }
+        const input = { ...sdkPayload };
 
         let predictionOutput: unknown;
         const modelIdentifier = request.model as `${string}/${string}` | `${string}/${string}:${string}`;
+
+        logger?.info?.('providers.replicate.audio.invoke.start', {
+          provider: descriptor.provider,
+          model: request.model,
+          jobId: request.jobId,
+          inputKeys: Object.keys(input),
+          plannerContext,
+        });
 
         try {
           predictionOutput = await runReplicateWithRetries({
@@ -95,13 +71,10 @@ export function createReplicateAudioHandler(): HandlerFactory {
           });
         } catch (error) {
           logger?.error?.('providers.replicate.audio.invoke.error', {
-            producer: request.jobId,
+            provider: descriptor.provider,
             model: request.model,
-            plannerContext,
-            inputKeys: Object.keys(input),
-            inputPreview: Object.fromEntries(Object.entries(input).slice(0, 5)),
+            jobId: request.jobId,
             error: error instanceof Error ? error.message : String(error),
-            stack: error instanceof Error ? error.stack : undefined,
           });
           throw createProviderError('Replicate prediction failed.', {
             code: 'replicate_prediction_failed',
@@ -115,7 +88,7 @@ export function createReplicateAudioHandler(): HandlerFactory {
         const artefacts = await buildArtefactsFromUrls({
           produces: request.produces,
           urls: outputUrls,
-          mimeType: config.outputMimeType,
+          mimeType: OUTPUT_MIME_TYPE,
           mode: init.mode,
         });
 
@@ -127,10 +100,8 @@ export function createReplicateAudioHandler(): HandlerFactory {
           input,
           outputUrls,
           plannerContext,
+          ...(outputUrls.length === 0 && { rawOutput: predictionOutput }),
         };
-        if (outputUrls.length === 0) {
-          diagnostics.rawOutput = predictionOutput;
-        }
 
         return {
           status,
@@ -142,42 +113,6 @@ export function createReplicateAudioHandler(): HandlerFactory {
 
     return factory(init);
   };
-}
-
-function parseReplicateAudioConfig(raw: unknown): ReplicateAudioConfig {
-  const source = isRecord(raw) ? raw : {};
-
-  // Merge defaults
-  const defaults: Record<string, unknown> = {
-    ...(isRecord(source.defaults) ? source.defaults : {}),
-    ...(isRecord(source.inputs) ? source.inputs : {}),
-  };
-
-  // Determine textKey based on model (minimax uses 'text', elevenlabs uses 'prompt')
-  const textKey = typeof source.textKey === 'string' && source.textKey ? source.textKey : 'text';
-
-  // Fixed output mime type for audio
-  const outputMimeType = 'audio/mpeg';
-
-  return {
-    textKey,
-    defaults,
-    outputMimeType,
-  };
-}
-
-/**
- * Determine the voice parameter name based on the model.
- * Different models use different parameter names:
- * - minimax models: 'voice_id'
- * - elevenlabs models: 'voice'
- */
-function getVoiceFieldName(model: string): string {
-  if (model.includes('elevenlabs')) {
-    return 'voice';
-  }
-  // Default to minimax format
-  return 'voice_id';
 }
 
 function readInputSchema(request: ProviderJobContext): string | undefined {

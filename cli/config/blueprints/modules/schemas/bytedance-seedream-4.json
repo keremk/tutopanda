@@ -18,6 +18,19 @@
       "default": "2K",
       "x-order": 2
     },
+    "output_size": {
+      "enum": [
+        "1K",
+        "2K",
+        "4K",
+        "custom"
+      ],
+      "type": "string",
+      "title": "output_size",
+      "description": "Image resolution: 1K (1024px), 2K (2048px), 4K (4096px), or 'custom' for specific dimensions.",
+      "default": "2K",
+      "x-order": 2
+    },
     "width": {
       "type": "integer",
       "title": "Width",

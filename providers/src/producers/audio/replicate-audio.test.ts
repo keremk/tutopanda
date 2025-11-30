@@ -1,1021 +1,224 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { createReplicateAudioHandler } from './replicate-audio.js';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ProviderJobContext, SecretResolver } from '../../types.js';
+import { createReplicateAudioHandler } from './replicate-audio.js';
 
-// Mock the Replicate SDK
 vi.mock('replicate', () => ({
   default: vi.fn().mockImplementation(() => ({
     run: vi.fn(),
   })),
 }));
 
-// Mock fetch globally
 global.fetch = vi.fn();
 
-function attachJobContext(request: ProviderJobContext): ProviderJobContext {
-  const extras = request.context.extras
-    ?? (request.context.extras = {} as Record<string, unknown>);
-  const resolved = (extras.resolvedInputs = (extras.resolvedInputs ?? {}) as Record<string, unknown>);
-  const planner = extras.plannerContext && typeof extras.plannerContext === 'object'
-    ? (extras.plannerContext as { index?: { segment?: number } })
-    : { index: { segment: 0 } };
-  const segmentIndex = planner.index?.segment ?? 0;
-  const canonicalId = `Artifact:ScriptGeneration.NarrationScript[segment=${segmentIndex}]`;
-  const narration = extractNarration(resolved, segmentIndex);
-  if (narration !== undefined) {
-    resolved.TextInput = narration;
-    resolved[canonicalId] = narration;
-    resolved['Input:TextInput'] = narration;
-  }
-  const voiceValue = resolved.VoiceId ?? resolved['Input:VoiceId'];
-  if (voiceValue !== undefined) {
-    resolved.VoiceId = voiceValue as string;
-    resolved['Input:VoiceId'] = voiceValue as string;
-  }
+const schemaText = JSON.stringify({
+  type: 'object',
+  required: ['text', 'voice_id'],
+  properties: {
+    text: { type: 'string' },
+    voice_id: { type: 'string' },
+  },
+});
 
-  const jobContext = {
-    inputBindings: {
-      TextInput: canonicalId,
-      ...(voiceValue !== undefined ? { VoiceId: 'Input:VoiceId' } : {}),
-    },
-    sdkMapping: {
-      TextInput: { field: readTextField(request.context.providerConfig), required: true },
-      ...(voiceValue !== undefined ? { VoiceId: { field: 'voice_id', required: false } } : {}),
-    },
-  };
-  extras.jobContext = {
-    ...(extras.jobContext ?? {}),
-    ...jobContext,
-  };
-  return request;
-}
-
-function readTextField(config: ProviderJobContext['context']['providerConfig']): string {
-  if (config && typeof config === 'object' && 'textKey' in config) {
-    const value = (config as Record<string, unknown>).textKey;
-    if (typeof value === 'string' && value.trim().length > 0) {
-      return value;
-    }
-  }
-  return 'text';
-}
-
-function extractNarration(resolvedInputs: Record<string, unknown>, segmentIndex: number): string | undefined {
-  const source = resolvedInputs.TextInput ?? resolvedInputs.SegmentNarration;
-  if (Array.isArray(source)) {
-    const entry = source[segmentIndex] ?? source[0];
-    if (typeof entry === 'string' && entry.trim()) {
-      return entry;
-    }
-    return undefined;
-  }
-  if (typeof source === 'string' && source.trim()) {
-    return source;
-  }
-  return undefined;
-}
-
-describe('createReplicateAudioHandler', () => {
+describe('replicate-audio (schema-first, no fallbacks)', () => {
   let secretResolver: SecretResolver;
+  type TestExtras = {
+    resolvedInputs: Record<string, unknown>;
+    jobContext: {
+      inputBindings: Record<string, string>;
+      sdkMapping: Record<string, { field: string; required?: boolean }>;
+    };
+    plannerContext: { index?: { segment?: number } };
+    schema: { input: string };
+  };
 
   beforeEach(() => {
     vi.clearAllMocks();
     secretResolver = {
       async getSecret(key: string) {
-        if (key === 'REPLICATE_API_TOKEN') {
-          return 'test-token';
-        }
-        return null;
+        return key === 'REPLICATE_API_TOKEN' ? 'test-replicate-token' : null;
       },
     };
+    (global.fetch as any).mockResolvedValue({
+      ok: true,
+      arrayBuffer: async () => new ArrayBuffer(4),
+    });
   });
 
-  describe('parseReplicateAudioConfig', () => {
-    it('uses default textKey when not specified', async () => {
-      const handler = createReplicateAudioHandler()({
-        descriptor: {
-          provider: 'replicate',
-          model: 'minimax/speech-02-hd',
-          environment: 'local',
+  function baseRequest(): ProviderJobContext {
+    const extras: TestExtras = {
+      resolvedInputs: {
+        'Input:TextInput': 'Narration for audio',
+        'Input:VoiceId': 'Wise_Woman',
+      },
+      jobContext: {
+        inputBindings: {
+          TextInput: 'Input:TextInput',
+          VoiceId: 'Input:VoiceId',
         },
-        mode: 'live',
-        secretResolver,
-        logger: undefined,
-      });
-
-      const request: ProviderJobContext = {
-        jobId: 'test-job',
-        provider: 'replicate',
-        model: 'minimax/speech-02-hd',
-        revision: 'rev-test',
-        layerIndex: 0,
-        attempt: 1,
-        inputs: ['Input:SegmentNarration[segment=0]'],
-        produces: ['Artifact:SegmentAudio[segment=0]'],
-        context: {
-          providerConfig: {},
-          rawAttachments: [],
-          environment: 'local',
-          observability: undefined,
-          extras: {
-            plannerContext: {
-              index: { segment: 0 },
-            },
-            jobContext: {
-              inputBindings: {
-                TextInput: 'Artifact:ScriptGeneration.NarrationScript[segment=0]',
-              },
-              sdkMapping: {
-                TextInput: { field: 'text', required: true },
-              },
-            },
-            resolvedInputs: {
-              TextInput: 'Test narration',
-              'Artifact:ScriptGeneration.NarrationScript[segment=0]': 'Test narration',
-            },
-          },
-        },
-      };
-      attachJobContext(request);
-
-      const testData = new Uint8Array([1, 2, 3]);
-      (global.fetch as any).mockResolvedValue({
-        ok: true,
-        status: 200,
-        arrayBuffer: async () => testData.buffer,
-      });
-
-      const Replicate = (await import('replicate')).default;
-      const mockRun = vi.fn().mockResolvedValue('https://example.com/audio.mp3');
-      (Replicate as any).mockImplementation(() => ({
-        run: mockRun,
-      }));
-
-      await handler.warmStart?.({ logger: undefined });
-      const result = await handler.invoke(request);
-
-      expect(result.status).toBe('succeeded');
-      expect(mockRun).toHaveBeenCalledWith('minimax/speech-02-hd', {
-        input: expect.objectContaining({
-          text: 'Test narration',
-        }),
-      });
-    });
-
-    it('uses custom textKey when specified', async () => {
-      const handler = createReplicateAudioHandler()({
-        descriptor: {
-          provider: 'replicate',
-          model: 'elevenlabs/v3',
-          environment: 'local',
-        },
-        mode: 'live',
-        secretResolver,
-        logger: undefined,
-      });
-
-      const request: ProviderJobContext = {
-        jobId: 'test-job',
-        provider: 'replicate',
-        model: 'elevenlabs/v3',
-        revision: 'rev-test',
-        layerIndex: 0,
-        attempt: 1,
-        inputs: ['Input:SegmentNarration[segment=0]'],
-        produces: ['Artifact:SegmentAudio[segment=0]'],
-        context: {
-          providerConfig: {
-            textKey: 'prompt',
-          },
-          rawAttachments: [],
-          environment: 'local',
-          observability: undefined,
-          extras: {
-            plannerContext: {
-              index: { segment: 0 },
-            },
-            jobContext: {
-              inputBindings: {
-                TextInput: 'Artifact:ScriptGeneration.NarrationScript[segment=0]',
-              },
-              sdkMapping: {
-                TextInput: { field: 'prompt', required: true },
-              },
-            },
-            resolvedInputs: {
-              TextInput: 'Test narration',
-              'Artifact:ScriptGeneration.NarrationScript[segment=0]': 'Test narration',
-            },
-          },
-        },
-      };
-      attachJobContext(request);
-
-      const testData = new Uint8Array([1, 2, 3]);
-      (global.fetch as any).mockResolvedValue({
-        ok: true,
-        status: 200,
-        arrayBuffer: async () => testData.buffer,
-      });
-
-      const Replicate = (await import('replicate')).default;
-      const mockRun = vi.fn().mockResolvedValue('https://example.com/audio.mp3');
-      (Replicate as any).mockImplementation(() => ({
-        run: mockRun,
-      }));
-
-      await handler.warmStart?.({ logger: undefined });
-      const result = await handler.invoke(request);
-
-      expect(result.status).toBe('succeeded');
-      expect(mockRun).toHaveBeenCalledWith('elevenlabs/v3', {
-        input: expect.objectContaining({
-          prompt: 'Test narration',
-        }),
-      });
-    });
-
-    it('merges defaults and customAttributes', async () => {
-      const handler = createReplicateAudioHandler()({
-        descriptor: {
-          provider: 'replicate',
-          model: 'minimax/speech-02-hd',
-          environment: 'local',
-        },
-        mode: 'live',
-        secretResolver,
-        logger: undefined,
-      });
-
-      const request: ProviderJobContext = {
-        jobId: 'test-job',
-        provider: 'replicate',
-        model: 'minimax/speech-02-hd',
-        revision: 'rev-test',
-        layerIndex: 0,
-        attempt: 1,
-        inputs: ['Input:SegmentNarration[segment=0]'],
-        produces: ['Artifact:SegmentAudio[segment=0]'],
-        context: {
-          providerConfig: {
-            defaults: {
-              speed: 1.0,
-              pitch: 0,
-            },
-            customAttributes: {
-              voice_id: 'Wise_Woman',
-              speed: 1.2,
-            },
-          },
-          rawAttachments: [],
-          environment: 'local',
-          observability: undefined,
-          extras: {
-            plannerContext: {
-              index: { segment: 0 },
-            },
-            jobContext: {
-              inputBindings: {
-                TextInput: 'Artifact:ScriptGeneration.NarrationScript[segment=0]',
-                VoiceId: 'Input:VoiceId',
-              },
-              sdkMapping: {
-                TextInput: { field: 'text', required: true },
-                VoiceId: { field: 'voice_id', required: false },
-              },
-            },
-        resolvedInputs: {
-          'Artifact:ScriptGeneration.NarrationScript[segment=0]': 'Test narration',
-          'Input:VoiceId': 'Narrator',
-          'Input:TextInput': 'Test narration',
+        sdkMapping: {
+          TextInput: { field: 'text', required: true },
+          VoiceId: { field: 'voice_id', required: true },
         },
       },
-    },
-  };
-      attachJobContext(request);
+      plannerContext: { index: { segment: 0 } },
+      schema: { input: schemaText },
+    };
 
-      const testData = new Uint8Array([1, 2, 3]);
-      (global.fetch as any).mockResolvedValue({
-        ok: true,
-        status: 200,
-        arrayBuffer: async () => testData.buffer,
-      });
+    return {
+      jobId: 'test-job',
+      provider: 'replicate',
+      model: 'minimax/speech-02-hd',
+      revision: 'rev-test',
+      layerIndex: 0,
+      attempt: 1,
+      inputs: Object.keys(extras.resolvedInputs),
+      produces: ['Artifact:SegmentAudio[segment=0]'],
+      context: {
+        providerConfig: {},
+        extras,
+      },
+    };
+  }
 
-      const Replicate = (await import('replicate')).default;
-      const mockRun = vi.fn().mockResolvedValue('https://example.com/audio.mp3');
-      (Replicate as any).mockImplementation(() => ({
-        run: mockRun,
-      }));
+  function extrasFor(request: ProviderJobContext): TestExtras {
+    return request.context.extras as TestExtras;
+  }
 
-      await handler.warmStart?.({ logger: undefined });
-      const result = await handler.invoke(request);
-
-      expect(result.status).toBe('succeeded');
-      expect(mockRun).toHaveBeenCalledWith('minimax/speech-02-hd', {
-        input: expect.objectContaining({
-          text: 'Test narration',
-          speed: 1.2,
-          pitch: 0,
-          voice_id: 'Narrator',
-        }),
-      });
-    });
-
-    it('sets fixed output MIME type to audio/mpeg', async () => {
-      const handler = createReplicateAudioHandler()({
-        descriptor: {
-          provider: 'replicate',
-          model: 'minimax/speech-02-hd',
-          environment: 'local',
-        },
-        mode: 'live',
-        secretResolver,
-        logger: undefined,
-      });
-
-      const request: ProviderJobContext = {
-        jobId: 'test-job',
+  it('builds input strictly from sdk mapping and schema', async () => {
+    const handler = createReplicateAudioHandler()({
+      descriptor: {
         provider: 'replicate',
         model: 'minimax/speech-02-hd',
-        revision: 'rev-test',
-        layerIndex: 0,
-        attempt: 1,
-        inputs: ['Input:SegmentNarration[segment=0]'],
-        produces: ['Artifact:SegmentAudio[segment=0]'],
-        context: {
-          providerConfig: {},
-          rawAttachments: [],
-          environment: 'local',
-          observability: undefined,
-          extras: {
-            plannerContext: {
-              index: { segment: 0 },
-            },
-            resolvedInputs: {
-              SegmentNarration: ['Test narration'],
-            },
-          },
-        },
-      };
-      attachJobContext(request);
+        environment: 'local',
+      },
+      mode: 'live',
+      secretResolver,
+      logger: undefined,
+    });
 
-      const testData = new Uint8Array([1, 2, 3]);
-      (global.fetch as any).mockResolvedValue({
-        ok: true,
-        status: 200,
-        arrayBuffer: async () => testData.buffer,
-      });
+    const request = baseRequest();
+    const Replicate = (await import('replicate')).default;
+    const mockRun = vi.fn().mockResolvedValue('https://example.com/audio.mp3');
+    (Replicate as any).mockImplementation(() => ({ run: mockRun }));
 
-      const Replicate = (await import('replicate')).default;
-      const mockRun = vi.fn().mockResolvedValue('https://example.com/audio.mp3');
-      (Replicate as any).mockImplementation(() => ({
-        run: mockRun,
-      }));
+    await handler.warmStart?.({ logger: undefined });
+    const result = await handler.invoke(request);
 
-      await handler.warmStart?.({ logger: undefined });
-      const result = await handler.invoke(request);
-
-      expect(result.status).toBe('succeeded');
-      expect(result.artefacts[0]?.blob?.mimeType).toBe('audio/mpeg');
+    expect(result.status).toBe('succeeded');
+    expect(mockRun).toHaveBeenCalledWith('minimax/speech-02-hd', {
+      input: {
+        text: 'Narration for audio',
+        voice_id: 'Wise_Woman',
+      },
     });
   });
 
-  describe('resolveText', () => {
-    it('resolves text from array using segment index', async () => {
-      const handler = createReplicateAudioHandler()({
-        descriptor: {
-          provider: 'replicate',
-          model: 'minimax/speech-02-hd',
-          environment: 'local',
-        },
-        mode: 'live',
-        secretResolver,
-        logger: undefined,
-      });
-
-      const request: ProviderJobContext = {
-        jobId: 'test-job',
+  it('fails fast when schema is missing', async () => {
+    const handler = createReplicateAudioHandler()({
+      descriptor: {
         provider: 'replicate',
         model: 'minimax/speech-02-hd',
-        revision: 'rev-test',
-        layerIndex: 0,
-        attempt: 1,
-        inputs: ['Input:SegmentNarration[segment=1]'],
-        produces: ['Artifact:SegmentAudio[segment=1]'],
-        context: {
-          providerConfig: {},
-          rawAttachments: [],
-          environment: 'local',
-          observability: undefined,
-          extras: {
-            plannerContext: {
-              index: { segment: 1 },
-            },
-            resolvedInputs: {
-              SegmentNarration: ['First narration', 'Second narration', 'Third narration'],
-            },
-          },
-        },
-      };
-      attachJobContext(request);
-
-      const testData = new Uint8Array([1, 2, 3]);
-      (global.fetch as any).mockResolvedValue({
-        ok: true,
-        status: 200,
-        arrayBuffer: async () => testData.buffer,
-      });
-
-      const Replicate = (await import('replicate')).default;
-      const mockRun = vi.fn().mockResolvedValue('https://example.com/audio.mp3');
-      (Replicate as any).mockImplementation(() => ({
-        run: mockRun,
-      }));
-
-      await handler.warmStart?.({ logger: undefined });
-      const result = await handler.invoke(request);
-
-      expect(result.status).toBe('succeeded');
-      expect(mockRun).toHaveBeenCalledWith('minimax/speech-02-hd', {
-        input: expect.objectContaining({
-          text: 'Second narration',
-        }),
-      });
+        environment: 'local',
+      },
+      mode: 'live',
+      secretResolver,
+      logger: undefined,
     });
 
-    it('falls back to first element when segment index is out of bounds', async () => {
-      const handler = createReplicateAudioHandler()({
-        descriptor: {
-          provider: 'replicate',
-          model: 'minimax/speech-02-hd',
-          environment: 'local',
-        },
-        mode: 'live',
-        secretResolver,
-        logger: undefined,
-      });
+    const request = baseRequest();
+    delete (request.context.extras as any).schema;
 
-      const request: ProviderJobContext = {
-        jobId: 'test-job',
+    await handler.warmStart?.({ logger: undefined });
+    await expect(handler.invoke(request)).rejects.toThrow(/Missing input schema/);
+  });
+
+  it('fails fast when required mapped input is absent', async () => {
+    const handler = createReplicateAudioHandler()({
+      descriptor: {
         provider: 'replicate',
         model: 'minimax/speech-02-hd',
-        revision: 'rev-test',
-        layerIndex: 0,
-        attempt: 1,
-        inputs: ['Input:SegmentNarration[segment=10]'],
-        produces: ['Artifact:SegmentAudio[segment=10]'],
-        context: {
-          providerConfig: {},
-          rawAttachments: [],
-          environment: 'local',
-          observability: undefined,
-          extras: {
-            plannerContext: {
-              index: { segment: 10 },
-            },
-            resolvedInputs: {
-              SegmentNarration: ['Only narration'],
-            },
-          },
-        },
-      };
-      attachJobContext(request);
-
-      const testData = new Uint8Array([1, 2, 3]);
-      (global.fetch as any).mockResolvedValue({
-        ok: true,
-        status: 200,
-        arrayBuffer: async () => testData.buffer,
-      });
-
-      const Replicate = (await import('replicate')).default;
-      const mockRun = vi.fn().mockResolvedValue('https://example.com/audio.mp3');
-      (Replicate as any).mockImplementation(() => ({
-        run: mockRun,
-      }));
-
-      await handler.warmStart?.({ logger: undefined });
-      const result = await handler.invoke(request);
-
-      expect(result.status).toBe('succeeded');
-      expect(mockRun).toHaveBeenCalledWith('minimax/speech-02-hd', {
-        input: expect.objectContaining({
-          text: 'Only narration',
-        }),
-      });
+        environment: 'local',
+      },
+      mode: 'live',
+      secretResolver,
+      logger: undefined,
     });
 
-    it('handles single string narration', async () => {
-      const handler = createReplicateAudioHandler()({
-        descriptor: {
-          provider: 'replicate',
-          model: 'minimax/speech-02-hd',
-          environment: 'local',
-        },
-        mode: 'live',
-        secretResolver,
-        logger: undefined,
-      });
+    const request = baseRequest();
+    const extras = extrasFor(request);
+    delete extras.resolvedInputs['Input:TextInput'];
 
-      const request: ProviderJobContext = {
-        jobId: 'test-job',
+    await handler.warmStart?.({ logger: undefined });
+    await expect(handler.invoke(request)).rejects.toThrow(/Missing required input/);
+  });
+
+  it('fails when payload violates the input schema', async () => {
+    const handler = createReplicateAudioHandler()({
+      descriptor: {
         provider: 'replicate',
         model: 'minimax/speech-02-hd',
-        revision: 'rev-test',
-        layerIndex: 0,
-        attempt: 1,
-        inputs: ['Input:SegmentNarration[segment=0]'],
-        produces: ['Artifact:SegmentAudio[segment=0]'],
-        context: {
-          providerConfig: {},
-          rawAttachments: [],
-          environment: 'local',
-          observability: undefined,
-          extras: {
-            plannerContext: {
-              index: { segment: 0 },
-            },
-            resolvedInputs: {
-              SegmentNarration: 'Single narration string',
-            },
-          },
-        },
-      };
-      attachJobContext(request);
-
-      const testData = new Uint8Array([1, 2, 3]);
-      (global.fetch as any).mockResolvedValue({
-        ok: true,
-        status: 200,
-        arrayBuffer: async () => testData.buffer,
-      });
-
-      const Replicate = (await import('replicate')).default;
-      const mockRun = vi.fn().mockResolvedValue('https://example.com/audio.mp3');
-      (Replicate as any).mockImplementation(() => ({
-        run: mockRun,
-      }));
-
-      await handler.warmStart?.({ logger: undefined });
-      const result = await handler.invoke(request);
-
-      expect(result.status).toBe('succeeded');
-      expect(mockRun).toHaveBeenCalledWith('minimax/speech-02-hd', {
-        input: expect.objectContaining({
-          text: 'Single narration string',
-        }),
-      });
+        environment: 'local',
+      },
+      mode: 'live',
+      secretResolver,
+      logger: undefined,
     });
 
-    it('throws error when no text is available', async () => {
-      const handler = createReplicateAudioHandler()({
-        descriptor: {
-          provider: 'replicate',
-          model: 'minimax/speech-02-hd',
-          environment: 'local',
-        },
-        mode: 'live',
-        secretResolver,
-        logger: undefined,
-      });
+    const request = baseRequest();
+    const extras = extrasFor(request);
+    extras.resolvedInputs['Input:VoiceId'] = 42;
 
-      const request: ProviderJobContext = {
-        jobId: 'test-job',
+    await handler.warmStart?.({ logger: undefined });
+    await expect(handler.invoke(request)).rejects.toThrow(/Invalid input payload/);
+  });
+
+  it('ignores providerConfig defaults and customAttributes', async () => {
+    const handler = createReplicateAudioHandler()({
+      descriptor: {
         provider: 'replicate',
         model: 'minimax/speech-02-hd',
-        revision: 'rev-test',
-        layerIndex: 0,
-        attempt: 1,
-        inputs: ['Input:SegmentNarration[segment=0]'],
-        produces: ['Artifact:SegmentAudio[segment=0]'],
-        context: {
-          providerConfig: {},
-          rawAttachments: [],
-          environment: 'local',
-          observability: undefined,
-          extras: {
-            plannerContext: {
-              index: { segment: 0 },
-            },
-            resolvedInputs: {},
-          },
-        },
-      };
-      attachJobContext(request);
-
-      await handler.warmStart?.({ logger: undefined });
-
-      await expect(handler.invoke(request)).rejects.toThrow('Missing required input "Artifact:ScriptGeneration.NarrationScript[segment=0]" for field "text" (requested "TextInput").');
+        environment: 'local',
+      },
+      mode: 'live',
+      secretResolver,
+      logger: undefined,
     });
 
-    it('throws error when text is empty string', async () => {
-      const handler = createReplicateAudioHandler()({
-        descriptor: {
-          provider: 'replicate',
-          model: 'minimax/speech-02-hd',
-          environment: 'local',
-        },
-        mode: 'live',
-        secretResolver,
-        logger: undefined,
-      });
+    const request = baseRequest();
+    request.context.providerConfig = {
+      defaults: { speed: 2 },
+      customAttributes: { pitch: 4 },
+    };
 
-      const request: ProviderJobContext = {
-        jobId: 'test-job',
-        provider: 'replicate',
-        model: 'minimax/speech-02-hd',
-        revision: 'rev-test',
-        layerIndex: 0,
-        attempt: 1,
-        inputs: ['Input:SegmentNarration[segment=0]'],
-        produces: ['Artifact:SegmentAudio[segment=0]'],
-        context: {
-          providerConfig: {},
-          rawAttachments: [],
-          environment: 'local',
-          observability: undefined,
-          extras: {
-            plannerContext: {
-              index: { segment: 0 },
-            },
-            resolvedInputs: {
-              SegmentNarration: '   ',
-            },
-          },
-        },
-      };
-      attachJobContext(request);
+    const Replicate = (await import('replicate')).default;
+    const mockRun = vi.fn().mockResolvedValue('https://example.com/audio.mp3');
+    (Replicate as any).mockImplementation(() => ({ run: mockRun }));
 
-      await handler.warmStart?.({ logger: undefined });
+    await handler.warmStart?.({ logger: undefined });
+    const result = await handler.invoke(request);
 
-      await expect(handler.invoke(request)).rejects.toThrow('Missing required input "Artifact:ScriptGeneration.NarrationScript[segment=0]" for field "text" (requested "TextInput").');
+    expect(result.status).toBe('succeeded');
+    expect(mockRun).toHaveBeenCalledWith('minimax/speech-02-hd', {
+      input: { text: 'Narration for audio', voice_id: 'Wise_Woman' },
     });
   });
 
-  describe('resolveVoice', () => {
-    it('maps VoiceId from resolvedInputs to voice_id for minimax models', async () => {
-      const handler = createReplicateAudioHandler()({
-        descriptor: {
-          provider: 'replicate',
-          model: 'minimax/speech-02-hd',
-          environment: 'local',
-        },
-        mode: 'live',
-        secretResolver,
-        logger: undefined,
-      });
-
-      const request: ProviderJobContext = {
-        jobId: 'test-job',
+  it('validates required inputs in simulated mode (dry run)', async () => {
+    const handler = createReplicateAudioHandler()({
+      descriptor: {
         provider: 'replicate',
         model: 'minimax/speech-02-hd',
-        revision: 'rev-test',
-        layerIndex: 0,
-        attempt: 1,
-        inputs: ['Input:SegmentNarration[segment=0]', 'Input:VoiceId'],
-        produces: ['Artifact:SegmentAudio[segment=0]'],
-        context: {
-          providerConfig: {},
-          rawAttachments: [],
-          environment: 'local',
-          observability: undefined,
-          extras: {
-            plannerContext: {
-              index: { segment: 0 },
-            },
-            resolvedInputs: {
-              SegmentNarration: ['Test narration'],
-              VoiceId: 'English_CaptivatingStoryteller',
-            },
-          },
-        },
-      };
-      attachJobContext(request);
-
-      const testData = new Uint8Array([1, 2, 3]);
-      (global.fetch as any).mockResolvedValue({
-        ok: true,
-        status: 200,
-        arrayBuffer: async () => testData.buffer,
-      });
-
-      const Replicate = (await import('replicate')).default;
-      const mockRun = vi.fn().mockResolvedValue('https://example.com/audio.mp3');
-      (Replicate as any).mockImplementation(() => ({
-        run: mockRun,
-      }));
-
-      await handler.warmStart?.({ logger: undefined });
-      const result = await handler.invoke(request);
-
-      expect(result.status).toBe('succeeded');
-      expect(mockRun).toHaveBeenCalledWith('minimax/speech-02-hd', {
-        input: expect.objectContaining({
-          text: 'Test narration',
-          voice_id: 'English_CaptivatingStoryteller',
-        }),
-      });
+        environment: 'local',
+      },
+      mode: 'simulated',
+      secretResolver,
+      logger: undefined,
     });
 
-    it('maps VoiceId from resolvedInputs to voice for elevenlabs models', async () => {
-      const handler = createReplicateAudioHandler()({
-        descriptor: {
-          provider: 'replicate',
-          model: 'elevenlabs/v3',
-          environment: 'local',
-        },
-        mode: 'live',
-        secretResolver,
-        logger: undefined,
-      });
+    const request = baseRequest();
+    const extras = extrasFor(request);
+    delete extras.resolvedInputs['Input:VoiceId'];
 
-      const request: ProviderJobContext = {
-        jobId: 'test-job',
-        provider: 'replicate',
-        model: 'elevenlabs/v3',
-        revision: 'rev-test',
-        layerIndex: 0,
-        attempt: 1,
-        inputs: ['Input:SegmentNarration[segment=0]', 'Input:VoiceId'],
-        produces: ['Artifact:SegmentAudio[segment=0]'],
-        context: {
-          providerConfig: {
-            textKey: 'prompt',
-          },
-          rawAttachments: [],
-          environment: 'local',
-          observability: undefined,
-          extras: {
-            plannerContext: {
-              index: { segment: 0 },
-            },
-            resolvedInputs: {
-              SegmentNarration: ['Test narration'],
-              VoiceId: 'Grimblewood',
-            },
-          },
-        },
-      };
-      attachJobContext(request);
-
-      const testData = new Uint8Array([1, 2, 3]);
-      (global.fetch as any).mockResolvedValue({
-        ok: true,
-        status: 200,
-        arrayBuffer: async () => testData.buffer,
-      });
-
-      const Replicate = (await import('replicate')).default;
-      const mockRun = vi.fn().mockResolvedValue('https://example.com/audio.mp3');
-      (Replicate as any).mockImplementation(() => ({
-        run: mockRun,
-      }));
-
-      await handler.warmStart?.({ logger: undefined });
-      const result = await handler.invoke(request);
-
-      expect(result.status).toBe('succeeded');
-      expect(mockRun).toHaveBeenCalledWith('elevenlabs/v3', {
-        input: expect.objectContaining({
-          prompt: 'Test narration',
-          voice: 'Grimblewood',
-        }),
-      });
-    });
-
-    it('VoiceId from resolvedInputs takes precedence over customAttributes', async () => {
-      const handler = createReplicateAudioHandler()({
-        descriptor: {
-          provider: 'replicate',
-          model: 'minimax/speech-02-hd',
-          environment: 'local',
-        },
-        mode: 'live',
-        secretResolver,
-        logger: undefined,
-      });
-
-      const request: ProviderJobContext = {
-        jobId: 'test-job',
-        provider: 'replicate',
-        model: 'minimax/speech-02-hd',
-        revision: 'rev-test',
-        layerIndex: 0,
-        attempt: 1,
-        inputs: ['Input:SegmentNarration[segment=0]', 'Input:VoiceId'],
-        produces: ['Artifact:SegmentAudio[segment=0]'],
-        context: {
-          providerConfig: {
-            customAttributes: {
-              voice_id: 'OldVoice',
-            },
-          },
-          rawAttachments: [],
-          environment: 'local',
-          observability: undefined,
-          extras: {
-            plannerContext: {
-              index: { segment: 0 },
-            },
-            resolvedInputs: {
-              SegmentNarration: ['Test narration'],
-              VoiceId: 'NewVoice',
-            },
-          },
-        },
-      };
-      attachJobContext(request);
-
-      const testData = new Uint8Array([1, 2, 3]);
-      (global.fetch as any).mockResolvedValue({
-        ok: true,
-        status: 200,
-        arrayBuffer: async () => testData.buffer,
-      });
-
-      const Replicate = (await import('replicate')).default;
-      const mockRun = vi.fn().mockResolvedValue('https://example.com/audio.mp3');
-      (Replicate as any).mockImplementation(() => ({
-        run: mockRun,
-      }));
-
-      await handler.warmStart?.({ logger: undefined });
-      const result = await handler.invoke(request);
-
-      expect(result.status).toBe('succeeded');
-      expect(mockRun).toHaveBeenCalledWith('minimax/speech-02-hd', {
-        input: expect.objectContaining({
-          text: 'Test narration',
-          voice_id: 'NewVoice',
-        }),
-      });
-    });
-
-    it('does not add voice field when VoiceId is not provided', async () => {
-      const handler = createReplicateAudioHandler()({
-        descriptor: {
-          provider: 'replicate',
-          model: 'minimax/speech-02-hd',
-          environment: 'local',
-        },
-        mode: 'live',
-        secretResolver,
-        logger: undefined,
-      });
-
-      const request: ProviderJobContext = {
-        jobId: 'test-job',
-        provider: 'replicate',
-        model: 'minimax/speech-02-hd',
-        revision: 'rev-test',
-        layerIndex: 0,
-        attempt: 1,
-        inputs: ['Input:SegmentNarration[segment=0]'],
-        produces: ['Artifact:SegmentAudio[segment=0]'],
-        context: {
-          providerConfig: {},
-          rawAttachments: [],
-          environment: 'local',
-          observability: undefined,
-          extras: {
-            plannerContext: {
-              index: { segment: 0 },
-            },
-            resolvedInputs: {
-              SegmentNarration: ['Test narration'],
-            },
-          },
-        },
-      };
-      attachJobContext(request);
-
-      const testData = new Uint8Array([1, 2, 3]);
-      (global.fetch as any).mockResolvedValue({
-        ok: true,
-        status: 200,
-        arrayBuffer: async () => testData.buffer,
-      });
-
-      const Replicate = (await import('replicate')).default;
-      const mockRun = vi.fn().mockResolvedValue('https://example.com/audio.mp3');
-      (Replicate as any).mockImplementation(() => ({
-        run: mockRun,
-      }));
-
-      await handler.warmStart?.({ logger: undefined });
-      const result = await handler.invoke(request);
-
-      expect(result.status).toBe('succeeded');
-      const callArgs = mockRun.mock.calls[0]?.[1] as { input: Record<string, unknown> };
-      expect(callArgs.input).not.toHaveProperty('voice');
-      expect(callArgs.input).not.toHaveProperty('voice_id');
-    });
-  });
-
-  describe('error handling', () => {
-    it('throws error when Replicate prediction fails', async () => {
-      const handler = createReplicateAudioHandler()({
-        descriptor: {
-          provider: 'replicate',
-          model: 'minimax/speech-02-hd',
-          environment: 'local',
-        },
-        mode: 'live',
-        secretResolver,
-        logger: undefined,
-      });
-
-      const request: ProviderJobContext = {
-        jobId: 'test-job',
-        provider: 'replicate',
-        model: 'minimax/speech-02-hd',
-        revision: 'rev-test',
-        layerIndex: 0,
-        attempt: 1,
-        inputs: ['Input:SegmentNarration[segment=0]'],
-        produces: ['Artifact:SegmentAudio[segment=0]'],
-        context: {
-          providerConfig: {},
-          rawAttachments: [],
-          environment: 'local',
-          observability: undefined,
-          extras: {
-            plannerContext: {
-              index: { segment: 0 },
-            },
-            resolvedInputs: {
-              SegmentNarration: ['Test narration'],
-            },
-          },
-        },
-      };
-      attachJobContext(request);
-
-      const Replicate = (await import('replicate')).default;
-      const mockRun = vi.fn().mockRejectedValue(new Error('Replicate API error'));
-      (Replicate as any).mockImplementation(() => ({
-        run: mockRun,
-      }));
-
-      await handler.warmStart?.({ logger: undefined });
-
-      await expect(handler.invoke(request)).rejects.toThrow('Replicate prediction failed.');
-    });
-
-    it('returns failed status when artefact download fails', async () => {
-      const handler = createReplicateAudioHandler()({
-        descriptor: {
-          provider: 'replicate',
-          model: 'minimax/speech-02-hd',
-          environment: 'local',
-        },
-        mode: 'live',
-        secretResolver,
-        logger: undefined,
-      });
-
-      const request: ProviderJobContext = {
-        jobId: 'test-job',
-        provider: 'replicate',
-        model: 'minimax/speech-02-hd',
-        revision: 'rev-test',
-        layerIndex: 0,
-        attempt: 1,
-        inputs: ['Input:SegmentNarration[segment=0]'],
-        produces: ['Artifact:SegmentAudio[segment=0]'],
-        context: {
-          providerConfig: {},
-          rawAttachments: [],
-          environment: 'local',
-          observability: undefined,
-          extras: {
-            plannerContext: {
-              index: { segment: 0 },
-            },
-            resolvedInputs: {
-              SegmentNarration: ['Test narration'],
-            },
-          },
-        },
-      };
-      attachJobContext(request);
-
-      (global.fetch as any).mockResolvedValue({
-        ok: false,
-        status: 500,
-      });
-
-      const Replicate = (await import('replicate')).default;
-      const mockRun = vi.fn().mockResolvedValue('https://example.com/audio.mp3');
-      (Replicate as any).mockImplementation(() => ({
-        run: mockRun,
-      }));
-
-      await handler.warmStart?.({ logger: undefined });
-      const result = await handler.invoke(request);
-
-      expect(result.status).toBe('failed');
-      expect(result.artefacts[0]?.status).toBe('failed');
-    });
+    await expect(handler.invoke(request)).rejects.toThrow(/Missing required input/);
   });
 });

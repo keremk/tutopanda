@@ -1,812 +1,224 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { createReplicateMusicHandler } from './replicate-music.js';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ProviderJobContext, SecretResolver } from '../../types.js';
+import { createReplicateMusicHandler } from './replicate-music.js';
 
-// Mock the Replicate SDK
 vi.mock('replicate', () => ({
   default: vi.fn().mockImplementation(() => ({
     run: vi.fn(),
   })),
 }));
 
-// Mock fetch globally
 global.fetch = vi.fn();
 
-describe('createReplicateMusicHandler', () => {
+const schemaText = JSON.stringify({
+  type: 'object',
+  required: ['prompt', 'duration'],
+  properties: {
+    prompt: { type: 'string' },
+    duration: { type: 'integer', minimum: 1 },
+  },
+});
+
+describe('replicate-music (schema-first, no fallbacks)', () => {
   let secretResolver: SecretResolver;
+  type TestExtras = {
+    resolvedInputs: Record<string, unknown>;
+    jobContext: {
+      inputBindings: Record<string, string>;
+      sdkMapping: Record<string, { field: string; required?: boolean }>;
+    };
+    plannerContext: { index?: { segment?: number } };
+    schema: { input: string };
+  };
 
   beforeEach(() => {
     vi.clearAllMocks();
     secretResolver = {
       async getSecret(key: string) {
-        if (key === 'REPLICATE_API_TOKEN') {
-          return 'test-token';
-        }
-        return null;
+        return key === 'REPLICATE_API_TOKEN' ? 'test-replicate-token' : null;
       },
     };
-  });
-
-  describe('stability-ai/stable-audio-2.5', () => {
-    it('generates music with duration in seconds', async () => {
-      const handler = createReplicateMusicHandler()({
-        descriptor: {
-          provider: 'replicate',
-          model: 'stability-ai/stable-audio-2.5',
-          environment: 'local',
-        },
-        mode: 'live',
-        secretResolver,
-        logger: undefined,
-      });
-
-      const request: ProviderJobContext = {
-        jobId: 'test-job',
-        provider: 'replicate',
-        model: 'stability-ai/stable-audio-2.5',
-        revision: 'rev-test',
-        layerIndex: 0,
-        attempt: 1,
-        inputs: ['Artifact:MusicPromptGenerator.MusicPrompt', 'Input:Duration'],
-        produces: ['Artifact:MusicTrack'],
-        context: {
-          providerConfig: {
-            durationKey: 'duration',
-            durationMultiplier: 1,
-            maxDuration: 190,
-          },
-          rawAttachments: [],
-          environment: 'local',
-          observability: undefined,
-          extras: {
-            resolvedInputs: {
-              'Artifact:MusicPromptGenerator.MusicPrompt': 'Upbeat electronic music with a modern feel',
-              'Input:Duration': 60,
-            },
-          },
-        },
-      };
-
-      const testData = new Uint8Array([1, 2, 3]);
-      (global.fetch as any).mockResolvedValue({
-        ok: true,
-        status: 200,
-        arrayBuffer: async () => testData.buffer,
-      });
-
-      const Replicate = (await import('replicate')).default;
-      const mockRun = vi.fn().mockResolvedValue('https://example.com/music.mp3');
-      (Replicate as any).mockImplementation(() => ({
-        run: mockRun,
-      }));
-
-      await handler.warmStart?.({ logger: undefined });
-      const result = await handler.invoke(request);
-
-      expect(result.status).toBe('succeeded');
-      expect(mockRun).toHaveBeenCalledWith('stability-ai/stable-audio-2.5', {
-        input: expect.objectContaining({
-          prompt: 'Upbeat electronic music with a modern feel',
-          duration: 60,
-        }),
-      });
-    });
-
-
-    it('caps duration at 190 seconds', async () => {
-      const handler = createReplicateMusicHandler()({
-        descriptor: {
-          provider: 'replicate',
-          model: 'stability-ai/stable-audio-2.5',
-          environment: 'local',
-        },
-        mode: 'live',
-        secretResolver,
-        logger: undefined,
-      });
-
-      const request: ProviderJobContext = {
-        jobId: 'test-job',
-        provider: 'replicate',
-        model: 'stability-ai/stable-audio-2.5',
-        revision: 'rev-test',
-        layerIndex: 0,
-        attempt: 1,
-        inputs: ['Artifact:MusicPromptGenerator.MusicPrompt', 'Input:Duration'],
-        produces: ['Artifact:MusicTrack'],
-        context: {
-          providerConfig: {
-            durationKey: 'duration',
-            durationMultiplier: 1,
-            maxDuration: 190,
-          },
-          rawAttachments: [],
-          environment: 'local',
-          observability: undefined,
-          extras: {
-            resolvedInputs: {
-              'Artifact:MusicPromptGenerator.MusicPrompt': 'Epic orchestral soundtrack',
-              'Input:Duration': 300, // Exceeds max
-            },
-          },
-        },
-      };
-
-      const testData = new Uint8Array([1, 2, 3]);
-      (global.fetch as any).mockResolvedValue({
-        ok: true,
-        status: 200,
-        arrayBuffer: async () => testData.buffer,
-      });
-
-      const Replicate = (await import('replicate')).default;
-      const mockRun = vi.fn().mockResolvedValue('https://example.com/music.mp3');
-      (Replicate as any).mockImplementation(() => ({
-        run: mockRun,
-      }));
-
-      await handler.warmStart?.({ logger: undefined });
-      const result = await handler.invoke(request);
-
-      expect(result.status).toBe('succeeded');
-      expect(mockRun).toHaveBeenCalledWith('stability-ai/stable-audio-2.5', {
-        input: expect.objectContaining({
-          duration: 190, // Capped
-        }),
-      });
-    });
-
-    it('merges defaults and customAttributes', async () => {
-      const handler = createReplicateMusicHandler()({
-        descriptor: {
-          provider: 'replicate',
-          model: 'stability-ai/stable-audio-2.5',
-          environment: 'local',
-        },
-        mode: 'live',
-        secretResolver,
-        logger: undefined,
-      });
-
-      const request: ProviderJobContext = {
-        jobId: 'test-job',
-        provider: 'replicate',
-        model: 'stability-ai/stable-audio-2.5',
-        revision: 'rev-test',
-        layerIndex: 0,
-        attempt: 1,
-        inputs: ['Artifact:MusicPromptGenerator.MusicPrompt', 'Input:Duration'],
-        produces: ['Artifact:MusicTrack'],
-        context: {
-          providerConfig: {
-            durationKey: 'duration',
-            durationMultiplier: 1,
-            maxDuration: 190,
-            defaults: {
-              steps: 8,
-              cfg_scale: 1,
-            },
-            customAttributes: {
-              steps: 12,
-              cfg_scale: 2,
-            },
-          },
-          rawAttachments: [],
-          environment: 'local',
-          observability: undefined,
-          extras: {
-            resolvedInputs: {
-              'Artifact:MusicPromptGenerator.MusicPrompt': 'Calm ambient music',
-              'Input:Duration': 120,
-            },
-          },
-        },
-      };
-
-      const testData = new Uint8Array([1, 2, 3]);
-      (global.fetch as any).mockResolvedValue({
-        ok: true,
-        status: 200,
-        arrayBuffer: async () => testData.buffer,
-      });
-
-      const Replicate = (await import('replicate')).default;
-      const mockRun = vi.fn().mockResolvedValue('https://example.com/music.mp3');
-      (Replicate as any).mockImplementation(() => ({
-        run: mockRun,
-      }));
-
-      await handler.warmStart?.({ logger: undefined });
-      const result = await handler.invoke(request);
-
-      expect(result.status).toBe('succeeded');
-      expect(mockRun).toHaveBeenCalledWith('stability-ai/stable-audio-2.5', {
-        input: expect.objectContaining({
-          prompt: 'Calm ambient music',
-          duration: 120,
-          steps: 12, // customAttributes override
-          cfg_scale: 2, // customAttributes override
-        }),
-      });
+    (global.fetch as any).mockResolvedValue({
+      ok: true,
+      arrayBuffer: async () => new ArrayBuffer(4),
     });
   });
 
-  describe('elevenlabs/music', () => {
-    it('generates music with duration in milliseconds', async () => {
-      const handler = createReplicateMusicHandler()({
-        descriptor: {
-          provider: 'replicate',
-          model: 'elevenlabs/music',
-          environment: 'local',
+  function baseRequest(): ProviderJobContext {
+    const extras: TestExtras = {
+      resolvedInputs: {
+        'Input:Prompt': 'Test music prompt',
+        'Input:Duration': 8,
+      },
+      jobContext: {
+        inputBindings: {
+          Prompt: 'Input:Prompt',
+          Duration: 'Input:Duration',
         },
-        mode: 'live',
-        secretResolver,
-        logger: undefined,
-      });
+        sdkMapping: {
+          Prompt: { field: 'prompt', required: true },
+          Duration: { field: 'duration', required: true },
+        },
+      },
+      plannerContext: { index: { segment: 0 } },
+      schema: { input: schemaText },
+    };
 
-      const request: ProviderJobContext = {
-        jobId: 'test-job',
+    return {
+      jobId: 'test-job',
+      provider: 'replicate',
+      model: 'stability-ai/stable-audio-2.5',
+      revision: 'rev-test',
+      layerIndex: 0,
+      attempt: 1,
+      inputs: Object.keys(extras.resolvedInputs),
+      produces: ['Artifact:MusicTrack'],
+      context: {
+        providerConfig: {},
+        extras,
+      },
+    };
+  }
+
+  function extrasFor(request: ProviderJobContext): TestExtras {
+    return request.context.extras as TestExtras;
+  }
+
+  it('builds input strictly from sdk mapping and schema', async () => {
+    const handler = createReplicateMusicHandler()({
+      descriptor: {
         provider: 'replicate',
-        model: 'elevenlabs/music',
-        revision: 'rev-test',
-        layerIndex: 0,
-        attempt: 1,
-        inputs: ['Artifact:MusicPromptGenerator.MusicPrompt', 'Input:Duration'],
-        produces: ['Artifact:MusicTrack'],
-        context: {
-          providerConfig: {
-            durationKey: 'music_length_ms',
-            durationMultiplier: 1000,
-            maxDuration: 300000,
-          },
-          rawAttachments: [],
-          environment: 'local',
-          observability: undefined,
-          extras: {
-            resolvedInputs: {
-              'Artifact:MusicPromptGenerator.MusicPrompt': 'Jazzy piano piece',
-              'Input:Duration': 60,
-            },
-          },
-        },
-      };
-
-      const testData = new Uint8Array([1, 2, 3]);
-      (global.fetch as any).mockResolvedValue({
-        ok: true,
-        status: 200,
-        arrayBuffer: async () => testData.buffer,
-      });
-
-      const Replicate = (await import('replicate')).default;
-      const mockRun = vi.fn().mockResolvedValue('https://example.com/music.mp3');
-      (Replicate as any).mockImplementation(() => ({
-        run: mockRun,
-      }));
-
-      await handler.warmStart?.({ logger: undefined });
-      const result = await handler.invoke(request);
-
-      expect(result.status).toBe('succeeded');
-      expect(mockRun).toHaveBeenCalledWith('elevenlabs/music', {
-        input: expect.objectContaining({
-          prompt: 'Jazzy piano piece',
-          music_length_ms: 60000, // 60s * 1000
-        }),
-      });
+        model: 'stability-ai/stable-audio-2.5',
+        environment: 'local',
+      },
+      mode: 'live',
+      secretResolver,
+      logger: undefined,
     });
 
-    it('caps duration at 300000 milliseconds (300s)', async () => {
-      const handler = createReplicateMusicHandler()({
-        descriptor: {
-          provider: 'replicate',
-          model: 'elevenlabs/music',
-          environment: 'local',
-        },
-        mode: 'live',
-        secretResolver,
-        logger: undefined,
-      });
+    const request = baseRequest();
+    const Replicate = (await import('replicate')).default;
+    const mockRun = vi.fn().mockResolvedValue('https://example.com/music.mp3');
+    (Replicate as any).mockImplementation(() => ({ run: mockRun }));
 
-      const request: ProviderJobContext = {
-        jobId: 'test-job',
-        provider: 'replicate',
-        model: 'elevenlabs/music',
-        revision: 'rev-test',
-        layerIndex: 0,
-        attempt: 1,
-        inputs: ['Artifact:MusicPromptGenerator.MusicPrompt', 'Input:Duration'],
-        produces: ['Artifact:MusicTrack'],
-        context: {
-          providerConfig: {
-            durationKey: 'music_length_ms',
-            durationMultiplier: 1000,
-            maxDuration: 300000,
-          },
-          rawAttachments: [],
-          environment: 'local',
-          observability: undefined,
-          extras: {
-            resolvedInputs: {
-              'Artifact:MusicPromptGenerator.MusicPrompt': 'Rock anthem',
-              'Input:Duration': 400, // Exceeds max when converted
-            },
-          },
-        },
-      };
+    await handler.warmStart?.({ logger: undefined });
+    const result = await handler.invoke(request);
 
-      const testData = new Uint8Array([1, 2, 3]);
-      (global.fetch as any).mockResolvedValue({
-        ok: true,
-        status: 200,
-        arrayBuffer: async () => testData.buffer,
-      });
-
-      const Replicate = (await import('replicate')).default;
-      const mockRun = vi.fn().mockResolvedValue('https://example.com/music.mp3');
-      (Replicate as any).mockImplementation(() => ({
-        run: mockRun,
-      }));
-
-      await handler.warmStart?.({ logger: undefined });
-      const result = await handler.invoke(request);
-
-      expect(result.status).toBe('succeeded');
-      expect(mockRun).toHaveBeenCalledWith('elevenlabs/music', {
-        input: expect.objectContaining({
-          music_length_ms: 300000, // Capped at max
-        }),
-      });
+    expect(result.status).toBe('succeeded');
+    expect(mockRun).toHaveBeenCalledWith('stability-ai/stable-audio-2.5', {
+      input: {
+        prompt: 'Test music prompt',
+        duration: 8,
+      },
     });
   });
 
-  describe('config parsing', () => {
-    it('uses default promptKey when not specified', async () => {
-      const handler = createReplicateMusicHandler()({
-        descriptor: {
-          provider: 'replicate',
-          model: 'stability-ai/stable-audio-2.5',
-          environment: 'local',
-        },
-        mode: 'live',
-        secretResolver,
-        logger: undefined,
-      });
-
-      const request: ProviderJobContext = {
-        jobId: 'test-job',
+  it('fails fast when schema is missing', async () => {
+    const handler = createReplicateMusicHandler()({
+      descriptor: {
         provider: 'replicate',
         model: 'stability-ai/stable-audio-2.5',
-        revision: 'rev-test',
-        layerIndex: 0,
-        attempt: 1,
-        inputs: ['Artifact:MusicPromptGenerator.MusicPrompt', 'Input:Duration'],
-        produces: ['Artifact:MusicTrack'],
-        context: {
-          providerConfig: {},
-          rawAttachments: [],
-          environment: 'local',
-          observability: undefined,
-          extras: {
-            resolvedInputs: {
-              'Artifact:MusicPromptGenerator.MusicPrompt': 'Classical symphony',
-              'Input:Duration': 90,
-            },
-          },
-        },
-      };
-
-      const testData = new Uint8Array([1, 2, 3]);
-      (global.fetch as any).mockResolvedValue({
-        ok: true,
-        status: 200,
-        arrayBuffer: async () => testData.buffer,
-      });
-
-      const Replicate = (await import('replicate')).default;
-      const mockRun = vi.fn().mockResolvedValue('https://example.com/music.mp3');
-      (Replicate as any).mockImplementation(() => ({
-        run: mockRun,
-      }));
-
-      await handler.warmStart?.({ logger: undefined });
-      const result = await handler.invoke(request);
-
-      expect(result.status).toBe('succeeded');
-      expect(mockRun).toHaveBeenCalledWith('stability-ai/stable-audio-2.5', {
-        input: expect.objectContaining({
-          prompt: 'Classical symphony',
-        }),
-      });
+        environment: 'local',
+      },
+      mode: 'live',
+      secretResolver,
+      logger: undefined,
     });
 
-    it('sets fixed output MIME type to audio/mpeg', async () => {
-      const handler = createReplicateMusicHandler()({
-        descriptor: {
-          provider: 'replicate',
-          model: 'stability-ai/stable-audio-2.5',
-          environment: 'local',
-        },
-        mode: 'live',
-        secretResolver,
-        logger: undefined,
-      });
+    const request = baseRequest();
+    delete (request.context.extras as any).schema;
 
-      const request: ProviderJobContext = {
-        jobId: 'test-job',
+    await handler.warmStart?.({ logger: undefined });
+    await expect(handler.invoke(request)).rejects.toThrow(/Missing input schema/);
+  });
+
+  it('fails fast when required mapped input is absent', async () => {
+    const handler = createReplicateMusicHandler()({
+      descriptor: {
         provider: 'replicate',
         model: 'stability-ai/stable-audio-2.5',
-        revision: 'rev-test',
-        layerIndex: 0,
-        attempt: 1,
-        inputs: ['Artifact:MusicPromptGenerator.MusicPrompt', 'Input:Duration'],
-        produces: ['Artifact:MusicTrack'],
-        context: {
-          providerConfig: {},
-          rawAttachments: [],
-          environment: 'local',
-          observability: undefined,
-          extras: {
-            resolvedInputs: {
-              'Artifact:MusicPromptGenerator.MusicPrompt': 'Relaxing lofi beats',
-              'Input:Duration': 120,
-            },
-          },
-        },
-      };
+        environment: 'local',
+      },
+      mode: 'live',
+      secretResolver,
+      logger: undefined,
+    });
 
-      const testData = new Uint8Array([1, 2, 3]);
-      (global.fetch as any).mockResolvedValue({
-        ok: true,
-        status: 200,
-        arrayBuffer: async () => testData.buffer,
-      });
+    const request = baseRequest();
+    const extras = extrasFor(request);
+    delete extras.resolvedInputs['Input:Prompt'];
 
-      const Replicate = (await import('replicate')).default;
-      const mockRun = vi.fn().mockResolvedValue('https://example.com/music.mp3');
-      (Replicate as any).mockImplementation(() => ({
-        run: mockRun,
-      }));
+    await handler.warmStart?.({ logger: undefined });
+    await expect(handler.invoke(request)).rejects.toThrow(/Missing required input/);
+  });
 
-      await handler.warmStart?.({ logger: undefined });
-      const result = await handler.invoke(request);
+  it('fails when payload violates the input schema', async () => {
+    const handler = createReplicateMusicHandler()({
+      descriptor: {
+        provider: 'replicate',
+        model: 'stability-ai/stable-audio-2.5',
+        environment: 'local',
+      },
+      mode: 'live',
+      secretResolver,
+      logger: undefined,
+    });
 
-      expect(result.status).toBe('succeeded');
-      expect(result.artefacts[0]?.blob?.mimeType).toBe('audio/mpeg');
+    const request = baseRequest();
+    const extras = extrasFor(request);
+    extras.resolvedInputs['Input:Duration'] = 0;
+
+    await handler.warmStart?.({ logger: undefined });
+    await expect(handler.invoke(request)).rejects.toThrow(/Invalid input payload/);
+  });
+
+  it('ignores providerConfig defaults and customAttributes', async () => {
+    const handler = createReplicateMusicHandler()({
+      descriptor: {
+        provider: 'replicate',
+        model: 'stability-ai/stable-audio-2.5',
+        environment: 'local',
+      },
+      mode: 'live',
+      secretResolver,
+      logger: undefined,
+    });
+
+    const request = baseRequest();
+    request.context.providerConfig = {
+      defaults: { duration: 30 },
+      customAttributes: { seed: 1, cfg_scale: 2 },
+    };
+
+    const Replicate = (await import('replicate')).default;
+    const mockRun = vi.fn().mockResolvedValue('https://example.com/music.mp3');
+    (Replicate as any).mockImplementation(() => ({ run: mockRun }));
+
+    await handler.warmStart?.({ logger: undefined });
+    const result = await handler.invoke(request);
+
+    expect(result.status).toBe('succeeded');
+    expect(mockRun).toHaveBeenCalledWith('stability-ai/stable-audio-2.5', {
+      input: { prompt: 'Test music prompt', duration: 8 },
     });
   });
 
-  describe('input resolution', () => {
-    it('throws error when MusicPrompt is missing', async () => {
-      const handler = createReplicateMusicHandler()({
-        descriptor: {
-          provider: 'replicate',
-          model: 'stability-ai/stable-audio-2.5',
-          environment: 'local',
-        },
-        mode: 'live',
-        secretResolver,
-        logger: undefined,
-      });
-
-      const request: ProviderJobContext = {
-        jobId: 'test-job',
+  it('validates required inputs in simulated mode (dry run)', async () => {
+    const handler = createReplicateMusicHandler()({
+      descriptor: {
         provider: 'replicate',
         model: 'stability-ai/stable-audio-2.5',
-        revision: 'rev-test',
-        layerIndex: 0,
-        attempt: 1,
-        inputs: ['Input:Duration'],
-        produces: ['Artifact:MusicTrack'],
-        context: {
-          providerConfig: {},
-          rawAttachments: [],
-          environment: 'local',
-          observability: undefined,
-          extras: {
-            resolvedInputs: {
-              'Input:Duration': 60,
-            },
-          },
-        },
-      };
-
-      await handler.warmStart?.({ logger: undefined });
-
-      await expect(handler.invoke(request)).rejects.toThrow(
-        'No music prompt available for music generation.',
-      );
+        environment: 'local',
+      },
+      mode: 'simulated',
+      secretResolver,
+      logger: undefined,
     });
 
-    it('throws error when MusicPrompt is empty string', async () => {
-      const handler = createReplicateMusicHandler()({
-        descriptor: {
-          provider: 'replicate',
-          model: 'stability-ai/stable-audio-2.5',
-          environment: 'local',
-        },
-        mode: 'live',
-        secretResolver,
-        logger: undefined,
-      });
+    const request = baseRequest();
+    const extras = extrasFor(request);
+    delete extras.resolvedInputs['Input:Duration'];
 
-      const request: ProviderJobContext = {
-        jobId: 'test-job',
-        provider: 'replicate',
-        model: 'stability-ai/stable-audio-2.5',
-        revision: 'rev-test',
-        layerIndex: 0,
-        attempt: 1,
-        inputs: ['Artifact:MusicPromptGenerator.MusicPrompt', 'Input:Duration'],
-        produces: ['Artifact:MusicTrack'],
-        context: {
-          providerConfig: {},
-          rawAttachments: [],
-          environment: 'local',
-          observability: undefined,
-          extras: {
-            resolvedInputs: {
-              'Artifact:MusicPromptGenerator.MusicPrompt': '   ',
-              'Input:Duration': 60,
-            },
-          },
-        },
-      };
-
-      await handler.warmStart?.({ logger: undefined });
-
-      await expect(handler.invoke(request)).rejects.toThrow(
-        'No music prompt available for music generation.',
-      );
-    });
-
-    it('throws error when Duration is missing', async () => {
-      const handler = createReplicateMusicHandler()({
-        descriptor: {
-          provider: 'replicate',
-          model: 'stability-ai/stable-audio-2.5',
-          environment: 'local',
-        },
-        mode: 'live',
-        secretResolver,
-        logger: undefined,
-      });
-
-      const request: ProviderJobContext = {
-        jobId: 'test-job',
-        provider: 'replicate',
-        model: 'stability-ai/stable-audio-2.5',
-        revision: 'rev-test',
-        layerIndex: 0,
-        attempt: 1,
-        inputs: ['Artifact:MusicPromptGenerator.MusicPrompt'],
-        produces: ['Artifact:MusicTrack'],
-        context: {
-          providerConfig: {},
-          rawAttachments: [],
-          environment: 'local',
-          observability: undefined,
-          extras: {
-            resolvedInputs: {
-              'Artifact:MusicPromptGenerator.MusicPrompt': 'Happy tune',
-            },
-          },
-        },
-      };
-
-      await handler.warmStart?.({ logger: undefined });
-
-      await expect(handler.invoke(request)).rejects.toThrow(
-        'No duration available for music generation.',
-      );
-    });
-
-    it('throws error when Duration is zero or negative', async () => {
-      const handler = createReplicateMusicHandler()({
-        descriptor: {
-          provider: 'replicate',
-          model: 'stability-ai/stable-audio-2.5',
-          environment: 'local',
-        },
-        mode: 'live',
-        secretResolver,
-        logger: undefined,
-      });
-
-      const request: ProviderJobContext = {
-        jobId: 'test-job',
-        provider: 'replicate',
-        model: 'stability-ai/stable-audio-2.5',
-        revision: 'rev-test',
-        layerIndex: 0,
-        attempt: 1,
-        inputs: ['Artifact:MusicPromptGenerator.MusicPrompt', 'Input:Duration'],
-        produces: ['Artifact:MusicTrack'],
-        context: {
-          providerConfig: {},
-          rawAttachments: [],
-          environment: 'local',
-          observability: undefined,
-          extras: {
-            resolvedInputs: {
-              'Artifact:MusicPromptGenerator.MusicPrompt': 'Happy tune',
-              'Input:Duration': 0,
-            },
-          },
-        },
-      };
-
-      await handler.warmStart?.({ logger: undefined });
-
-      await expect(handler.invoke(request)).rejects.toThrow(
-        'No duration available for music generation.',
-      );
-    });
-  });
-
-  describe('error handling', () => {
-    it('throws error when Replicate prediction fails', async () => {
-      const handler = createReplicateMusicHandler()({
-        descriptor: {
-          provider: 'replicate',
-          model: 'stability-ai/stable-audio-2.5',
-          environment: 'local',
-        },
-        mode: 'live',
-        secretResolver,
-        logger: undefined,
-      });
-
-      const request: ProviderJobContext = {
-        jobId: 'test-job',
-        provider: 'replicate',
-        model: 'stability-ai/stable-audio-2.5',
-        revision: 'rev-test',
-        layerIndex: 0,
-        attempt: 1,
-        inputs: ['Artifact:MusicPromptGenerator.MusicPrompt', 'Input:Duration'],
-        produces: ['Artifact:MusicTrack'],
-        context: {
-          providerConfig: {},
-          rawAttachments: [],
-          environment: 'local',
-          observability: undefined,
-          extras: {
-            resolvedInputs: {
-              'Artifact:MusicPromptGenerator.MusicPrompt': 'Test music',
-              'Input:Duration': 60,
-            },
-          },
-        },
-      };
-
-      const Replicate = (await import('replicate')).default;
-      const mockRun = vi.fn().mockRejectedValue(new Error('Replicate API error'));
-      (Replicate as any).mockImplementation(() => ({
-        run: mockRun,
-      }));
-
-      await handler.warmStart?.({ logger: undefined });
-
-      await expect(handler.invoke(request)).rejects.toThrow('Replicate music prediction failed.');
-    });
-
-    it('returns failed status when artefact download fails', async () => {
-      const handler = createReplicateMusicHandler()({
-        descriptor: {
-          provider: 'replicate',
-          model: 'stability-ai/stable-audio-2.5',
-          environment: 'local',
-        },
-        mode: 'live',
-        secretResolver,
-        logger: undefined,
-      });
-
-      const request: ProviderJobContext = {
-        jobId: 'test-job',
-        provider: 'replicate',
-        model: 'stability-ai/stable-audio-2.5',
-        revision: 'rev-test',
-        layerIndex: 0,
-        attempt: 1,
-        inputs: ['Artifact:MusicPromptGenerator.MusicPrompt', 'Input:Duration'],
-        produces: ['Artifact:MusicTrack'],
-        context: {
-          providerConfig: {},
-          rawAttachments: [],
-          environment: 'local',
-          observability: undefined,
-          extras: {
-            resolvedInputs: {
-              'Artifact:MusicPromptGenerator.MusicPrompt': 'Test music',
-              'Input:Duration': 60,
-            },
-          },
-        },
-      };
-
-      (global.fetch as any).mockResolvedValue({
-        ok: false,
-        status: 500,
-      });
-
-      const Replicate = (await import('replicate')).default;
-      const mockRun = vi.fn().mockResolvedValue('https://example.com/music.mp3');
-      (Replicate as any).mockImplementation(() => ({
-        run: mockRun,
-      }));
-
-      await handler.warmStart?.({ logger: undefined });
-      const result = await handler.invoke(request);
-
-      expect(result.status).toBe('failed');
-      expect(result.artefacts[0]?.status).toBe('failed');
-    });
-  });
-
-  describe('diagnostics', () => {
-    it('includes duration mapping in diagnostics', async () => {
-      const handler = createReplicateMusicHandler()({
-        descriptor: {
-          provider: 'replicate',
-          model: 'elevenlabs/music',
-          environment: 'local',
-        },
-        mode: 'live',
-        secretResolver,
-        logger: undefined,
-      });
-
-      const request: ProviderJobContext = {
-        jobId: 'test-job',
-        provider: 'replicate',
-        model: 'elevenlabs/music',
-        revision: 'rev-test',
-        layerIndex: 0,
-        attempt: 1,
-        inputs: ['Artifact:MusicPromptGenerator.MusicPrompt', 'Input:Duration'],
-        produces: ['Artifact:MusicTrack'],
-        context: {
-          providerConfig: {
-            durationKey: 'music_length_ms',
-            durationMultiplier: 1000,
-            maxDuration: 300000,
-          },
-          rawAttachments: [],
-          environment: 'local',
-          observability: undefined,
-          extras: {
-            resolvedInputs: {
-              'Artifact:MusicPromptGenerator.MusicPrompt': 'Dance track',
-              'Input:Duration': 90,
-            },
-          },
-        },
-      };
-
-      const testData = new Uint8Array([1, 2, 3]);
-      (global.fetch as any).mockResolvedValue({
-        ok: true,
-        status: 200,
-        arrayBuffer: async () => testData.buffer,
-      });
-
-      const Replicate = (await import('replicate')).default;
-      const mockRun = vi.fn().mockResolvedValue('https://example.com/music.mp3');
-      (Replicate as any).mockImplementation(() => ({
-        run: mockRun,
-      }));
-
-      await handler.warmStart?.({ logger: undefined });
-      const result = await handler.invoke(request);
-
-      expect(result.diagnostics).toMatchObject({
-        provider: 'replicate',
-        model: 'elevenlabs/music',
-        duration: 90,
-        mappedDuration: 90000,
-      });
-    });
+    await expect(handler.invoke(request)).rejects.toThrow(/Missing required input/);
   });
 });

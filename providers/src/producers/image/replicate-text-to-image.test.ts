@@ -1,238 +1,234 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { HandlerFactory, ProviderJobContext } from '../../types.js';
+import type { ProviderJobContext, SecretResolver } from '../../types.js';
 import { createReplicateTextToImageHandler } from './replicate-text-to-image.js';
 
-const replicateMocks = vi.hoisted(() => ({
-  run: vi.fn(),
-  constructor: vi.fn(),
+vi.mock('replicate', () => ({
+  default: vi.fn().mockImplementation(() => ({
+    run: vi.fn(),
+  })),
 }));
 
-vi.mock('replicate', () => {
-  return {
-    default: vi.fn(() => {
-      replicateMocks.constructor();
-      return {
-        run: replicateMocks.run,
-      };
-    }),
-  };
+global.fetch = vi.fn();
+
+const schemaText = JSON.stringify({
+  type: 'object',
+  required: ['prompt'],
+  properties: {
+    prompt: { type: 'string' },
+    aspect_ratio: { type: 'string' },
+    output_size: { type: 'string' },
+  },
 });
 
-const secretResolver = {
-  getSecret: vi.fn(async () => 'test-replicate-token'),
-};
-
-const originalFetch = globalThis.fetch;
-
-function stubFetch(buffer: Uint8Array) {
-  const response = {
-    ok: true,
-    arrayBuffer: async () => buffer,
+describe('replicate-text-to-image (schema-first, no fallbacks)', () => {
+  let secretResolver: SecretResolver;
+  type TestExtras = {
+    resolvedInputs: Record<string, unknown>;
+    jobContext: {
+      inputBindings: Record<string, string>;
+      sdkMapping: Record<string, { field: string; required?: boolean }>;
+    };
+    plannerContext: { index?: { segment?: number; image?: number } };
+    schema: { input: string };
   };
-  const stub = vi.fn(async () => response);
-  (globalThis as typeof globalThis & { fetch: typeof fetch }).fetch = stub as unknown as typeof fetch;
-  return stub;
-}
 
-function restoreFetch() {
-  (globalThis as typeof globalThis & { fetch: typeof fetch }).fetch = originalFetch;
-}
+  beforeEach(() => {
+    vi.clearAllMocks();
+    secretResolver = {
+      async getSecret(key: string) {
+        return key === 'REPLICATE_API_TOKEN' ? 'test-replicate-token' : null;
+      },
+    };
+    (global.fetch as any).mockResolvedValue({
+      ok: true,
+      arrayBuffer: async () => new ArrayBuffer(4),
+    });
+  });
 
-function buildHandler(): ReturnType<HandlerFactory> {
-  const factory = createReplicateTextToImageHandler();
-  return factory({
-    descriptor: {
+  function baseRequest(): ProviderJobContext {
+    const extras: TestExtras = {
+      resolvedInputs: {
+        'Input:Prompt': 'A test image prompt',
+        'Input:AspectRatio': '16:9',
+      },
+      jobContext: {
+        inputBindings: {
+          Prompt: 'Input:Prompt',
+          AspectRatio: 'Input:AspectRatio',
+        },
+        sdkMapping: {
+          Prompt: { field: 'prompt', required: true },
+          AspectRatio: { field: 'aspect_ratio', required: false },
+        },
+      },
+      plannerContext: { index: { segment: 0, image: 0 } },
+      schema: { input: schemaText },
+    };
+
+    return {
+      jobId: 'test-job',
       provider: 'replicate',
       model: 'bytedance/seedream-4',
-      environment: 'local',
-    },
-    mode: 'live',
-    secretResolver,
-    logger: undefined,
-  });
-}
-
-function createJobContext(overrides: Partial<ProviderJobContext> = {}): ProviderJobContext {
-  const base: ProviderJobContext = {
-    jobId: 'job-text-to-image',
-    provider: 'replicate',
-    model: 'bytedance/seedream-4',
-    revision: 'rev-100',
-    layerIndex: 0,
-    attempt: 1,
-    inputs: ['Input:SegmentImagePromptInput[segment=0][image=0]', 'Input:AspectRatio', 'Input:ImagesPerSegment'],
-    produces: ['Artifact:SegmentImage[segment=0][image=0]'],
-    context: {
-      providerConfig: {
-        defaults: {
-          negative_prompt: 'blurry, distorted, watermark, low contrast',
-          num_inference_steps: 4,
-          guidance_scale: 3,
-          size: '1K',
-          image_input: [],
-          max_images: 1,
-          sequential_image_generation: 'disabled',
-        },
-        promptKey: 'prompt',
-        negativePromptKey: 'negative_prompt',
-        aspectRatioKey: 'aspect_ratio',
-        imageCountKey: 'max_images',
-        sizeKey: 'size',
-        outputMimeType: 'image/png',
+      revision: 'rev-test',
+      layerIndex: 0,
+      attempt: 1,
+      inputs: Object.keys(extras.resolvedInputs),
+      produces: ['Artifact:SegmentImage[segment=0][image=0]'],
+      context: {
+        providerConfig: {},
+        extras,
       },
-      environment: 'local',
-      rawAttachments: [],
-      observability: undefined,
-      extras: {
-        jobContext: {
-          inputBindings: {
-            Prompt: 'Artifact:ImagePromptGeneration.ImagePrompt[segment=0][image=0]',
-            AspectRatio: 'Input:AspectRatio',
-            Size: 'Input:Size',
-          },
-          sdkMapping: {
-            Prompt: { field: 'prompt', required: true },
-            AspectRatio: { field: 'aspect_ratio', required: false },
-            Size: { field: 'size', required: false },
-          },
-          indices: { segment: 0, image: 0 },
-          namespacePath: ['ImagePromptGeneration'],
-          qualifiedName: 'ImagePromptGeneration.ImagePromptProducer',
-        },
-        plannerContext: {
-          index: {
-            segment: 0,
-            image: 0,
-          },
-        },
-        resolvedInputs: {
-          'Artifact:ImagePromptGeneration.ImagePrompt[segment=0][image=0]': 'A cinematic view of mountains at sunrise',
-          'Input:ImagesPerSegment': 1,
-          'Input:NumOfImagesPerNarrative': 1,
-          'Input:AspectRatio': '16:9',
-          'Input:Size': '1K',
-        },
+    };
+  }
+
+  function extrasFor(request: ProviderJobContext): TestExtras {
+    return request.context.extras as TestExtras;
+  }
+
+  it('builds input strictly from sdk mapping and schema', async () => {
+    const handler = createReplicateTextToImageHandler()({
+      descriptor: {
+        provider: 'replicate',
+        model: 'bytedance/seedream-4',
+        environment: 'local',
       },
-    },
-  };
+      mode: 'live',
+      secretResolver,
+      logger: undefined,
+    });
 
-  return {
-    ...base,
-    ...overrides,
-    context: {
-      ...base.context,
-      ...(overrides.context ?? {}),
-      extras: {
-        ...(base.context.extras ?? {}),
-        ...(overrides.context?.extras ?? {}),
-        jobContext: {
-          ...(base.context.extras?.jobContext ?? {}),
-          ...(overrides.context?.extras?.jobContext ?? {}),
-        },
-        resolvedInputs: {
-          ...(base.context.extras?.resolvedInputs ?? {}),
-          ...(overrides.context?.extras?.resolvedInputs ?? {}),
-        },
-      },
-    },
-  };
-}
+    const request = baseRequest();
+    const extras = extrasFor(request);
+    extras.resolvedInputs['Input:OutputSize'] = '1K';
+    extras.jobContext.inputBindings.OutputSize = 'Input:OutputSize';
+    extras.jobContext.sdkMapping.OutputSize = { field: 'output_size', required: false };
 
-describe('createReplicateTextToImageHandler', () => {
-  beforeEach(() => {
-    vi.restoreAllMocks();
-    replicateMocks.run.mockReset();
-    replicateMocks.constructor.mockReset();
-    secretResolver.getSecret.mockClear();
-    restoreFetch();
-  });
-
-  it('runs Replicate prediction and materialises artefact blobs', async () => {
-    const handler = buildHandler();
-    stubFetch(new TextEncoder().encode('binary-image-data'));
-    replicateMocks.run.mockResolvedValueOnce(['https://example.com/image-1.png']);
+    const Replicate = (await import('replicate')).default;
+    const mockRun = vi.fn().mockResolvedValue('https://example.com/image.png');
+    (Replicate as any).mockImplementation(() => ({ run: mockRun }));
 
     await handler.warmStart?.({ logger: undefined });
-
-    const request = createJobContext();
     const result = await handler.invoke(request);
-
-    expect(secretResolver.getSecret).toHaveBeenCalledWith('REPLICATE_API_TOKEN');
-    expect(replicateMocks.run).toHaveBeenCalledWith('bytedance/seedream-4', {
-      input: expect.objectContaining({
-        prompt: 'A cinematic view of mountains at sunrise',
-        aspect_ratio: '16:9',
-        max_images: 1,
-        size: '1K',
-      }),
-    });
 
     expect(result.status).toBe('succeeded');
-    expect(result.artefacts).toHaveLength(1);
-    const artefact = result.artefacts[0];
-    expect(artefact?.status).toBe('succeeded');
-    expect(artefact?.blob?.mimeType).toBe('image/png');
-    expect(artefact?.blob?.data).toBeInstanceOf(Uint8Array);
-    expect(result.diagnostics?.outputUrls).toEqual(['https://example.com/image-1.png']);
+    expect(mockRun).toHaveBeenCalledWith('bytedance/seedream-4', {
+      input: {
+        prompt: 'A test image prompt',
+        aspect_ratio: '16:9',
+        output_size: '1K',
+      },
+    });
   });
 
-  it('marks artefact as failed when Replicate returns no URLs', async () => {
-    const handler = buildHandler();
-    replicateMocks.run.mockResolvedValueOnce([]);
-    stubFetch(new TextEncoder().encode('unreached'));
-    await handler.warmStart?.({ logger: undefined });
+  it('fails fast when schema is missing', async () => {
+    const handler = createReplicateTextToImageHandler()({
+      descriptor: {
+        provider: 'replicate',
+        model: 'bytedance/seedream-4',
+        environment: 'local',
+      },
+      mode: 'live',
+      secretResolver,
+      logger: undefined,
+    });
 
-    const request = createJobContext();
+    const request = baseRequest();
+    delete (request.context.extras as any).schema;
+
+    await handler.warmStart?.({ logger: undefined });
+    await expect(handler.invoke(request)).rejects.toThrow(/Missing input schema/);
+  });
+
+  it('fails fast when required mapped input is absent', async () => {
+    const handler = createReplicateTextToImageHandler()({
+      descriptor: {
+        provider: 'replicate',
+        model: 'bytedance/seedream-4',
+        environment: 'local',
+      },
+      mode: 'live',
+      secretResolver,
+      logger: undefined,
+    });
+
+    const request = baseRequest();
+    const extras = extrasFor(request);
+    delete extras.resolvedInputs['Input:Prompt'];
+
+    await handler.warmStart?.({ logger: undefined });
+    await expect(handler.invoke(request)).rejects.toThrow(/Missing required input/);
+  });
+
+  it('fails when payload violates the input schema', async () => {
+    const handler = createReplicateTextToImageHandler()({
+      descriptor: {
+        provider: 'replicate',
+        model: 'bytedance/seedream-4',
+        environment: 'local',
+      },
+      mode: 'live',
+      secretResolver,
+      logger: undefined,
+    });
+
+    const request = baseRequest();
+    const extras = extrasFor(request);
+    extras.resolvedInputs['Input:AspectRatio'] = 42;
+
+    await handler.warmStart?.({ logger: undefined });
+    await expect(handler.invoke(request)).rejects.toThrow(/Invalid input payload/);
+  });
+
+  it('ignores providerConfig defaults and customAttributes', async () => {
+    const handler = createReplicateTextToImageHandler()({
+      descriptor: {
+        provider: 'replicate',
+        model: 'bytedance/seedream-4',
+        environment: 'local',
+      },
+      mode: 'live',
+      secretResolver,
+      logger: undefined,
+    });
+
+    const request = baseRequest();
+    request.context.providerConfig = {
+      defaults: { output_size: '2K' },
+      customAttributes: { negative_prompt: 'bad' },
+    };
+
+    const Replicate = (await import('replicate')).default;
+    const mockRun = vi.fn().mockResolvedValue('https://example.com/image.png');
+    (Replicate as any).mockImplementation(() => ({ run: mockRun }));
+
+    await handler.warmStart?.({ logger: undefined });
     const result = await handler.invoke(request);
 
-    expect(result.status).toBe('failed');
-    expect(result.artefacts[0]?.status).toBe('failed');
-    expect(result.artefacts[0]?.diagnostics).toMatchObject({
-      reason: 'missing_output',
-    });
-  });
-
-  it('throws when prompt cannot be resolved', async () => {
-    const handler = buildHandler();
-    replicateMocks.run.mockResolvedValueOnce([]);
-    await handler.warmStart?.({ logger: undefined });
-
-    const request = createJobContext({
-      context: {
-        extras: {
-          resolvedInputs: {
-            SegmentImagePromptInput: [],
-            Prompt: '',
-            'Artifact:ImagePromptGeneration.ImagePrompt[segment=0][image=0]': '',
-          },
-        },
+    expect(result.status).toBe('succeeded');
+    expect(mockRun).toHaveBeenCalledWith('bytedance/seedream-4', {
+      input: {
+        prompt: 'A test image prompt',
+        aspect_ratio: '16:9',
       },
     });
-
-    await expect(handler.invoke(request)).rejects.toThrow('No prompt available for image generation.');
   });
 
-  it('fails fast when input schema validation fails', async () => {
-    const handler = buildHandler();
-    replicateMocks.run.mockResolvedValueOnce([]);
-    await handler.warmStart?.({ logger: undefined });
-
-    const request = createJobContext({
-      context: {
-        extras: {
-          schema: {
-            input: JSON.stringify({
-              type: 'object',
-              required: ['unprovided'],
-              properties: { unprovided: { type: 'string' } },
-            }),
-          },
-        },
+  it('validates required inputs in simulated mode (dry run)', async () => {
+    const handler = createReplicateTextToImageHandler()({
+      descriptor: {
+        provider: 'replicate',
+        model: 'bytedance/seedream-4',
+        environment: 'local',
       },
+      mode: 'simulated',
+      secretResolver,
+      logger: undefined,
     });
 
-    await expect(handler.invoke(request)).rejects.toThrow(/invalid input payload/i);
-    expect(replicateMocks.run).not.toHaveBeenCalled();
-  });
+    const request = baseRequest();
+    const extras = extrasFor(request);
+    delete extras.resolvedInputs['Input:Prompt'];
 
+    await expect(handler.invoke(request)).rejects.toThrow(/Missing required input/);
+  });
 });

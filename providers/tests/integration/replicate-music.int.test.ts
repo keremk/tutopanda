@@ -1,133 +1,86 @@
 /**
- * Music Integration Tests
+ * Music Integration Test (single model)
  *
- * These tests call real Replicate APIs and are expensive/slow.
- * By default, all tests are SKIPPED even if REPLICATE_API_TOKEN is available.
+ * Set exactly one of:
+ * - RUN_MUSIC_STABLE_AUDIO=1 (stability-ai/stable-audio-2.5)
+ * - RUN_MUSIC_ELEVENLABS=1 (elevenlabs/music)
+ * - RUN_ALL_MUSIC_TESTS=1 (picks stability-ai/stable-audio-2.5)
  *
- * Enable specific models via environment variables:
- * - RUN_MUSIC_STABLE_AUDIO=1    (stability-ai/stable-audio-2.5)
- * - RUN_MUSIC_ELEVENLABS=1      (elevenlabs/music)
- * - RUN_ALL_MUSIC_TESTS=1       (runs all music tests)
- *
- * Examples:
- *
- * # Spot check stable-audio model
  * RUN_MUSIC_STABLE_AUDIO=1 pnpm test:integration
- *
- * # Run only elevenlabs test
- * RUN_MUSIC_ELEVENLABS=1 pnpm test:integration
- *
- * # Run all music integration tests
- * RUN_ALL_MUSIC_TESTS=1 pnpm test:integration
  */
 
 import { describe, expect, it } from 'vitest';
 import { createReplicateMusicHandler } from '../../src/producers/music/replicate-music.js';
 import type { ProviderJobContext } from '../../src/types.js';
 import { saveTestArtifact } from './test-utils.js';
+import {
+  buildMusicExtras,
+  getMusicMapping,
+  loadMusicSchema,
+  type MusicModel,
+} from './schema-helpers.js';
 
 const describeIfToken = process.env.REPLICATE_API_TOKEN ? describe : describe.skip;
-const describeIfStableAudio =
-  process.env.RUN_MUSIC_STABLE_AUDIO || process.env.RUN_ALL_MUSIC_TESTS
-    ? describe
-    : describe.skip;
-const describeIfElevenlabs =
-  process.env.RUN_MUSIC_ELEVENLABS || process.env.RUN_ALL_MUSIC_TESTS
-    ? describe
-    : describe.skip;
 
-describeIfToken('Replicate music integration', () => {
-  describeIfStableAudio('stability-ai/stable-audio-2.5', () => {
-    it('generates a music artefact via Replicate (stable-audio)', async () => {
-      const handler = createReplicateMusicHandler()({
-        descriptor: {
-          provider: 'replicate',
-          model: 'stability-ai/stable-audio-2.5',
-          environment: 'local',
-        },
-        mode: 'live',
-        secretResolver: {
-          async getSecret(key) {
-            if (key === 'REPLICATE_API_TOKEN') {
-              return process.env.REPLICATE_API_TOKEN ?? null;
-            }
-            return null;
-          },
-        },
-        logger: {
-          info: (msg, meta) => console.log(`[INFO] ${msg}`, meta),
-          error: (msg, meta) => console.error(`[ERROR] ${msg}`, meta),
-        },
-      });
+function selectModel(): MusicModel | null {
+  const enabled: Array<{ flag: string; model: MusicModel }> = [];
+  if (process.env.RUN_MUSIC_STABLE_AUDIO) {
+    enabled.push({ flag: 'RUN_MUSIC_STABLE_AUDIO', model: 'stability-ai/stable-audio-2.5' });
+  }
+  if (process.env.RUN_MUSIC_ELEVENLABS) {
+    enabled.push({ flag: 'RUN_MUSIC_ELEVENLABS', model: 'elevenlabs/music' });
+  }
+  if (process.env.RUN_ALL_MUSIC_TESTS) {
+    enabled.push({ flag: 'RUN_ALL_MUSIC_TESTS', model: 'stability-ai/stable-audio-2.5' });
+  }
 
-      await handler.warmStart?.({ logger: undefined });
+  const uniqueModels = new Set(enabled.map((entry) => entry.model));
+  if (uniqueModels.size > 1) {
+    throw new Error('Select exactly one music model env flag; multiple models enabled.');
+  }
+  return enabled[0]?.model ?? null;
+}
 
-      const request: ProviderJobContext = {
-        jobId: 'job-int-replicate-music-stable-audio',
-        provider: 'replicate',
-        model: 'stability-ai/stable-audio-2.5',
-        revision: 'rev-int-music',
-        layerIndex: 0,
-        attempt: 1,
-        inputs: ['Artifact:MusicPrompt', 'Input:Duration'],
-        produces: ['Artifact:MusicTrack'],
-        context: {
-          providerConfig: {
-            promptKey: 'prompt',
-            durationKey: 'duration',
-            durationMultiplier: 1,
-            maxDuration: 190,
-            defaults: {},
-            customAttributes: {
-              steps: 8,
-              cfg_scale: 1,
-            },
-          },
-          rawAttachments: [],
-          environment: 'local',
-          observability: undefined,
-          extras: {
-            resolvedInputs: {
-              MusicPrompt:
-                'Upbeat electronic music with a modern feel, featuring synthesizers and a driving beat',
-              Duration: 30, // Short duration for faster test
-            },
-          },
-        },
-      };
+function resolveInputsFromSchema(model: MusicModel): Record<string, unknown> {
+  const schemaText = loadMusicSchema(model);
+  const schema = JSON.parse(schemaText) as { properties?: Record<string, { default?: unknown; minimum?: number }> };
+  const properties = schema.properties ?? {};
+  const mapping = getMusicMapping(model);
+  const inputs: Record<string, unknown> = {
+    'Input:Prompt': `Integration music prompt for ${model}`,
+  };
 
-      const result = await handler.invoke(request);
+  for (const [alias, spec] of Object.entries(mapping)) {
+    if (alias === 'Prompt') continue;
+    const property = properties[spec.field] ?? {};
+    if (typeof property.minimum === 'number') {
+      inputs[`Input:${alias}`] = property.minimum;
+      continue;
+    }
+    if (property.default !== undefined) {
+      inputs[`Input:${alias}`] = property.default;
+      continue;
+    }
+    inputs[`Input:${alias}`] = inputs[`Input:${alias}`] ?? 5;
+  }
 
-      expect(result.status).toBe('succeeded');
-      expect(result.artefacts).toHaveLength(1);
+  return inputs;
+}
 
-      const artefact = result.artefacts[0];
-      expect(artefact?.status).toBe('succeeded');
-      expect(artefact?.blob?.data).toBeInstanceOf(Uint8Array);
-      expect(artefact?.blob?.mimeType).toBe('audio/mpeg');
-      expect(artefact?.blob?.data.length).toBeGreaterThan(0);
+describeIfToken('Replicate music integration (single model)', () => {
+  const model = selectModel();
+  const describeBlock = model ? describe : describe.skip;
 
-      // Verify diagnostics include duration mapping
-      expect(result.diagnostics).toMatchObject({
-        provider: 'replicate',
-        model: 'stability-ai/stable-audio-2.5',
-        duration: 30,
-        mappedDuration: 30, // 30 seconds in seconds
-      });
-
-      // Optional: Write to disk for manual verification
-      if (artefact?.blob?.data) {
-        saveTestArtifact('test-stable-audio-output.mp3', artefact.blob.data);
+  describeBlock(model ?? 'no-model', () => {
+    it('prompt-to-music uses schema defaults and mapping', async () => {
+      if (!model) {
+        throw new Error('No model selected for integration test.');
       }
-    }, 120000); // 2 minute timeout for music generation
-  });
 
-  describeIfElevenlabs('elevenlabs/music', () => {
-    it('generates a music artefact via Replicate (elevenlabs)', async () => {
       const handler = createReplicateMusicHandler()({
         descriptor: {
           provider: 'replicate',
-          model: 'elevenlabs/music',
+          model,
           environment: 'local',
         },
         mode: 'live',
@@ -139,143 +92,37 @@ describeIfToken('Replicate music integration', () => {
             return null;
           },
         },
-        logger: {
-          info: (msg, meta) => console.log(`[INFO] ${msg}`, meta),
-          error: (msg, meta) => console.error(`[ERROR] ${msg}`, meta),
-        },
       });
 
-      await handler.warmStart?.({ logger: undefined });
+      const resolvedInputs = resolveInputsFromSchema(model);
 
       const request: ProviderJobContext = {
-        jobId: 'job-int-replicate-music-elevenlabs',
+        jobId: `integration-${model}-music`,
         provider: 'replicate',
-        model: 'elevenlabs/music',
-        revision: 'rev-int-music',
+        model,
+        revision: 'rev-test',
         layerIndex: 0,
         attempt: 1,
-        inputs: ['Artifact:MusicPrompt', 'Input:Duration'],
+        inputs: Object.keys(resolvedInputs),
         produces: ['Artifact:MusicTrack'],
         context: {
-          providerConfig: {
-            promptKey: 'prompt',
-            durationKey: 'music_length_ms',
-            durationMultiplier: 1000,
-            maxDuration: 300000,
-            defaults: {},
-            customAttributes: {
-              force_instrumental: true,
-              output_format: 'mp3_standard',
-            },
-          },
-          rawAttachments: [],
-          environment: 'local',
-          observability: undefined,
-          extras: {
-            resolvedInputs: {
-              MusicPrompt: 'Calm ambient music with soft piano and gentle strings',
-              Duration: 20, // Short duration for faster test (20s = 20000ms)
-            },
-          },
+          providerConfig: {},
+          extras: buildMusicExtras(model, resolvedInputs),
         },
       };
 
+      await handler.warmStart?.({ logger: undefined });
       const result = await handler.invoke(request);
 
       expect(result.status).toBe('succeeded');
       expect(result.artefacts).toHaveLength(1);
+      expect(result.artefacts[0]?.artefactId).toBe('Artifact:MusicTrack');
+      expect(result.artefacts[0]?.blob?.mimeType).toBe('audio/mpeg');
+      expect(result.artefacts[0]?.blob?.data).toBeInstanceOf(Uint8Array);
 
-      const artefact = result.artefacts[0];
-      expect(artefact?.status).toBe('succeeded');
-      expect(artefact?.blob?.data).toBeInstanceOf(Uint8Array);
-      expect(artefact?.blob?.mimeType).toBe('audio/mpeg');
-      expect(artefact?.blob?.data.length).toBeGreaterThan(0);
-
-      // Verify diagnostics include duration mapping in milliseconds
-      expect(result.diagnostics).toMatchObject({
-        provider: 'replicate',
-        model: 'elevenlabs/music',
-        duration: 20,
-        mappedDuration: 20000, // 20 seconds * 1000 = 20000ms
-      });
-
-      // Optional: Write to disk for manual verification
-      if (artefact?.blob?.data) {
-        saveTestArtifact('test-elevenlabs-music-output.mp3', artefact.blob.data);
+      if (result.artefacts[0]?.blob?.data) {
+        saveTestArtifact(`test-music-${model}.mp3`, result.artefacts[0].blob.data);
       }
-    }, 120000); // 2 minute timeout for music generation
-  });
-
-  describeIfStableAudio('stability-ai/stable-audio-2.5 duration capping', () => {
-    it('caps duration at 190 seconds for stable-audio', async () => {
-      const handler = createReplicateMusicHandler()({
-        descriptor: {
-          provider: 'replicate',
-          model: 'stability-ai/stable-audio-2.5',
-          environment: 'local',
-        },
-        mode: 'live',
-        secretResolver: {
-          async getSecret(key) {
-            if (key === 'REPLICATE_API_TOKEN') {
-              return process.env.REPLICATE_API_TOKEN ?? null;
-            }
-            return null;
-          },
-        },
-        logger: {
-          info: (msg, meta) => console.log(`[INFO] ${msg}`, meta),
-          error: (msg, meta) => console.error(`[ERROR] ${msg}`, meta),
-        },
-      });
-
-      await handler.warmStart?.({ logger: undefined });
-
-      const request: ProviderJobContext = {
-        jobId: 'job-int-replicate-music-capping',
-        provider: 'replicate',
-        model: 'stability-ai/stable-audio-2.5',
-        revision: 'rev-int-music',
-        layerIndex: 0,
-        attempt: 1,
-        inputs: ['Artifact:MusicPrompt', 'Input:Duration'],
-        produces: ['Artifact:MusicTrack'],
-        context: {
-          providerConfig: {
-            promptKey: 'prompt',
-            durationKey: 'duration',
-            durationMultiplier: 1,
-            maxDuration: 190,
-            defaults: {},
-            customAttributes: {},
-          },
-          rawAttachments: [],
-          environment: 'local',
-          observability: undefined,
-          extras: {
-            resolvedInputs: {
-              MusicPrompt: 'Epic orchestral soundtrack with sweeping strings',
-              Duration: 300, // Exceeds max, should be capped at 190
-            },
-          },
-        },
-      };
-
-      const result = await handler.invoke(request);
-
-      expect(result.status).toBe('succeeded');
-      expect(result.artefacts).toHaveLength(1);
-
-      const artefact = result.artefacts[0];
-      expect(artefact?.status).toBe('succeeded');
-
-      // Verify diagnostics show capping occurred
-      expect(result.diagnostics).toMatchObject({
-        provider: 'replicate',
-        model: 'stability-ai/stable-audio-2.5',
-        duration: 300,
-        mappedDuration: 190, // Capped at max
-      });
-    }, 180000); // 3 minute timeout for longer generation
+    }, 240000);
   });
 });

@@ -198,7 +198,6 @@ describe('replicate-video (schema-first, no fallbacks)', () => {
     });
 
     const request = baseRequest();
-    const extras = extrasFor(request);
     request.context.providerConfig = {
       defaults: { duration: 5, resolution: '1080p' },
       customAttributes: { fps: 24, camera_fixed: true },

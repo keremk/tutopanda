@@ -7,21 +7,10 @@ import {
   buildArtefactsFromUrls,
   extractPlannerContext,
   runReplicateWithRetries,
-  isRecord,
-  type PlannerContext,
 } from '../../sdk/replicate/index.js';
 import { validatePayload } from '../../sdk/schema-validator.js';
 
-interface ReplicateImageConfig {
-  defaults: Record<string, unknown>;
-  promptKey: string;
-  negativePromptKey: string;
-  aspectRatioKey: string;
-  imageCountKey: string;
-  sizeKey?: string;
-  outputMimeType: string;
-  extrasMapping: Record<string, string>;
-}
+const OUTPUT_MIME_TYPE = 'image/png';
 
 export function createReplicateTextToImageHandler(): HandlerFactory {
   return (init) => {
@@ -30,7 +19,6 @@ export function createReplicateTextToImageHandler(): HandlerFactory {
 
     const factory = createProducerHandlerFactory({
       domain: 'media',
-      configValidator: parseReplicateImageConfig,
       warmStart: async () => {
         try {
           await clientManager.ensure();
@@ -45,36 +33,18 @@ export function createReplicateTextToImageHandler(): HandlerFactory {
       },
       invoke: async ({ request, runtime }) => {
         const replicate = await clientManager.ensure();
-        const config = runtime.config.parse<ReplicateImageConfig>(parseReplicateImageConfig);
         const plannerContext = extractPlannerContext(request);
-        const sdkPayload = runtime.sdk.buildPayload();
         const inputSchema = readInputSchema(request);
-        validatePayload(inputSchema, sdkPayload, 'input');
-        const promptValue = sdkPayload[config.promptKey];
-
-        if (typeof promptValue !== 'string' || promptValue.trim().length === 0) {
-          throw createProviderError('No prompt available for image generation.', {
-            code: 'missing_prompt',
-            kind: 'user_input',
-            causedByUser: true,
+        if (!inputSchema) {
+          throw createProviderError('Missing input schema for Replicate image provider.', {
+            code: 'missing_input_schema',
+            kind: 'unknown',
           });
         }
 
-        logger?.debug?.('providers.replicate.image.prompt', {
-          producer: request.jobId,
-          prompt: promptValue,
-          availableInputs: Object.keys(runtime.inputs.all()),
-          plannerContext,
-        });
-
-        const input = buildReplicateInput({
-          config,
-          request,
-          basePayload: sdkPayload,
-          prompt: promptValue,
-          plannerContext,
-          resolvedInputs: runtime.inputs.all(),
-        });
+        const sdkPayload = runtime.sdk.buildPayload();
+        validatePayload(inputSchema, sdkPayload, 'input');
+        const input = { ...sdkPayload };
 
         let predictionOutput: unknown;
         const modelIdentifier = request.model as `${string}/${string}` | `${string}/${string}:${string}`;
@@ -105,7 +75,7 @@ export function createReplicateTextToImageHandler(): HandlerFactory {
         const artefacts = await buildArtefactsFromUrls({
           produces: request.produces,
           urls: outputUrls,
-          mimeType: config.outputMimeType,
+          mimeType: OUTPUT_MIME_TYPE,
           mode: init.mode,
         });
 
@@ -132,92 +102,6 @@ export function createReplicateTextToImageHandler(): HandlerFactory {
 
     return factory(init);
   };
-}
-
-function parseReplicateImageConfig(raw: unknown): ReplicateImageConfig {
-  const source = isRecord(raw) ? raw : {};
-
-  // Merge all default sources
-  const defaults: Record<string, unknown> = {
-    ...(isRecord(source.defaults) ? source.defaults : {}),
-    ...(isRecord(source.inputs) ? source.inputs : {}),
-    ...(isRecord(source.customAttributes) ? source.customAttributes : {}),
-  };
-
-  // Extract key mappings with defaults
-  const getString = (key: string, defaultValue: string): string =>
-    typeof source[key] === 'string' && source[key] ? (source[key] as string) : defaultValue;
-
-  const extrasMapping: Record<string, string> = {};
-  if (isRecord(source.extrasMapping)) {
-    for (const [key, value] of Object.entries(source.extrasMapping)) {
-      if (typeof value === 'string' && value) {
-        extrasMapping[key] = value;
-      }
-    }
-  }
-
-  return {
-    defaults,
-    promptKey: getString('promptKey', 'prompt'),
-    negativePromptKey: getString('negativePromptKey', 'negative_prompt'),
-    aspectRatioKey: getString('aspectRatioKey', 'aspect_ratio'),
-    imageCountKey: getString('imageCountKey', 'num_outputs'),
-    sizeKey: source.sizeKey && typeof source.sizeKey === 'string' ? source.sizeKey : undefined,
-    outputMimeType: getString('outputMimeType', 'image/png'),
-    extrasMapping,
-  };
-}
-
-function buildReplicateInput(args: {
-  config: ReplicateImageConfig;
-  prompt: string;
-  basePayload: Record<string, unknown>;
-  request: ProviderJobContext;
-  plannerContext: PlannerContext;
-  resolvedInputs: Record<string, unknown>;
-}): Record<string, unknown> {
-  const { config, prompt, basePayload, request, plannerContext, resolvedInputs } = args;
-  const input: Record<string, unknown> = {
-    ...config.defaults,
-    ...basePayload,
-  };
-  input[config.promptKey] = prompt;
-
-  if (config.sizeKey && (input[config.sizeKey] === undefined || input[config.sizeKey] === '')) {
-    input[config.sizeKey] = '1K';
-  }
-
-  const imagesPerSegment =
-    runtimeNumber(resolvedInputs['ImagesPerSegment'])
-    ?? runtimeNumber(resolvedInputs['NumOfImagesPerNarrative']);
-  if (typeof imagesPerSegment === 'number' && imagesPerSegment > 0) {
-    input[config.imageCountKey] = Math.min(request.produces.length, Math.trunc(imagesPerSegment));
-  } else {
-    input[config.imageCountKey] = request.produces.length;
-  }
-
-  const indexPayload = {
-    segment: plannerContext.index?.segment ?? 0,
-    image: plannerContext.index?.image ?? 0,
-  };
-  input._plannerIndex = indexPayload;
-
-  for (const [inputKey, field] of Object.entries(config.extrasMapping)) {
-    if (input[field] !== undefined) {
-      continue;
-    }
-    const value = resolvedInputs[inputKey];
-    if (value !== undefined) {
-      input[field] = value;
-    }
-  }
-
-  return input;
-}
-
-function runtimeNumber(value: unknown): number | undefined {
-  return typeof value === 'number' ? value : undefined;
 }
 
 function readInputSchema(request: ProviderJobContext): string | undefined {

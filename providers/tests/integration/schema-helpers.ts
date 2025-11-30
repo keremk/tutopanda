@@ -7,18 +7,44 @@ export type VideoModel =
   | 'bytedance/seedance-1-lite'
   | 'google/veo-3.1-fast';
 
+export type AudioModel =
+  | 'minimax/speech-2.6-hd'
+  | 'minimax/speech-02-hd'
+  | 'elevenlabs/v3';
+
+export type MusicModel = 'stability-ai/stable-audio-2.5' | 'elevenlabs/music';
+
+export type ImageModel = 'bytedance/seedream-4' | 'google/nano-banana' | 'qwen/qwen-image';
+
 type MappingEntry = { field: string; required?: boolean };
 
 type ModelMapping = Record<string, MappingEntry>;
 
-const schemaPaths: Record<VideoModel, string> = {
+const videoSchemaPaths: Record<VideoModel, string> = {
   'bytedance/seedance-1-pro-fast': '../../../cli/config/blueprints/modules/schemas/bytedance-seedance-1-pro-fast.json',
   'bytedance/seedance-1-lite': '../../../cli/config/blueprints/modules/schemas/bytedance-seedance-1-lite.json',
   'google/veo-3.1-fast': '../../../cli/config/blueprints/modules/schemas/google-veo-3-1-fast.json',
 };
 
+const audioSchemaPaths: Record<AudioModel, string> = {
+  'minimax/speech-2.6-hd': '../../../cli/config/blueprints/modules/schemas/minimax-speech.json',
+  'minimax/speech-02-hd': '../../../cli/config/blueprints/modules/schemas/minimax-speech.json',
+  'elevenlabs/v3': '../../../cli/config/blueprints/modules/schemas/elevenlabs-speech-v3.json',
+};
+
+const musicSchemaPaths: Record<MusicModel, string> = {
+  'stability-ai/stable-audio-2.5': '../../../cli/config/blueprints/modules/schemas/stable-audio.json',
+  'elevenlabs/music': '../../../cli/config/blueprints/modules/schemas/elevenlabs-music.json',
+};
+
+const imageSchemaPaths: Record<ImageModel, string> = {
+  'bytedance/seedream-4': '../../../cli/config/blueprints/modules/schemas/bytedance-seedream-4.json',
+  'google/nano-banana': '../../../cli/config/blueprints/modules/schemas/google-nano-banana.json',
+  'qwen/qwen-image': '../../../cli/config/blueprints/modules/schemas/qwen-image.json',
+};
+
 // Mirrors cli/config/blueprints/modules/producers/video.yaml input mappings
-const modelMappings: Record<VideoModel, ModelMapping> = {
+const videoModelMappings: Record<VideoModel, ModelMapping> = {
   'bytedance/seedance-1-pro-fast': {
     Prompt: { field: 'prompt', required: true },
     AspectRatio: { field: 'aspect_ratio', required: true },
@@ -39,24 +65,66 @@ const modelMappings: Record<VideoModel, ModelMapping> = {
   },
 };
 
-function resolveSchemaPath(model: VideoModel): string {
+// Mirrors cli/config/blueprints/modules/producers/audio.yaml input mappings
+const audioModelMappings: Record<AudioModel, ModelMapping> = {
+  'minimax/speech-2.6-hd': {
+    TextInput: { field: 'text', required: true },
+    Emotion: { field: 'emotion', required: false },
+    VoiceId: { field: 'voice_id', required: true },
+  },
+  'minimax/speech-02-hd': {
+    TextInput: { field: 'text', required: true },
+    Emotion: { field: 'emotion', required: false },
+    VoiceId: { field: 'voice_id', required: true },
+  },
+  'elevenlabs/v3': {
+    TextInput: { field: 'prompt', required: true },
+    VoiceId: { field: 'voice', required: true },
+  },
+};
+
+// Mirrors cli/config/blueprints/modules/producers/music.yaml input mappings
+const musicModelMappings: Record<MusicModel, ModelMapping> = {
+  'stability-ai/stable-audio-2.5': {
+    Prompt: { field: 'prompt', required: true },
+    Duration: { field: 'duration', required: true },
+  },
+  'elevenlabs/music': {
+    Prompt: { field: 'prompt', required: true },
+    Duration: { field: 'music_length_ms', required: true },
+  },
+};
+
+// Mirrors cli/config/blueprints/modules/producers/image.yaml input mappings
+const imageModelMappings: Record<ImageModel, ModelMapping> = {
+  'bytedance/seedream-4': {
+    Prompt: { field: 'prompt', required: true },
+    AspectRatio: { field: 'aspect_ratio', required: false },
+    Size: { field: 'output_size', required: false },
+  },
+  'google/nano-banana': {
+    Prompt: { field: 'prompt', required: true },
+    AspectRatio: { field: 'aspect_ratio', required: false },
+  },
+  'qwen/qwen-image': {
+    Prompt: { field: 'prompt', required: true },
+    AspectRatio: { field: 'aspect_ratio', required: false },
+  },
+};
+
+function resolveSchemaPath(relative: string): string {
+  return resolve(new URL('.', import.meta.url).pathname, relative);
+}
+
+function loadSchemaForModel<TModel extends string>(
+  schemaPaths: Record<TModel, string>,
+  model: TModel,
+): string {
   const relative = schemaPaths[model];
   if (!relative) {
     throw new Error(`No schema path registered for model: ${model}`);
   }
-  return resolve(new URL('.', import.meta.url).pathname, relative);
-}
-
-export function loadSchema(model: VideoModel): string {
-  return readFileSync(resolveSchemaPath(model), 'utf-8');
-}
-
-export function getVideoMapping(model: VideoModel): ModelMapping {
-  const mapping = modelMappings[model];
-  if (!mapping) {
-    throw new Error(`No mapping registered for model: ${model}`);
-  }
-  return mapping;
+  return readFileSync(resolveSchemaPath(relative), 'utf-8');
 }
 
 function mergeMappings(base: ModelMapping, extra?: ModelMapping): ModelMapping {
@@ -66,6 +134,7 @@ function mergeMappings(base: ModelMapping, extra?: ModelMapping): ModelMapping {
 function computeMappingFromSchema(
   schemaText: string,
   mapping: ModelMapping,
+  requiredAliases: string[] = [],
 ): Record<string, MappingEntry> {
   const schema = JSON.parse(schemaText) as { properties?: Record<string, unknown> };
   const properties = schema.properties ?? {};
@@ -78,21 +147,29 @@ function computeMappingFromSchema(
     resolved[alias] = spec;
   }
 
-  if (!resolved.Prompt) {
-    throw new Error('Prompt mapping is required for video tests.');
+  for (const alias of requiredAliases) {
+    if (!resolved[alias]) {
+      throw new Error(`${alias} mapping is required for this test.`);
+    }
   }
 
   return resolved;
 }
 
-export function buildVideoExtras(
-  model: VideoModel,
-  resolvedInputs: Record<string, unknown>,
-  extraMapping?: ModelMapping,
+function buildExtras<TModel extends string>(
+  args: {
+    model: TModel;
+    resolvedInputs: Record<string, unknown>;
+    schemaPaths: Record<TModel, string>;
+    modelMappings: Record<TModel, ModelMapping>;
+    requiredAliases: string[];
+    plannerIndex?: { segment?: number; image?: number };
+    extraMapping?: ModelMapping;
+  },
 ): ProviderJobContext['context']['extras'] {
-  const schemaText = loadSchema(model);
-  const mapping = mergeMappings(modelMappings[model], extraMapping);
-  const sdkMapping = computeMappingFromSchema(schemaText, mapping);
+  const schemaText = loadSchemaForModel(args.schemaPaths, args.model);
+  const mapping = mergeMappings(args.modelMappings[args.model], args.extraMapping);
+  const sdkMapping = computeMappingFromSchema(schemaText, mapping, args.requiredAliases);
 
   const inputBindings: Record<string, string> = {};
   for (const alias of Object.keys(sdkMapping)) {
@@ -100,12 +177,123 @@ export function buildVideoExtras(
   }
 
   return {
-    resolvedInputs,
+    resolvedInputs: args.resolvedInputs,
     jobContext: {
       inputBindings,
       sdkMapping,
     },
-    plannerContext: { index: { segment: 0 } },
+    plannerContext: { index: args.plannerIndex ?? { segment: 0 } },
     schema: { input: schemaText },
   };
+}
+
+export function loadSchema(model: VideoModel): string {
+  return loadSchemaForModel(videoSchemaPaths, model);
+}
+
+export function getVideoMapping(model: VideoModel): ModelMapping {
+  const mapping = videoModelMappings[model];
+  if (!mapping) {
+    throw new Error(`No mapping registered for model: ${model}`);
+  }
+  return mapping;
+}
+
+export function buildVideoExtras(
+  model: VideoModel,
+  resolvedInputs: Record<string, unknown>,
+  extraMapping?: ModelMapping,
+): ProviderJobContext['context']['extras'] {
+  return buildExtras({
+    model,
+    resolvedInputs,
+    schemaPaths: videoSchemaPaths,
+    modelMappings: videoModelMappings,
+    requiredAliases: ['Prompt'],
+    extraMapping,
+  });
+}
+
+export function loadAudioSchema(model: AudioModel): string {
+  return loadSchemaForModel(audioSchemaPaths, model);
+}
+
+export function getAudioMapping(model: AudioModel): ModelMapping {
+  const mapping = audioModelMappings[model];
+  if (!mapping) {
+    throw new Error(`No mapping registered for model: ${model}`);
+  }
+  return mapping;
+}
+
+export function buildAudioExtras(
+  model: AudioModel,
+  resolvedInputs: Record<string, unknown>,
+  extraMapping?: ModelMapping,
+): ProviderJobContext['context']['extras'] {
+  return buildExtras({
+    model,
+    resolvedInputs,
+    schemaPaths: audioSchemaPaths,
+    modelMappings: audioModelMappings,
+    requiredAliases: ['TextInput', 'VoiceId'],
+    plannerIndex: { segment: 0 },
+    extraMapping,
+  });
+}
+
+export function loadMusicSchema(model: MusicModel): string {
+  return loadSchemaForModel(musicSchemaPaths, model);
+}
+
+export function getMusicMapping(model: MusicModel): ModelMapping {
+  const mapping = musicModelMappings[model];
+  if (!mapping) {
+    throw new Error(`No mapping registered for model: ${model}`);
+  }
+  return mapping;
+}
+
+export function buildMusicExtras(
+  model: MusicModel,
+  resolvedInputs: Record<string, unknown>,
+  extraMapping?: ModelMapping,
+): ProviderJobContext['context']['extras'] {
+  return buildExtras({
+    model,
+    resolvedInputs,
+    schemaPaths: musicSchemaPaths,
+    modelMappings: musicModelMappings,
+    requiredAliases: ['Prompt', 'Duration'],
+    plannerIndex: { segment: 0 },
+    extraMapping,
+  });
+}
+
+export function loadImageSchema(model: ImageModel): string {
+  return loadSchemaForModel(imageSchemaPaths, model);
+}
+
+export function getImageMapping(model: ImageModel): ModelMapping {
+  const mapping = imageModelMappings[model];
+  if (!mapping) {
+    throw new Error(`No mapping registered for model: ${model}`);
+  }
+  return mapping;
+}
+
+export function buildImageExtras(
+  model: ImageModel,
+  resolvedInputs: Record<string, unknown>,
+  extraMapping?: ModelMapping,
+): ProviderJobContext['context']['extras'] {
+  return buildExtras({
+    model,
+    resolvedInputs,
+    schemaPaths: imageSchemaPaths,
+    modelMappings: imageModelMappings,
+    requiredAliases: ['Prompt'],
+    plannerIndex: { segment: 0, image: 0 },
+    extraMapping,
+  });
 }
