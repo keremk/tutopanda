@@ -22,7 +22,10 @@
     "test:unit": "vitest run --pool=threads --poolOptions.threads.singleThread",
     "test:integration": "vitest run -c vitest.integration.config.ts --pool=threads --poolOptions.threads.singleThread",
     "test:e2e": "vitest run -c vitest.e2e.config.ts --pool=threads --poolOptions.threads.singleThread",
-    "test:typecheck": "tsc --project tsconfig.vitest.json --noEmit",
+    "test:typecheck": "pnpm test:typecheck:unit && pnpm test:typecheck:integration && pnpm test:typecheck:e2e",
+    "test:typecheck:unit": "tsc --project tsconfig.vitest.unit.json --noEmit",
+    "test:typecheck:integration": "tsc --project tsconfig.vitest.integration.json --noEmit",
+    "test:typecheck:e2e": "tsc --project tsconfig.vitest.e2e.json --noEmit",
     "test:ui": "vitest --ui",
     "test:run": "vitest run"
   },

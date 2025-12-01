@@ -39,6 +39,7 @@ const AUDIO_ONLY_OVERRIDES = {
   Emotion: 'neutral',
   Language: 'en',
 };
+const LOG_DEFAULTS = { mode: 'log' as const, logLevel: 'info' as const };
 
 const tmpRoots: string[] = [];
 const originalEnvConfig = process.env.TUTOPANDA_CLI_CONFIG;
@@ -79,6 +80,7 @@ describe('runGenerate (new runs)', () => {
       overrides: AUDIO_ONLY_OVERRIDES,
     });
     const result = await runGenerate({
+      ...LOG_DEFAULTS,
       inputsPath,
       nonInteractive: true,
       blueprint: AUDIO_ONLY_BLUEPRINT_PATH,
@@ -134,6 +136,7 @@ describe('runGenerate (new runs)', () => {
       overrides: AUDIO_ONLY_OVERRIDES,
     });
     const result = await runGenerate({
+      ...LOG_DEFAULTS,
       inputsPath,
       dryRun: true,
       nonInteractive: true,
@@ -163,6 +166,7 @@ describe('runGenerate (new runs)', () => {
       },
     });
     const result = await runGenerate({
+      ...LOG_DEFAULTS,
       inputsPath,
       dryRun: true,
       nonInteractive: true,
@@ -188,6 +192,7 @@ describe('runGenerate (new runs)', () => {
       overrides: AUDIO_ONLY_OVERRIDES,
     });
     const result = await runGenerate({
+      ...LOG_DEFAULTS,
       inputsPath,
       nonInteractive: true,
       blueprint: AUDIO_ONLY_BLUEPRINT_PATH,
@@ -211,6 +216,7 @@ describe('runGenerate (new runs)', () => {
       overrides: AUDIO_ONLY_OVERRIDES,
     });
     await runGenerate({
+      ...LOG_DEFAULTS,
       inputsPath,
       nonInteractive: true,
       blueprint: AUDIO_ONLY_BLUEPRINT_PATH,
@@ -241,6 +247,7 @@ describe('runGenerate (new runs)', () => {
     await writeFile(baselineInputsPath, stringifyYaml(initialDoc), 'utf8');
 
     const first = await runGenerate({
+      ...LOG_DEFAULTS,
       inputsPath: baselineInputsPath,
       nonInteractive: true,
       blueprint: IMAGE_AUDIO_BLUEPRINT_PATH,
@@ -257,6 +264,7 @@ describe('runGenerate (new runs)', () => {
     await writeFile(baselineInputsPath, stringifyYaml(doc), 'utf8');
 
     const second = await runGenerate({
+      ...LOG_DEFAULTS,
       useLast: true,
       inputsPath: baselineInputsPath,
       nonInteractive: true,
@@ -288,6 +296,7 @@ describe('runGenerate (new runs)', () => {
       },
     });
     const result = await runGenerate({
+      ...LOG_DEFAULTS,
       inputsPath,
       dryRun: true,
       nonInteractive: true,
@@ -325,6 +334,7 @@ describe('runGenerate (new runs)', () => {
       overrides: AUDIO_ONLY_OVERRIDES,
     });
     const first = await runGenerate({
+      ...LOG_DEFAULTS,
       inputsPath,
       nonInteractive: true,
       blueprint: AUDIO_ONLY_BLUEPRINT_PATH,
@@ -334,6 +344,7 @@ describe('runGenerate (new runs)', () => {
     expect(cliConfig?.lastMovieId).toBe(formatMovieId(first.movieId));
 
     const second = await runGenerate({
+      ...LOG_DEFAULTS,
       useLast: true,
       dryRun: true,
     });
@@ -351,6 +362,7 @@ describe('runGenerate (new runs)', () => {
 
     await expect(
       runGenerate({
+        ...LOG_DEFAULTS,
         useLast: true,
       }),
     ).rejects.toThrow(/No previous movie found/i);
@@ -371,6 +383,7 @@ describe('runGenerate (new runs)', () => {
       overrides: AUDIO_ONLY_OVERRIDES,
     });
     const first = await runGenerate({
+      ...LOG_DEFAULTS,
       inputsPath,
       nonInteractive: true,
       blueprint: AUDIO_ONLY_BLUEPRINT_PATH,
@@ -378,6 +391,7 @@ describe('runGenerate (new runs)', () => {
 
     await expect(
       runGenerate({
+        ...LOG_DEFAULTS,
         movieId: first.storageMovieId,
         useLast: true,
         dryRun: true,
@@ -400,12 +414,14 @@ describe('runGenerate (new runs)', () => {
       overrides: AUDIO_ONLY_OVERRIDES,
     });
     const first = await runGenerate({
+      ...LOG_DEFAULTS,
       inputsPath,
       nonInteractive: true,
       blueprint: AUDIO_ONLY_BLUEPRINT_PATH,
     });
 
     const next = await runGenerate({
+      ...LOG_DEFAULTS,
       movieId: first.storageMovieId,
       dryRun: true,
     });

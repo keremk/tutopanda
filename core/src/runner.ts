@@ -27,6 +27,7 @@ import {
   type FanInDescriptor,
 } from './types.js';
 import type { Logger } from './logger.js';
+import type { NotificationBus } from './notifications.js';
 
 /* eslint-disable no-unused-vars */
 export interface RunnerLogger extends Partial<Logger> {}
@@ -35,6 +36,7 @@ export interface RunnerOptions {
   clock?: Clock;
   logger?: RunnerLogger;
   produce?: ProduceFn;
+  notifications?: NotificationBus;
 }
 
 export interface RunnerExecutionContext {
@@ -46,6 +48,7 @@ export interface RunnerExecutionContext {
   produce?: ProduceFn;
   logger?: RunnerLogger;
   clock?: Clock;
+  notifications?: NotificationBus;
 }
 
 type SingleJobExecutionContext = RunnerExecutionContext & {
@@ -62,6 +65,7 @@ interface RunnerJobContext extends RunnerExecutionContext {
   logger: RunnerLogger;
   clock: Clock;
   manifestService: ManifestService;
+  notifications?: NotificationBus;
 }
 
 const defaultClock: Clock = {
@@ -74,6 +78,7 @@ export function createRunner(options: RunnerOptions = {}) {
   const baseClock = options.clock ?? defaultClock;
   const baseLogger = options.logger ?? noopLogger;
   const baseProduce = options.produce ?? createStubProduce();
+  const baseNotifications = options.notifications;
 
   return {
     async execute(plan: ExecutionPlan, context: RunnerExecutionContext): Promise<RunResult> {
@@ -82,6 +87,7 @@ export function createRunner(options: RunnerOptions = {}) {
       const produce = context.produce ?? baseProduce;
       const storage = context.storage;
       const eventLog = context.eventLog;
+      const notifications = context.notifications ?? baseNotifications;
 
       const manifestService = context.manifestService ?? createManifestService(storage);
 
@@ -100,6 +106,11 @@ export function createRunner(options: RunnerOptions = {}) {
           layerIndex,
           jobs: layer.length,
         });
+        notifications?.publish({
+          type: 'progress',
+          message: `Layer ${layerIndex} starting (${layer.length} job${layer.length === 1 ? '' : 's'}).`,
+          timestamp: clock.now(),
+        });
 
         for (const job of layer) {
           const jobResult = await executeJob(job, {
@@ -111,6 +122,7 @@ export function createRunner(options: RunnerOptions = {}) {
             logger,
             clock,
             manifestService,
+            notifications,
           });
           jobs.push(jobResult);
         }
@@ -119,6 +131,11 @@ export function createRunner(options: RunnerOptions = {}) {
           movieId: context.movieId,
           revision: plan.revision,
           layerIndex,
+        });
+        notifications?.publish({
+          type: 'success',
+          message: `Layer ${layerIndex} finished.`,
+          timestamp: clock.now(),
         });
       }
 
@@ -163,6 +180,7 @@ export function createRunner(options: RunnerOptions = {}) {
         logger,
         clock,
         manifestService,
+        notifications: ctx.notifications ?? baseNotifications,
       });
     },
   };
@@ -184,6 +202,7 @@ async function executeJob(
   context: RunnerJobContext,
 ): Promise<JobResult> {
   const { movieId, layerIndex, attempt, revision, produce, logger, clock, storage, eventLog } = context;
+  const notifications = context.notifications;
   const startedAt = clock.now();
   const inputsHash = hashInputs(job.inputs);
   const expectedArtefacts = job.produces.filter((id) => id.startsWith('Artifact:'));
@@ -230,6 +249,11 @@ async function executeJob(
       layerIndex,
       attempt,
       artefacts: artefacts.length,
+    });
+    notifications?.publish({
+      type: status === 'failed' ? 'error' : status === 'skipped' ? 'warning' : 'success',
+      message: `Job ${job.jobId} [${job.producer}] ${status}.`,
+      timestamp: completedAt,
     });
 
     return {
@@ -282,6 +306,11 @@ async function executeJob(
       layerIndex,
       attempt,
       error: serialized,
+    });
+    notifications?.publish({
+      type: 'error',
+      message: `Job ${job.jobId} [${job.producer}] failed.`,
+      timestamp: completedAt,
     });
 
     return {

@@ -79,6 +79,7 @@ export interface HandlerFactoryInit {
   secretResolver: SecretResolver;
   logger?: ProviderLogger;
   schemaRegistry?: SchemaRegistry;
+  notifications?: import('@tutopanda/core').NotificationBus;
 }
 
 export type HandlerFactory = (init: HandlerFactoryInit) => ProducerHandler;
@@ -96,6 +97,7 @@ export interface ProviderRegistryOptions {
   logger?: ProviderLogger;
   secretResolver?: SecretResolver;
   schemaRegistry?: SchemaRegistry;
+  notifications?: import('@tutopanda/core').NotificationBus;
 }
 
 export interface ResolvedProviderHandler {

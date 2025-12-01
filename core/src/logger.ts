@@ -5,6 +5,14 @@ export type LogMeta = Record<string, unknown>;
 
 export type LogWriter = (_message: string, _meta?: LogMeta) => void;
 
+export interface LogEvent {
+  level: keyof Logger;
+  message: string;
+  meta?: LogMeta;
+  timestamp: string;
+  prefix?: string;
+}
+
 export interface Logger {
   info(message: string, meta?: LogMeta): void;
   warn(message: string, meta?: LogMeta): void;
@@ -16,6 +24,7 @@ export interface CreateLoggerOptions {
   level?: LogLevel;
   writers?: Partial<Record<keyof Logger, LogWriter>>;
   prefix?: string;
+  onLog?: (event: LogEvent) => void;
 }
 
 export function createLogger(options: CreateLoggerOptions = {}): Logger {
@@ -23,7 +32,7 @@ export function createLogger(options: CreateLoggerOptions = {}): Logger {
   const prefix = options.prefix?.trim();
   const consoleRef = globalThis.console;
 
-  const writers: Record<keyof Logger, LogWriter> = {
+  const writers: Record<keyof Logger, LogWriter | undefined> = {
     info: options.writers?.info ?? consoleRef.log.bind(consoleRef),
     warn: options.writers?.warn ?? consoleRef.warn.bind(consoleRef),
     error: options.writers?.error ?? consoleRef.error.bind(consoleRef),
@@ -44,15 +53,25 @@ export function createLogger(options: CreateLoggerOptions = {}): Logger {
     if (!shouldLog(target)) {
       return;
     }
+
+    const event: LogEvent = {
+      level: target,
+      message,
+      meta,
+      timestamp: new Date().toISOString(),
+      prefix,
+    };
+    options.onLog?.(event);
+
     const output = writers[target];
     if (!output) {
       return;
     }
     if (meta && Object.keys(meta).length > 0) {
       output(formatMessage(message), meta);
-    } else {
-      output(formatMessage(message));
+      return;
     }
+    output(formatMessage(message));
   };
 
   return {

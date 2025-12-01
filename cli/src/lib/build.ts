@@ -37,6 +37,7 @@ export interface ExecuteBuildOptions {
   concurrency?: number;
   upToLayer?: number;
   logger?: Logger;
+  notifications?: import('@tutopanda/core').NotificationBus;
 }
 
 export interface BuildSummary {
@@ -61,6 +62,7 @@ export interface ExecuteBuildResult {
 
 export async function executeBuild(options: ExecuteBuildOptions): Promise<ExecuteBuildResult> {
   const logger = options.logger ?? globalThis.console;
+  const notifications = options.notifications;
   const storage = createStorageContext({
     kind: 'local',
     rootDir: options.cliConfig.storage.root,
@@ -72,7 +74,7 @@ export async function executeBuild(options: ExecuteBuildOptions): Promise<Execut
 
   const eventLog = createEventLog(storage);
   const manifestService = createManifestService(storage);
-  const registry = createProviderRegistry({ mode: 'live', logger });
+  const registry = createProviderRegistry({ mode: 'live', logger, notifications });
   const preResolved = prepareProviderHandlers(registry, options.plan, options.providerOptions);
   await registry.warmStart?.(preResolved);
   const resolvedInputsWithSystem = {
@@ -89,6 +91,7 @@ export async function executeBuild(options: ExecuteBuildOptions): Promise<Execut
     resolvedInputsWithSystem,
     preResolved,
     logger,
+    notifications,
   );
 
   const run = await executePlanWithConcurrency(
@@ -101,6 +104,7 @@ export async function executeBuild(options: ExecuteBuildOptions): Promise<Execut
       manifestService,
       produce,
       logger,
+      notifications,
     },
     { concurrency, upToLayer: options.upToLayer },
   );
@@ -160,6 +164,7 @@ export function createProviderProduce(
   resolvedInputs: Record<string, unknown>,
   preResolved: ResolvedProviderHandler[] = [],
   logger: Logger = globalThis.console,
+  notifications?: import('@tutopanda/core').NotificationBus,
 ): ProduceFn {
   const handlerCache = new Map<string, ProducerHandler>();
 
@@ -210,6 +215,11 @@ export function createProviderProduce(
     logger.info(
       `provider.invoke.start ${providerOption.provider}/${providerOption.model} [${providerOption.environment}] -> ${request.job.produces.join(', ')}`,
     );
+    notifications?.publish({
+      type: 'progress',
+      message: `Invoking ${providerOption.provider}/${providerOption.model} for ${producerName}.`,
+      timestamp: new Date().toISOString(),
+    });
 
     let response;
     try {
@@ -232,12 +242,22 @@ export function createProviderProduce(
         environment: providerOption.environment,
         error: errorMessage,
       });
+      notifications?.publish({
+        type: 'error',
+        message: `Provider ${providerOption.provider}/${providerOption.model} failed for ${producerName}: ${errorMessage}`,
+        timestamp: new Date().toISOString(),
+      });
       throw error;
     }
 
     logger.info(
       `provider.invoke.end ${providerOption.provider}/${providerOption.model} [${providerOption.environment}]`,
     );
+    notifications?.publish({
+      type: 'success',
+      message: `Finished ${providerOption.provider}/${providerOption.model} for ${producerName}.`,
+      timestamp: new Date().toISOString(),
+    });
 
     const diagnostics = {
       ...response.diagnostics,

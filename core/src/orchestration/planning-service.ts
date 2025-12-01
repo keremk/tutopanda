@@ -81,6 +81,7 @@ export function createPlanningService(options: PlanningServiceOptions = {}): Pla
   const adapter = createPlanAdapter({
     logger: options.logger,
     clock: options.clock,
+    notifications: options.notifications,
   });
 
   return {

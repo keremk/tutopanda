@@ -1,0 +1,21 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["vitest/globals"],
+    "noEmit": true,
+    "rootDir": ".",
+    "typeRoots": [
+      "./node_modules/@types",
+      "../node_modules/@types",
+      "./node_modules",
+      "../node_modules"
+    ]
+  },
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    "tests/integration/**/*.test.ts",
+    "tests/integration/**/*.test.tsx"
+  ],
+  "exclude": ["node_modules", "dist"]
+}

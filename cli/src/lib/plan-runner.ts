@@ -16,6 +16,7 @@ interface PlanExecutionContext extends RunnerExecutionContext {
   produce: ProduceFn;
   logger?: RunnerLogger;
   clock?: Clock;
+  notifications?: import('@tutopanda/core').NotificationBus;
 }
 
 export async function executePlanWithConcurrency(

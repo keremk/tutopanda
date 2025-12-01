@@ -2,7 +2,7 @@ import { copyFile, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it, beforeEach, afterEach } from 'vitest';
-import { runQuery } from '../../src/commands/query.js';
+import { runQuery, formatMovieId } from '../../src/commands/query.js';
 import { runEdit } from '../../src/commands/edit.js';
 import { getBundledBlueprintsRoot } from '../../src/lib/config-assets.js';
 import {
@@ -34,14 +34,20 @@ describe('end-to-end: video-audio-music dry runs', () => {
     const blueprintPath = resolve(blueprintRoot, 'video-audio-music.yaml');
     const inputsPath = resolve(__dirname, 'fixtures', 'video-audio-music-inputs.yaml');
     const { logger, warnings, errors } = createLoggerRecorder();
+    const movieId = 'e2e-video';
+    const storageMovieId = formatMovieId(movieId);
 
     // Run query dry-run
     const queryResult = await runQuery({
+      mode: 'log',
       inputsPath,
       usingBlueprint: blueprintPath,
       dryRun: true,
       nonInteractive: true,
+      movieId,
+      storageMovieId,
       logger,
+      notifications: undefined,
     });
 
     if (queryResult.dryRun?.status !== 'succeeded') {
@@ -139,12 +145,14 @@ describe('end-to-end: video-audio-music dry runs', () => {
     );
 
     const editResult = await runEdit({
+      mode: 'log',
       movieId: queryResult.storageMovieId,
       inputsPath: editedInputsPath,
       dryRun: true,
       nonInteractive: true,
       usingBlueprint: blueprintPath,
       logger,
+      notifications: undefined,
     });
 
     expect(editResult.dryRun?.status).toBe('succeeded');

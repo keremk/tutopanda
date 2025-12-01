@@ -128,6 +128,8 @@ Before you start the generation, always provide a summary for what you are gener
           inputsPath,
           blueprint: resolvedBlueprint,
           nonInteractive: true,
+          mode: 'log',
+          logLevel: 'info',
         });
       } finally {
         await cleanupTempInputs(inputsPath);

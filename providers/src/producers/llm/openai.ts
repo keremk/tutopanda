@@ -19,6 +19,8 @@ export function createOpenAiLlmHandler(): HandlerFactory {
     const { descriptor, secretResolver, logger, schemaRegistry } = init;
     const clientManager = createOpenAiClientManager(secretResolver, logger, init.mode, schemaRegistry);
     const isSimulated = init.mode === 'simulated';
+    const notify = init.notifications;
+    const notificationLabel = `${descriptor.provider}/${descriptor.model}`;
 
     const factory = createProducerHandlerFactory({
       domain: 'prompt',
@@ -35,11 +37,22 @@ export function createOpenAiLlmHandler(): HandlerFactory {
             model: descriptor.model,
             error: error instanceof Error ? error.message : String(error),
           });
+          notify?.publish({
+            type: 'error',
+            message: `Warm start failed for ${notificationLabel}: ${error instanceof Error ? error.message : String(error)}`,
+            timestamp: new Date().toISOString(),
+          });
           throw error;
         }
       },
       invoke: async (args: ProducerInvokeArgs) => {
         const { request, runtime } = args;
+        notify?.publish({
+          type: 'progress',
+          message: `Invoking ${notificationLabel} for job ${request.jobId}`,
+          timestamp: new Date().toISOString(),
+        });
+        try {
 
         // 1. Parse config
         const config = runtime.config.parse<OpenAiLlmConfig>(parseOpenAiConfig);
@@ -113,11 +126,24 @@ export function createOpenAiLlmHandler(): HandlerFactory {
           textLength,
         } satisfies Record<string, unknown>;
 
+        notify?.publish({
+          type: status === 'succeeded' ? 'success' : 'error',
+          message: `${notificationLabel} completed for job ${request.jobId} (${status}).`,
+          timestamp: new Date().toISOString(),
+        });
         return {
           status,
           artefacts,
           diagnostics,
         };
+        } catch (error) {
+          notify?.publish({
+            type: 'error',
+            message: `${notificationLabel} failed for job ${request.jobId}: ${error instanceof Error ? error.message : String(error)}`,
+            timestamp: new Date().toISOString(),
+          });
+          throw error;
+        }
       },
     });
 

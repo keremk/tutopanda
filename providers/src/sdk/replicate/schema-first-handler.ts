@@ -22,9 +22,12 @@ export function createSchemaFirstReplicateHandler(options: SchemaFirstHandlerOpt
   return (init) => {
     const { descriptor, secretResolver, logger, schemaRegistry } = init;
     const clientManager = createReplicateClientManager(secretResolver, logger, init.mode, schemaRegistry);
+    const notify = init.notifications;
+    const notificationLabel = `${descriptor.provider}/${descriptor.model}`;
 
     return createProducerHandlerFactory({
       domain: 'media',
+      notificationKey: notificationLabel,
       warmStart: async () => {
         try {
           await clientManager.ensure();
@@ -33,6 +36,11 @@ export function createSchemaFirstReplicateHandler(options: SchemaFirstHandlerOpt
             provider: descriptor.provider,
             model: descriptor.model,
             error: error instanceof Error ? error.message : String(error),
+          });
+          notify?.publish({
+            type: 'error',
+            message: `Warm start failed for ${notificationLabel}: ${error instanceof Error ? error.message : String(error)}`,
+            timestamp: new Date().toISOString(),
           });
           throw error;
         }
@@ -62,6 +70,11 @@ export function createSchemaFirstReplicateHandler(options: SchemaFirstHandlerOpt
           inputKeys: Object.keys(input),
           plannerContext,
         });
+        notify?.publish({
+          type: 'progress',
+          message: `Invoking ${notificationLabel} for job ${request.jobId}`,
+          timestamp: new Date().toISOString(),
+        });
 
         try {
           predictionOutput = await runReplicateWithRetries({
@@ -82,6 +95,11 @@ export function createSchemaFirstReplicateHandler(options: SchemaFirstHandlerOpt
             model: request.model,
             jobId: request.jobId,
             error: rawMessage,
+          });
+          notify?.publish({
+            type: 'error',
+            message: `Provider ${notificationLabel} failed for job ${request.jobId}: ${rawMessage}`,
+            timestamp: new Date().toISOString(),
           });
           const message = options.includeErrorMessage
             ? `${options.predictionFailedMessage}: ${rawMessage}`
@@ -110,6 +128,11 @@ export function createSchemaFirstReplicateHandler(options: SchemaFirstHandlerOpt
           jobId: request.jobId,
           status,
           artefactCount: artefacts.length,
+        });
+        notify?.publish({
+          type: status === 'succeeded' ? 'success' : 'error',
+          message: `${notificationLabel} completed for job ${request.jobId} (${status}).`,
+          timestamp: new Date().toISOString(),
         });
 
         return {

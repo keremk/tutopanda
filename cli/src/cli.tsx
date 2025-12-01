@@ -60,7 +60,9 @@ import {
   getCliBlueprintsRoot,
   resolveBlueprintSpecifier,
 } from './lib/config-assets.js';
-import { createCliLogger, type CliLogger } from './lib/logger.js';
+import React from 'react';
+import { createNotificationBus, type LogLevel, type Logger as CoreLogger } from '@tutopanda/core';
+import type { CliLoggerMode } from './lib/logger.js';
 
 
 type ProviderListOutputEntry = Awaited<ReturnType<typeof runProvidersList>>['entries'][number];
@@ -89,7 +91,8 @@ const cli = meow(
       blueprintsDir: { type: 'string' },
       defaultBlueprint: { type: 'string' },
       openViewer: { type: 'boolean' },
-      verbose: { type: 'boolean', default: false },
+      mode: { type: 'string' },
+      logLevel: { type: 'string' },
       upToLayer: { type: 'number' },
       up: { type: 'number' },
       all: { type: 'boolean' },
@@ -122,12 +125,13 @@ async function main(): Promise<void> {
     blueprintsDir?: string;
       defaultBlueprint?: string;
       openViewer?: boolean;
-      verbose?: boolean;
+      mode?: string;
+      logLevel?: string;
       upToLayer?: number;
       up?: number;
       all?: boolean;
   };
-  const logger = createCliLogger({ verbose: Boolean(flags.verbose) });
+  const logger = globalThis.console;
 
   switch (command) {
     case 'install':
@@ -146,6 +150,22 @@ async function main(): Promise<void> {
         process.exitCode = 1;
         return;
       }
+      let mode: CliLoggerMode;
+      let logLevel: LogLevel;
+      try {
+        mode = resolveMode(flags.mode, Boolean(flags.dryRun));
+        logLevel = resolveLogLevel(flags.logLevel);
+      } catch (error) {
+        logger.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
+        process.exitCode = 1;
+        return;
+      }
+      if (mode === 'tui' && flags.nonInteractive) {
+        logger.error('Error: --non-interactive is only supported in log mode.');
+        process.exitCode = 1;
+        return;
+      }
+
       const movieIdFlag = flags.movieId ?? flags.id;
       const blueprintFlag = flags.blueprint ?? flags.bp;
       const inputsFlag = flags.inputs ?? flags.in;
@@ -177,6 +197,21 @@ async function main(): Promise<void> {
         }
       }
 
+      const notifications = mode === 'tui' ? createNotificationBus() : undefined;
+      let inkApp: import('ink').Instance | undefined;
+      let startTui: (() => void) | undefined;
+
+      if (notifications) {
+        const { render } = await import('ink');
+        const NotificationApp = (await import('./app.js')).default;
+        startTui = () => {
+          if (inkApp) {
+            return;
+          }
+          inkApp = render(<NotificationApp bus={notifications} />);
+        };
+      }
+
       try {
         const result = await runGenerate({
           movieId: movieIdFlag,
@@ -187,19 +222,37 @@ async function main(): Promise<void> {
           nonInteractive: Boolean(flags.nonInteractive),
           concurrency: flags.concurrency,
           upToLayer,
-          logger,
+          mode,
+          logLevel,
+          notifications,
+          onExecutionStart: startTui,
         });
-        printGenerateSummary(logger, result);
-        if (result.dryRun) {
-          printDryRunSummary(logger, result.dryRun, result.storagePath);
-        } else if (result.build) {
-          printBuildSummary(logger, result.build, result.manifestPath);
+        if (mode === 'log') {
+          printGenerateSummary(logger, result);
+          if (result.dryRun) {
+            printDryRunSummary(logger, result.dryRun, result.storagePath);
+          } else if (result.build) {
+            printBuildSummary(logger, result.build, result.manifestPath);
+          }
         }
+        notifications?.publish({
+          type: 'success',
+          message: 'Run complete.',
+          timestamp: new Date().toISOString(),
+        });
         return;
       } catch (error) {
         logger.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
         process.exitCode = 1;
+        notifications?.publish({
+          type: 'error',
+          message: error instanceof Error ? error.message : String(error),
+          timestamp: new Date().toISOString(),
+        });
         return;
+      } finally {
+        notifications?.complete();
+        inkApp?.unmount();
       }
     }
     case 'providers:list': {
@@ -442,7 +495,27 @@ async function main(): Promise<void> {
 
 void main();
 
-function printGenerateSummary(logger: CliLogger, result: Awaited<ReturnType<typeof runGenerate>>): void {
+function resolveMode(modeFlag: string | undefined, dryRun: boolean): CliLoggerMode {
+  if (modeFlag === 'tui' || modeFlag === 'log') {
+    return modeFlag;
+  }
+  if (modeFlag !== undefined) {
+    throw new Error('Invalid mode. Use "tui" or "log".');
+  }
+  return dryRun ? 'log' : 'tui';
+}
+
+function resolveLogLevel(levelFlag: string | undefined): LogLevel {
+  if (levelFlag === undefined || levelFlag === 'info') {
+    return 'info';
+  }
+  if (levelFlag === 'debug') {
+    return 'debug';
+  }
+  throw new Error('Invalid log level. Use "info" or "debug".');
+}
+
+function printGenerateSummary(logger: CoreLogger, result: Awaited<ReturnType<typeof runGenerate>>): void {
   const modeLabel = result.isNew ? 'New movie' : 'Updated movie';
   const statusLabel = result.dryRun
     ? `Dry run: ${result.dryRun.status} (${result.dryRun.jobCount} jobs)`
@@ -462,7 +535,7 @@ function printGenerateSummary(logger: CliLogger, result: Awaited<ReturnType<type
   }
 }
 
-function printDryRunSummary(logger: CliLogger, summary: DryRunSummary, storagePath: string): void {
+function printDryRunSummary(logger: CoreLogger, summary: DryRunSummary, storagePath: string): void {
   const counts = summary.statusCounts;
   const layersLabel = summary.layers === 1 ? 'layer' : 'layers';
   const jobsLabel = summary.jobCount === 1 ? 'job' : 'jobs';
@@ -526,7 +599,7 @@ function buildLayerMap(jobs: DryRunJobSummary[]): Map<number, DryRunJobSummary[]
   return map;
 }
 
-function printBuildSummary(logger: CliLogger, summary: BuildSummary, manifestPath?: string): void {
+function printBuildSummary(logger: CoreLogger, summary: BuildSummary, manifestPath?: string): void {
   const counts = summary.counts;
   logger.info(
     `Build status: ${summary.status}. Jobs: ${summary.jobCount} (succeeded ${counts.succeeded}, failed ${counts.failed}, skipped ${counts.skipped}). Manifest revision: ${summary.manifestRevision}.`,

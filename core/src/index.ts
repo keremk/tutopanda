@@ -12,6 +12,7 @@ export * from './revisions.js';
 export * from './runner.js';
 export * from './json-path.js';
 export * from './logger.js';
+export * from './notifications.js';
 export * from './canonical-ids.js';
 export * from './parsing/node-inventory.js';
 export * from './parsing/input-loader.js';

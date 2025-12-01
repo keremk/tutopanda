@@ -51,10 +51,12 @@ interface ExecuteDryRunArgs {
     basePath: string;
   };
   logger?: Logger;
+  notifications?: import('@tutopanda/core').NotificationBus;
 }
 
 export async function executeDryRun(args: ExecuteDryRunArgs): Promise<DryRunSummary> {
   const logger = args.logger ?? globalThis.console;
+  const notifications = args.notifications;
   const concurrency = normalizeConcurrency(args.concurrency);
   const storage = args.storage
     ? createStorageContext({ kind: 'local', rootDir: args.storage.rootDir, basePath: args.storage.basePath })
@@ -79,7 +81,7 @@ export async function executeDryRun(args: ExecuteDryRunArgs): Promise<DryRunSumm
     }
   }
 
-  const registry = createProviderRegistry({ mode: 'simulated', schemaRegistry, logger });
+  const registry = createProviderRegistry({ mode: 'simulated', schemaRegistry, logger, notifications });
   const preResolved = prepareProviderHandlers(registry, args.plan, args.providerOptions);
   await registry.warmStart?.(preResolved);
   const resolvedInputsWithSystem = {
@@ -98,6 +100,7 @@ export async function executeDryRun(args: ExecuteDryRunArgs): Promise<DryRunSumm
     resolvedInputsWithSystem,
     preResolved,
     logger,
+    notifications,
   );
 
   const runResult = await executePlanWithConcurrency(
@@ -110,6 +113,7 @@ export async function executeDryRun(args: ExecuteDryRunArgs): Promise<DryRunSumm
       manifestService,
       produce,
       logger,
+      notifications,
     },
     { concurrency },
   );

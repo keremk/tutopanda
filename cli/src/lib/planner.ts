@@ -31,8 +31,6 @@ import { mergeMovieMetadata } from './movie-metadata.js';
 import { INPUT_FILE_NAME } from './input-files.js';
 import { applyProviderDefaults } from './provider-defaults.js';
 
-const planningService = createPlanningService();
-
 export interface GeneratePlanOptions {
   cliConfig: CliConfig;
   movieId: string; // storage movie id (e.g., movie-q123)
@@ -41,6 +39,7 @@ export interface GeneratePlanOptions {
   usingBlueprint: string; // Path to blueprint YAML file
   pendingArtefacts?: PendingArtefactDraft[];
   logger?: Logger;
+  notifications?: import('@tutopanda/core').NotificationBus;
 }
 
 export interface GeneratePlanResult {
@@ -57,6 +56,7 @@ export interface GeneratePlanResult {
 
 export async function generatePlan(options: GeneratePlanOptions): Promise<GeneratePlanResult> {
   const logger = options.logger ?? globalThis.console;
+  const notifications = options.notifications;
   const { cliConfig, movieId } = options;
   const storageRoot = cliConfig.storage.root;
   const basePath = cliConfig.storage.basePath;
@@ -88,7 +88,10 @@ export async function generatePlan(options: GeneratePlanOptions): Promise<Genera
   const catalog = buildProducerCatalog(providerOptions);
   logger.info(`Using blueprint: ${blueprintPath}`);
 
-  const planResult = await planningService.generatePlan({
+  const planResult = await createPlanningService({
+    logger,
+    notifications,
+  }).generatePlan({
     movieId,
     blueprintTree: blueprintRoot,
     inputValues,

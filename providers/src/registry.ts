@@ -15,6 +15,7 @@ import type {
 export function createProviderRegistry(options: ProviderRegistryOptions = {}): ProviderRegistry {
   const mode: ProviderMode = options.mode ?? 'mock';
   const logger = options.logger;
+  const notifications = options.notifications;
   const secretResolver = options.secretResolver ?? createEnvSecretResolver();
   const handlerCache = new Map<string, ProducerHandler>();
 
@@ -38,6 +39,7 @@ export function createProviderRegistry(options: ProviderRegistryOptions = {}): P
       secretResolver,
       logger,
       schemaRegistry: options.schemaRegistry,
+      notifications,
     });
     handlerCache.set(cacheKey, handler);
     return handler;

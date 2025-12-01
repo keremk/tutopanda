@@ -26,12 +26,14 @@ export type PlanAdapter = {
 export interface PlanAdapterOptions {
   logger?: PlannerLogger;
   clock?: Clock;
+  notifications?: import('../notifications.js').NotificationBus;
 }
 
 export function createPlanAdapter(options: PlanAdapterOptions = {}): PlanAdapter {
   const planner = createPlanner({
     logger: options.logger,
     clock: options.clock,
+    notifications: options.notifications,
   });
 
   return {

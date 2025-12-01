@@ -10,10 +10,12 @@ import {
   type RevisionId,
 } from '../types.js';
 import type { Logger } from '../logger.js';
+import type { NotificationBus } from '../notifications.js';
 
 interface PlannerOptions {
   logger?: PlannerLogger;
   clock?: Clock;
+  notifications?: NotificationBus;
 }
 
 /* eslint-disable no-unused-vars */
@@ -40,6 +42,7 @@ type ArtefactMap = Map<string, ArtefactEvent>;
 export function createPlanner(options: PlannerOptions = {}) {
   const logger = options.logger ?? {};
   const clock = options.clock;
+  const notifications = options.notifications;
 
   return {
     async computePlan(args: ComputePlanArgs): Promise<ExecutionPlan> {
@@ -68,6 +71,11 @@ export function createPlanner(options: PlannerOptions = {}) {
         movieId: args.movieId,
         layers: layers.length,
         jobs: dirtyJobs.size,
+      });
+      notifications?.publish({
+        type: 'progress',
+        message: `Plan ready: ${dirtyJobs.size} job${dirtyJobs.size === 1 ? '' : 's'} across ${layers.length} layer${layers.length === 1 ? '' : 's'}.`,
+        timestamp: nowIso(clock),
       });
 
       return {

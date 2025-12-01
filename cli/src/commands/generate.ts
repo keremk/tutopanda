@@ -3,7 +3,11 @@ import { runQuery, type QueryResult, formatMovieId } from './query.js';
 import { runEdit, type EditResult } from './edit.js';
 import { resolveAndPersistConcurrency } from '../lib/concurrency.js';
 import { buildFriendlyView, loadCurrentManifest, prepareFriendlyPreflight } from '../lib/friendly-view.js';
-import type { Logger } from '@tutopanda/core';
+import crypto from 'node:crypto';
+import { resolve } from 'node:path';
+import type { LogLevel, NotificationBus } from '@tutopanda/core';
+import type { CliLoggerMode } from '../lib/logger.js';
+import { createCliLogger } from '../lib/logger.js';
 
 export interface GenerateOptions {
   movieId?: string;
@@ -14,7 +18,10 @@ export interface GenerateOptions {
   nonInteractive?: boolean;
   concurrency?: number;
   upToLayer?: number;
-  logger?: Logger;
+  mode: CliLoggerMode;
+  logLevel: LogLevel;
+  notifications?: NotificationBus;
+  onExecutionStart?: () => void;
 }
 
 export interface GenerateResult {
@@ -31,7 +38,6 @@ export interface GenerateResult {
 }
 
 export async function runGenerate(options: GenerateOptions): Promise<GenerateResult> {
-  const logger = options.logger ?? globalThis.console;
   const configPath = getDefaultCliConfigPath();
   const cliConfig = await readCliConfig(configPath);
   if (!cliConfig) {
@@ -51,7 +57,11 @@ export async function runGenerate(options: GenerateOptions): Promise<GenerateRes
 
   const upToLayer = options.upToLayer;
   if (options.dryRun && upToLayer !== undefined) {
-    logger.info('--up-to-layer applies only to live runs; dry runs will simulate all layers.');
+    options.notifications?.publish({
+      type: 'warning',
+      message: '--up-to-layer applies only to live runs; dry runs will simulate all layers.',
+      timestamp: new Date().toISOString(),
+    });
   }
 
   if (options.movieId || usingLast) {
@@ -59,6 +69,18 @@ export async function runGenerate(options: GenerateOptions): Promise<GenerateRes
       explicitMovieId: options.movieId,
       useLast: usingLast,
       cliConfig: activeConfig,
+    });
+    const logFilePath = resolve(
+      activeConfig.storage.root,
+      activeConfig.storage.basePath,
+      storageMovieId,
+      'logs',
+      `${new Date().toISOString().replace(/[:.]/g, '-')}.jsonl`,
+    );
+    const logger = createCliLogger({
+      mode: options.mode,
+      level: options.logLevel,
+      logFilePath,
     });
 
     const { manifest } = await loadCurrentManifest(activeConfig, storageMovieId).catch((error) => {
@@ -74,9 +96,17 @@ export async function runGenerate(options: GenerateOptions): Promise<GenerateRes
     });
 
     if (!preflight.changed) {
-      logger.info('No artefact changes detected in friendly view. Proceeding to run in case of prior failures.');
+      options.notifications?.publish({
+        type: 'progress',
+        message: 'No artefact changes detected in friendly view. Proceeding to run in case of prior failures.',
+        timestamp: new Date().toISOString(),
+      });
     } else {
-      logger.info(`Detected ${preflight.pendingArtefacts.length} artefact change(s) from friendly edits.`);
+      options.notifications?.publish({
+        type: 'progress',
+        message: `Detected ${preflight.pendingArtefacts.length} artefact change(s) from friendly edits.`,
+        timestamp: new Date().toISOString(),
+      });
     }
 
     const editResult = await runEdit({
@@ -88,7 +118,10 @@ export async function runGenerate(options: GenerateOptions): Promise<GenerateRes
       pendingArtefacts: preflight.pendingArtefacts,
       concurrency,
       upToLayer,
+      mode: options.mode,
       logger,
+      notifications: options.notifications,
+      onExecutionStart: options.onExecutionStart,
     });
 
     let friendlyRoot: string | undefined;
@@ -120,6 +153,21 @@ export async function runGenerate(options: GenerateOptions): Promise<GenerateRes
     };
   }
 
+  const newMovieId = generateMovieId();
+  const storageMovieId = formatMovieId(newMovieId);
+  const logFilePath = resolve(
+    activeConfig.storage.root,
+    activeConfig.storage.basePath,
+    storageMovieId,
+    'logs',
+    `${new Date().toISOString().replace(/[:.]/g, '-')}.jsonl`,
+  );
+  const logger = createCliLogger({
+    mode: options.mode,
+    level: options.logLevel,
+    logFilePath,
+  });
+
   if (!options.inputsPath) {
     throw new Error('Input YAML path is required for a new generation. Provide --inputs=/path/to/inputs.yaml');
   }
@@ -128,13 +176,18 @@ export async function runGenerate(options: GenerateOptions): Promise<GenerateRes
   }
 
   const queryResult = await runQuery({
+    movieId: newMovieId,
+    storageMovieId,
     inputsPath: options.inputsPath,
     dryRun: options.dryRun,
     nonInteractive: options.nonInteractive,
     usingBlueprint: options.blueprint,
     concurrency,
     upToLayer,
+    mode: options.mode,
     logger,
+    notifications: options.notifications,
+    onExecutionStart: options.onExecutionStart,
   });
 
   let friendlyRoot: string | undefined;
@@ -188,4 +241,8 @@ async function resolveTargetMovieId(args: {
 
 function normalizePublicId(storageMovieId: string): string {
   return storageMovieId.startsWith('movie-') ? storageMovieId.slice('movie-'.length) : storageMovieId;
+}
+
+function generateMovieId(): string {
+  return crypto.randomUUID().slice(0, 8);
 }

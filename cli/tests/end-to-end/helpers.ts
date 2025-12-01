@@ -102,7 +102,7 @@ export async function writeInputsFile(
     ? { ...(inputs as Record<string, unknown>), ...overrides.inputs }
     : { ...(inputs as Record<string, unknown>) };
 
-  const merged = { ...(parsed as Record<string, unknown>), inputs: mergedInputs };
+  const merged: Record<string, unknown> = { ...(parsed as Record<string, unknown>), inputs: mergedInputs };
   if ('models' in overrides) {
     merged.models = overrides.models;
   }

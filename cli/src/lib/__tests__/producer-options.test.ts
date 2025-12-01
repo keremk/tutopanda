@@ -75,13 +75,13 @@ describe('producer options', () => {
 
   it('throws when a json_schema variant is missing outputSchema', () => {
     const blueprint: BlueprintTreeNode = {
+      id: 'test-node',
       namespacePath: [],
       document: {
-        meta: { name: 'Test', description: 'test blueprint' },
+        meta: { id: 'test-blueprint', name: 'Test', description: 'test blueprint' },
         inputs: [],
-        outputs: [],
+        artefacts: [],
         subBlueprints: [],
-        nodes: [],
         edges: [],
         producers: [
           {

@@ -15,6 +15,7 @@ const VIDEO_AUDIO_MUSIC_BLUEPRINT_PATH = resolve(
   getBundledBlueprintsRoot(),
   'video-audio-music.yaml',
 );
+const LOG_DEFAULTS = { mode: 'log' as const, logLevel: 'info' as const };
 
 const tmpRoots: string[] = [];
 const originalEnvConfig = process.env.TUTOPANDA_CLI_CONFIG;
@@ -52,6 +53,7 @@ describe('runInspect', () => {
       fileName: 'query-inputs.yaml',
     });
     const queryResult = await runGenerate({
+      ...LOG_DEFAULTS,
       inputsPath,
       nonInteractive: true,
       blueprint: VIDEO_AUDIO_MUSIC_BLUEPRINT_PATH,

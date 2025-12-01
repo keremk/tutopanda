@@ -27,6 +27,7 @@ export type ProducerInvokeFn = (args: ProducerInvokeArgs) => Promise<ProviderRes
 export interface ProducerWarmStartArgs {
   handler: ProducerHandler;
   logger?: ProviderLogger;
+  notifications?: import('@tutopanda/core').NotificationBus;
 }
 
 export type ProducerWarmStartFn = (args: ProducerWarmStartArgs) => Promise<void>;
@@ -68,4 +69,5 @@ export interface ProducerRuntime {
   sdk: RuntimeSdkHelpers;
   artefacts: ArtefactRegistry;
   logger?: ProviderLogger;
+  notifications?: import('@tutopanda/core').NotificationBus;
 }

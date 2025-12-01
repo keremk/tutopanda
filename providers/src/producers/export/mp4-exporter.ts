@@ -43,6 +43,14 @@ export function createMp4ExporterHandler(): HandlerFactory {
     domain: 'media',
     configValidator: parseExporterConfig,
     invoke: async ({ request, runtime }) => {
+      const notify = (type: 'progress' | 'success' | 'error', message: string) => {
+        runtime.notifications?.publish({
+          type,
+          message,
+          timestamp: new Date().toISOString(),
+        });
+      };
+      notify('progress', `Exporting MP4 for job ${request.jobId}`);
       const config = runtime.config.parse<Mp4ExporterConfig>(parseExporterConfig);
       const produceId = request.produces[0];
       if (!produceId) {
@@ -119,12 +127,12 @@ export function createMp4ExporterHandler(): HandlerFactory {
 
       const buffer = await readFile(path.resolve(storageRoot, outputPath));
 
-      return {
-        status: 'succeeded',
+      const result = {
+        status: 'succeeded' as const,
         artefacts: [
           {
             artefactId: runtime.artefacts.expectBlob(produceId),
-            status: 'succeeded',
+            status: 'succeeded' as const,
             blob: {
               data: buffer,
               mimeType: 'video/mp4',
@@ -132,6 +140,8 @@ export function createMp4ExporterHandler(): HandlerFactory {
           },
         ],
       };
+      notify('success', `MP4 export completed for job ${request.jobId}`);
+      return result;
     },
   });
 }

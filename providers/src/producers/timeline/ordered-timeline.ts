@@ -180,6 +180,14 @@ export function createTimelineProducerHandler(): HandlerFactory {
     domain: 'media',
     configValidator: parseTimelineConfig,
     invoke: async ({ request, runtime }) => {
+      const notifier = (type: 'progress' | 'success' | 'error', message: string) => {
+        runtime.notifications?.publish({
+          type,
+          message,
+          timestamp: new Date().toISOString(),
+        });
+      };
+      notifier('progress', `Building timeline for job ${request.jobId}`);
       const baseConfig = runtime.config.parse<TimelineProducerConfig>(parseTimelineConfig);
       const overrides = readConfigOverrides(runtime.inputs, request);
       const config = mergeConfig(baseConfig, overrides);
@@ -285,12 +293,12 @@ export function createTimelineProducerHandler(): HandlerFactory {
 
       const artefactId = runtime.artefacts.expectBlob(request.produces[0] ?? '');
       const timelinePayload = JSON.stringify(timeline, null, 2);
-      return {
-        status: 'succeeded',
+      const result = {
+        status: 'succeeded' as const,
         artefacts: [
           {
             artefactId,
-            status: 'succeeded',
+            status: 'succeeded' as const,
             blob: {
               data: timelinePayload,
               mimeType: 'application/json',
@@ -298,6 +306,8 @@ export function createTimelineProducerHandler(): HandlerFactory {
           },
         ],
       };
+      notifier('success', `Timeline built for job ${request.jobId}`);
+      return result;
     },
   });
 }

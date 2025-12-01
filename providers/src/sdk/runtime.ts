@@ -15,6 +15,7 @@ import type {
   ArtefactRegistry,
 } from './types.js';
 import type { BlueprintProducerSdkMappingField } from '@tutopanda/core';
+import type { NotificationBus } from '@tutopanda/core';
 
 interface SerializedJobContext {
   inputBindings?: Record<string, string>;
@@ -30,6 +31,7 @@ interface RuntimeInit {
   logger?: ProviderLogger;
   configValidator?: ConfigValidator;
   mode: ProviderMode;
+  notifications?: NotificationBus;
 }
 
 export function createProducerRuntime(init: RuntimeInit): ProducerRuntime {
@@ -52,6 +54,7 @@ export function createProducerRuntime(init: RuntimeInit): ProducerRuntime {
     sdk,
     artefacts,
     logger,
+    notifications: init.notifications,
   };
 }
 
