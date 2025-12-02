@@ -3,6 +3,7 @@ import { createProviderProduce } from './build.js';
 import type { LoadedProducerOption } from './producer-options.js';
 import type { ProviderRegistry, ProducerHandler, ProviderJobContext } from '@tutopanda/providers';
 import type { ProduceRequest, JobDescriptor } from '@tutopanda/core';
+import { createTestLogger } from '../tests/setup/test-logger.js';
 
 describe('createProviderProduce', () => {
   it('passes user overrides for NumOfImagesPerNarrative through resolved inputs and bindings', async () => {
@@ -54,7 +55,7 @@ describe('createProviderProduce', () => {
       warmStart: vi.fn(),
     };
 
-    const produce = createProviderProduce(registry, providerOptions, resolvedInputs, [], globalThis.console);
+    const produce = createProviderProduce(registry, providerOptions, resolvedInputs, [], createTestLogger());
     const job: JobDescriptor = {
       jobId: 'Producer:ImagePromptGenerator.ImagePromptProducer[segment=0]',
       producer: 'ImagePromptProducer',

@@ -8,6 +8,7 @@ import { generatePlan } from '../../src/lib/planner.js';
 import { writeCliConfig } from '../../src/lib/cli-config.js';
 import { executeDryRun } from '../../src/lib/dry-run.js';
 import { loadInputsFromYaml } from '../../src/lib/input-loader.js';
+import { createTestLogger } from '../../src/tests/setup/test-logger.js';
 
 const CLI_ROOT = resolve(__dirname, '../../');
 
@@ -28,6 +29,7 @@ describe('integration: canonical inputs persist across query/edit', () => {
     const blueprintPath = await resolveBlueprintSpecifier('video-audio-music.yaml', { cliRoot: CLI_ROOT });
     const inputsPath = resolve(CLI_ROOT, 'config/inputs.yaml');
     const { root: blueprint } = await loadBlueprintBundle(blueprintPath);
+    const logger = createTestLogger();
 
     // Query flow: generate plan and persist canonical inputs
     const planResult = await generatePlan({
@@ -36,6 +38,7 @@ describe('integration: canonical inputs persist across query/edit', () => {
       isNew: true,
       inputsPath,
       usingBlueprint: blueprintPath,
+      logger,
     });
 
     expect(planResult.resolvedInputs['Input:MusicProducer.MusicProducer.force_instrumental']).toBe(true);
@@ -56,6 +59,7 @@ describe('integration: canonical inputs persist across query/edit', () => {
       resolvedInputs: planResult.resolvedInputs,
       storage: { rootDir: storageRoot, basePath: 'builds' },
       concurrency: 1,
+      logger,
     });
 
     expect(dryRun.jobCount).toBeGreaterThan(0);

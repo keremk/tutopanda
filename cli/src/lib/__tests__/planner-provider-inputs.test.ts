@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 import { generatePlan } from '../planner.js';
 import { resolveBlueprintSpecifier } from '../config-assets.js';
 import type { CliConfig } from '../cli-config.js';
+import { createTestLogger } from '../../tests/setup/test-logger.js';
 
 const TEST_DIR = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(TEST_DIR, '../../../..');
@@ -25,6 +26,8 @@ describe('planner provider inputs', () => {
         isNew: true,
         inputsPath,
         usingBlueprint: blueprintPath,
+        logger: createTestLogger(),
+        notifications: undefined,
       });
 
       const imageJobs = plan.layers.flat().filter((job) => job.producer === 'ImageProducer');
