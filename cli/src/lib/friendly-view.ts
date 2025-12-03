@@ -53,7 +53,6 @@ export async function buildFriendlyView(args: {
   await mkdir(friendlyRoot, { recursive: true });
 
   const inputsPath = resolve(cliConfig.storage.root, cliConfig.storage.basePath, movieId, 'inputs.yaml');
-  await ensureSymlink(inputsPath, resolve(friendlyRoot, 'inputs.yaml'));
 
   const artefacts: FriendlyArtefactInfo[] = [];
   for (const [artefactId, entry] of Object.entries(manifest.artefacts)) {
@@ -132,9 +131,7 @@ async function collectFriendlyContext(args: {
   const friendlyRoot = resolve(cliConfig.storage.root, 'movies', movieId);
   await mkdir(friendlyRoot, { recursive: true });
 
-    const inputsPath = resolve(cliConfig.storage.root, cliConfig.storage.basePath, movieId, 'inputs.yaml');
-    const friendlyInputs = resolve(friendlyRoot, 'inputs.yaml');
-    await ensureSymlink(inputsPath, friendlyInputs, { overwrite: true });
+  const inputsPath = resolve(cliConfig.storage.root, cliConfig.storage.basePath, movieId, 'inputs.yaml');
 
   const artefacts: FriendlyArtefactInfo[] = [];
   for (const [artefactId, entry] of Object.entries(manifest.artefacts)) {
@@ -167,7 +164,7 @@ async function collectFriendlyContext(args: {
     });
   }
 
-  return { friendlyRoot, artefacts, inputsPath: friendlyInputs };
+  return { friendlyRoot, artefacts, inputsPath };
 }
 
 function normalizeProducer(producedBy: string | undefined): string {
