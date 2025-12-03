@@ -11,7 +11,7 @@ import { formatMovieId } from './query.js';
 import { runEdit } from './edit.js';
 import { createInputsFile } from './__testutils__/inputs.js';
 import { getBundledBlueprintsRoot } from '../lib/config-assets.js';
-import { createTestLogger } from '../tests/setup/test-logger.js';
+import { createCliLogger } from '../lib/logger.js';
 
 const AUDIO_ONLY_BLUEPRINT_PATH = resolve(getBundledBlueprintsRoot(), 'audio-only.yaml');
 const AUDIO_ONLY_MODELS = [
@@ -90,7 +90,10 @@ describe('runEdit', () => {
       nonInteractive: true,
       usingBlueprint: AUDIO_ONLY_BLUEPRINT_PATH,
       mode: 'log',
-      logger: createTestLogger(),
+      logger: createCliLogger({
+          mode: 'log',
+          level: 'debug',
+        })
     });
 
     expect(editResult.targetRevision).toBe('rev-0002');
@@ -136,7 +139,10 @@ describe('runEdit', () => {
       dryRun: true,
       usingBlueprint: AUDIO_ONLY_BLUEPRINT_PATH,
       mode: 'log',
-      logger: createTestLogger(),
+      logger: createCliLogger({
+          mode: 'log',
+          level: 'debug',
+        })
     });
 
     expect(editResult.dryRun).toBeDefined();

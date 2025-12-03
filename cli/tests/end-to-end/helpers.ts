@@ -22,6 +22,8 @@ export interface InputsOverride {
   models?: unknown[];
 }
 
+const isDebugOutputEnabled = process.env.TEST_DEBUG_OUTPUT === 'true';
+
 export function buildTempConfig(root: string): CliConfig {
   return {
     storage: {
@@ -59,13 +61,27 @@ export function createLoggerRecorder(): LoggerRecorder {
     warnings,
     errors,
     logger: {
-      debug: () => {},
-      info: () => {},
+      debug: (message: unknown) => {
+        if (isDebugOutputEnabled) {
+          globalThis.console.debug(message);
+        }
+      },
+      info: (message: unknown) => {
+        if (isDebugOutputEnabled) {
+          globalThis.console.info(message);
+        }
+      },
       warn: (message: unknown) => {
         warnings.push(message);
+        if (isDebugOutputEnabled) {
+          globalThis.console.warn(message);
+        }
       },
       error: (message: unknown) => {
         errors.push(message);
+        if (isDebugOutputEnabled) {
+          globalThis.console.error(message);
+        }
       },
     },
   };

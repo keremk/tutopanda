@@ -2,6 +2,7 @@
 import { createWriteStream, type WriteStream } from 'node:fs';
 import { dirname } from 'node:path';
 import { mkdirSync } from 'node:fs';
+import process from 'node:process';
 import {
   createLogger,
   type LogEvent,
@@ -27,8 +28,10 @@ export function createCliLogger(options: CliLoggerOptions): CliLogger {
     process.env.VITEST === 'true' ||
     process.env.VITEST_WORKER_ID !== undefined ||
     process.env.NODE_ENV === 'test';
+  const isDebugOutputEnabled = process.env.TEST_DEBUG_OUTPUT === 'true';
+  const shouldSuppressOutput = options.mode !== 'log' || (isTest && !isDebugOutputEnabled);
   const writers: Partial<Record<keyof Logger, LogWriter>> =
-    options.mode === 'log' && !isTest
+    !shouldSuppressOutput
       ? {
           info: globalThis.console.log.bind(globalThis.console),
           warn: globalThis.console.warn.bind(globalThis.console),

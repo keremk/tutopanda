@@ -4,9 +4,12 @@ import { confirmPlanExecution } from './interactive-confirm.js';
 
 const mockClose = vi.fn();
 
+// eslint-disable-next-line no-unused-vars
+type QuestionCallback = (answer: string) => void;
+
 vi.mock('node:readline', () => ({
   createInterface: () => ({
-    question: (_prompt: string, callback: (answer: string) => void) => {
+    question: (_prompt: string, callback: QuestionCallback) => {
       callback('y');
     },
     close: mockClose,
